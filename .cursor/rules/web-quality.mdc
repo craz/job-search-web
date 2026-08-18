@@ -1,0 +1,9 @@
+---
+description: Web repository boundaries and quality gates
+alwaysApply: true
+---
+
+- Consume Core only through versioned HTTP; never import sibling repositories.
+- Keep browser loading, empty, success and error states explicit.
+- Run `make test` and applicable browser/container smoke checks.
+- Use only synthetic fixtures and never expose secrets or private history.

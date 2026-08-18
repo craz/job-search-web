@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Локальная доска вакансий Job Search">
+    <title>Job Search — Вакансии</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#vacancies">К списку вакансий</a>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">LOCAL WORKSPACE · CORE CONNECTED</p>
+        <h1>Работа — это воронка,<br><em>а не лотерея.</em></h1>
+        <p class="lede">Сохраняйте возможности, принимайте решения и держите следующий шаг перед глазами.</p>
+      </div>
+      <div class="signal" aria-label="Состояние сервиса">
+        <span class="signal-dot"></span>
+        <span id="connection-label">Проверяем Core</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="toolbar" aria-labelledby="board-title">
+        <div>
+          <p class="section-number">01 / ВОРОНКА</p>
+          <h2 id="board-title">Вакансии <span id="vacancy-count">—</span></h2>
+        </div>
+        <button class="primary-button" id="open-form" type="button">+ Добавить вакансию</button>
+      </section>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="vacancies" class="vacancy-grid" aria-live="polite" aria-busy="true">
+        <article class="state-card" id="loading-state">
+          <span class="loader" aria-hidden="true"></span>
+          <h3>Загружаем воронку</h3>
+          <p>Web запрашивает данные у Core API.</p>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="vacancy-dialog" aria-labelledby="dialog-title">
+      <form id="vacancy-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="section-number">НОВАЯ ВОЗМОЖНОСТЬ</p>
+            <h2 id="dialog-title">Добавить вакансию</h2>
+          </div>
+          <button class="icon-button" id="close-form" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <div class="form-grid">
+          <label>Название<input name="title" required maxlength="500" placeholder="Backend Engineer"></label>
+          <label>Компания<input name="company_name" required maxlength="255" placeholder="Example Labs"></label>
+          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
+          <label>Ссылка<input name="url" required type="url" placeholder="https://example.com/vacancy"></label>
+          <label class="wide">Описание<textarea name="description" rows="4" placeholder="Ключевые требования и заметки"></textarea></label>
+        </div>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="text-button" id="cancel-form" type="button">Отмена</button>
+          <button class="primary-button" id="submit-form" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
