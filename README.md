@@ -23,6 +23,10 @@ make test
 
 Open <http://127.0.0.1:8080>. Production-like startup uses the workspace
 Compose stack so the browser reaches Web and Web reaches `core:8000` internally.
+The workspace development stack mounts source read-only, reloads Uvicorn and
+refreshes an already open browser page when static assets change. This behavior
+is enabled only by `WEB_LIVE_RELOAD=1`; packaged standalone startup keeps normal
+asset caching and no polling dependency.
 
 ## Boundaries
 

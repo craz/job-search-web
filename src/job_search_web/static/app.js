@@ -22,6 +22,26 @@ const statusLabels = {
   rejected: "Не подходит",
 };
 
+async function startLiveReload() {
+  let initialRevision;
+  async function check() {
+    try {
+      const response = await fetch("/dev/revision", { cache: "no-store" });
+      const payload = await response.json();
+      if (!payload.enabled) return;
+      if (initialRevision && payload.revision !== initialRevision) {
+        window.location.reload();
+        return;
+      }
+      initialRevision = payload.revision;
+      window.setTimeout(check, 1000);
+    } catch (_error) {
+      window.setTimeout(check, 2000);
+    }
+  }
+  await check();
+}
+
 function escapeHtml(value) {
   const node = document.createElement("span");
   node.textContent = value ?? "";
@@ -224,3 +244,4 @@ applicationForm.addEventListener("submit", async (event) => {
 
 loadVacancies();
 loadApplications();
+startLiveReload();

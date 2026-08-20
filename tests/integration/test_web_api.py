@@ -73,3 +73,16 @@ def test_application_flow_records_only_through_core_gateway() -> None:
     assert listing.json()["total"] == 1
     assert listing.json()["items"][0]["vacancy"]["title"] == "Backend Engineer"
     assert [call[0] for call in core.calls] == ["application-create", "application-list"]
+
+
+def test_live_reload_revision_disables_asset_cache_in_dev_mode() -> None:
+    """The explicit Compose dev mode gives an open browser a changing revision."""
+    client = WebClient(StubCore(), live_reload=True)
+
+    revision = client.request("GET", "/dev/revision")
+    asset = client.request("GET", "/assets/app.js")
+
+    assert revision.status_code == 200
+    assert revision.json()["enabled"] is True
+    assert revision.json()["revision"].isdigit()
+    assert asset.headers["cache-control"] == "no-store"

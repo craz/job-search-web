@@ -113,9 +113,9 @@ class StubCore:
 class WebClient:
     """Synchronous facade around HTTPX's maintained ASGI transport."""
 
-    def __init__(self, core: StubCore) -> None:
+    def __init__(self, core: StubCore, *, live_reload: bool = False) -> None:
         """Bind requests to one Web app and synthetic Core gateway."""
-        self.app = create_app(core)
+        self.app = create_app(core, live_reload=live_reload)
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Send one request without opening a network socket."""

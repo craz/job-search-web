@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -14,6 +14,12 @@ from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableE
 from job_search_web.schemas import ApplicationCreate, VacancyCreate, VacancyStatusUpdate
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def static_revision() -> str:
+    """Return a cheap revision that changes when a browser asset is edited."""
+    timestamps = (path.stat().st_mtime_ns for path in STATIC_DIR.iterdir() if path.is_file())
+    return str(max(timestamps, default=0))
 
 
 def unavailable_response() -> JSONResponse:
@@ -29,11 +35,22 @@ def proxy_response(status_code: int, payload: Any) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def create_app(core: CoreGateway | None = None) -> FastAPI:
+def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = None) -> FastAPI:
     """Build an isolated Web app around an injectable Core HTTP gateway."""
     gateway = core or CoreClient(os.getenv("CORE_API_URL", "http://127.0.0.1:8000"))
+    live_reload_enabled = (
+        os.getenv("WEB_LIVE_RELOAD", "0") == "1" if live_reload is None else live_reload
+    )
     application = FastAPI(title="Job Search Web", docs_url=None, redoc_url=None)
     application.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+
+    @application.middleware("http")
+    async def disable_dev_asset_cache(request: Request, call_next: Any) -> Any:
+        """Prevent stale browser assets only in the explicit local dev mode."""
+        response = await call_next(request)
+        if live_reload_enabled and request.url.path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.get("/", include_in_schema=False)
     def index() -> FileResponse:
@@ -44,6 +61,14 @@ def create_app(core: CoreGateway | None = None) -> FastAPI:
     def liveness() -> dict[str, str]:
         """Report Web process liveness without hiding Core state."""
         return {"status": "ok", "component": "job-search-web"}
+
+    @application.get("/dev/revision", include_in_schema=False)
+    def dev_revision() -> dict[str, str | bool]:
+        """Expose an asset revision used by the local browser reload loop."""
+        return {
+            "enabled": live_reload_enabled,
+            "revision": static_revision() if live_reload_enabled else "",
+        }
 
     @application.get("/api/v1/vacancies")
     def get_vacancies() -> JSONResponse:
