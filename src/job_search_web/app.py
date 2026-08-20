@@ -11,12 +11,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
+from job_search_web.osint_client import OsintClient, OsintGateway, OsintUnavailableError
 from job_search_web.schemas import (
     ApplicationCreate,
     AssessmentCreate,
     DailyMetricUpdate,
     HypothesisClose,
     HypothesisCreate,
+    PeopleResearchRequest,
     PersonCreate,
     PersonStatusUpdate,
     VacancyCreate,
@@ -45,9 +47,15 @@ def proxy_response(status_code: int, payload: Any) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = None) -> FastAPI:
+def create_app(
+    core: CoreGateway | None = None,
+    osint: OsintGateway | None = None,
+    *,
+    live_reload: bool | None = None,
+) -> FastAPI:
     """Build an isolated Web app around an injectable Core HTTP gateway."""
     gateway = core or CoreClient(os.getenv("CORE_API_URL", "http://127.0.0.1:8000"))
+    osint_gateway = osint or OsintClient(os.getenv("OSINT_API_URL", "http://127.0.0.1:8081"))
     live_reload_enabled = (
         os.getenv("WEB_LIVE_RELOAD", "0") == "1" if live_reload is None else live_reload
     )
@@ -184,6 +192,28 @@ def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = No
             return proxy_response(*gateway.update_person_status(person_id, request.status))
         except CoreUnavailableError:
             return unavailable_response()
+
+    @application.get("/api/v1/osint/people-proposals")
+    def get_people_proposals() -> JSONResponse:
+        """Return normalized unconfirmed research without touching Core."""
+        try:
+            return proxy_response(*osint_gateway.list_people_proposals())
+        except OsintUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "osint_unavailable", "message": "OSINT API is unavailable"},
+            )
+
+    @application.post("/api/v1/osint/people-research")
+    def post_people_research(request: PeopleResearchRequest) -> JSONResponse:
+        """Trigger bounded public research without creating a Core Person."""
+        try:
+            return proxy_response(*osint_gateway.research_people(request.model_dump(mode="json")))
+        except OsintUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "osint_unavailable", "message": "OSINT API is unavailable"},
+            )
 
     @application.get("/api/v1/hypotheses")
     def get_hypotheses() -> JSONResponse:

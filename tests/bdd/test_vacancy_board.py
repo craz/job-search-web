@@ -2,7 +2,7 @@
 
 import httpx
 from pytest_bdd import given, scenarios, then, when
-from tests.support import StubCore, WebClient
+from tests.support import StubCore, StubOsint, WebClient
 
 scenarios("../features/vacancy_board.feature")
 
@@ -240,3 +240,28 @@ def assessment_comes_from_core(
     created, listing, core = assessment_flow
     assert created.status_code == 201 and listing.json()["items"][0]["relevance_score"] == 82
     assert [call[0] for call in core.calls] == ["assessment-create", "assessment-list"]
+
+
+@when("Web запрашивает нормализованные предложения OSINT", target_fixture="osint_flow")
+def list_osint_proposals(available_core: StubCore) -> tuple[httpx.Response, StubCore, StubOsint]:
+    osint = StubOsint()
+    response = WebClient(available_core, osint=osint).request(
+        "GET", "/api/v1/osint/people-proposals"
+    )
+    return response, available_core, osint
+
+
+@then("источник и фрагмент доказательства доступны карточке вакансии")
+def proposal_evidence_is_visible(osint_flow: tuple[httpx.Response, StubCore, StubOsint]) -> None:
+    response, _, osint = osint_flow
+    person = response.json()["items"][0]["people"][0]
+    assert response.status_code == 200
+    assert person["source_url"] and person["evidence_excerpt"]
+    assert osint.calls == [("list", None)]
+
+
+@then("предложение остаётся непроверенным и не записывается в Core")
+def proposal_stays_outside_core(osint_flow: tuple[httpx.Response, StubCore, StubOsint]) -> None:
+    response, core, _ = osint_flow
+    assert response.json()["items"][0]["people"][0]["status"] == "proposed"
+    assert core.calls == []

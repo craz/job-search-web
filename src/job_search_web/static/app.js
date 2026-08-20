@@ -40,6 +40,7 @@ const assessmentDialog = document.querySelector("#assessment-dialog");
 const assessmentForm = document.querySelector("#assessment-form");
 const assessmentFormError = document.querySelector("#assessment-form-error");
 let knownVacancies = [];
+let osintReports = [];
 
 const statusLabels = {
   new: "Новая",
@@ -91,11 +92,25 @@ function vacancyCard(item) {
   const options = Object.entries(statusLabels)
     .map(([value, label]) => `<option value="${value}" ${value === item.status ? "selected" : ""}>${label}</option>`)
     .join("");
+  const report = osintReports.find((candidate) => candidate.vacancy_id === item.id);
+  const people = report?.people || [];
+  const evidence = people.length ? `<div class="research-results">
+    <p class="research-heading">Найденные контакты · не проверено</p>
+    ${people.slice(0, 3).map((person) => `<article class="research-person">
+      <div><strong>${escapeHtml(person.full_name)}</strong><span>${escapeHtml(person.title || "Роль не определена")}</span></div>
+      <p>${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
+      <a href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
+    </article>`).join("")}</div>` : `<p class="research-empty">Непроверенные контакты ещё не найдены.</p>`;
+  const researchAction = item.company.website_url
+    ? `<button class="research-button" data-research type="button">${report ? "Обновить поиск" : "Найти контакты"}</button>`
+    : `<p class="research-empty">Для поиска контактов сначала нужен сайт компании.</p>`;
   return `<article class="vacancy-card" data-id="${escapeHtml(item.id)}">
     <div class="card-meta"><span>${escapeHtml(item.source)}</span><span>${escapeHtml(statusLabels[item.status] || item.status)}</span></div>
     <h3>${escapeHtml(item.title)}</h3>
     <p class="company">${escapeHtml(item.company.name)}</p>
     <p class="description">${escapeHtml(item.description || "Описание пока не добавлено.")}</p>
+    ${evidence}
+    ${researchAction}
     <div class="card-footer">
       <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
       <label><span class="sr-only">Статус</span><select data-status>${options}</select></label>
@@ -275,6 +290,11 @@ async function loadVacancies() {
     signal.classList.remove("offline");
     connectionLabel.textContent = "Core доступен";
     knownVacancies = payload.items;
+    try {
+      const osintResponse = await fetch("/api/v1/osint/people-proposals");
+      const osintPayload = await osintResponse.json();
+      osintReports = osintResponse.ok ? osintPayload.items : [];
+    } catch (_error) { osintReports = []; }
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyCard).join("")
       : "";
@@ -346,7 +366,35 @@ grid.addEventListener("change", async (event) => {
   }
 });
 
-grid.addEventListener("click", (event) => {
+grid.addEventListener("click", async (event) => {
+  const researchButton = event.target.closest("[data-research]");
+  if (researchButton) {
+    const card = researchButton.closest("[data-id]");
+    const vacancy = knownVacancies.find((item) => item.id === card.dataset.id);
+    researchButton.disabled = true;
+    researchButton.textContent = "Ищем…";
+    try {
+      const response = await fetch("/api/v1/osint/people-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: vacancy.company.id,
+          vacancy_id: vacancy.id,
+          company_name: vacancy.company.name,
+          website_url: vacancy.company.website_url,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Поиск контактов не выполнен");
+      showNotice(`Поиск завершён: ${payload.people.length} контактов`);
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, true);
+      researchButton.disabled = false;
+      researchButton.textContent = "Повторить поиск";
+    }
+    return;
+  }
   const button = event.target.closest("[data-apply]");
   if (!button) return;
   const card = button.closest("[data-id]");

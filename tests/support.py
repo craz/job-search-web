@@ -28,6 +28,7 @@ def vacancy(status: str = "new") -> dict[str, Any]:
             "name": "Example Labs",
             "source": "fixture",
             "external_id": "company-42",
+            "website_url": "https://example.test/",
         },
     }
 
@@ -271,12 +272,51 @@ class StubCore:
         return 201, created
 
 
+class StubOsint:
+    """In-memory normalized research gateway without provider or storage access."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, Any]] = []
+        self.items = [
+            {
+                "report_id": "report-1",
+                "company_id": "00000000-0000-0000-0000-000000000043",
+                "vacancy_id": "00000000-0000-0000-0000-000000000042",
+                "company_name": "Example Labs",
+                "website_url": "https://example.test/",
+                "observed_at": "2026-08-20T12:00:00Z",
+                "people": [
+                    {
+                        "full_name": "Alex Example",
+                        "title": "CTO",
+                        "source_url": "https://example.test/team/alex",
+                        "source": "company-site",
+                        "confidence": 0.75,
+                        "evidence_excerpt": "Alex Example, CTO at Example Labs.",
+                        "observed_at": "2026-08-20T12:00:00Z",
+                        "status": "proposed",
+                    }
+                ],
+            }
+        ]
+
+    def list_people_proposals(self) -> tuple[int, Any]:
+        self.calls.append(("list", None))
+        return 200, {"items": self.items, "total": len(self.items)}
+
+    def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        self.calls.append(("research", payload))
+        return 200, self.items[0]
+
+
 class WebClient:
     """Synchronous facade around HTTPX's maintained ASGI transport."""
 
-    def __init__(self, core: StubCore, *, live_reload: bool = False) -> None:
+    def __init__(
+        self, core: StubCore, *, osint: StubOsint | None = None, live_reload: bool = False
+    ) -> None:
         """Bind requests to one Web app and synthetic Core gateway."""
-        self.app = create_app(core, live_reload=live_reload)
+        self.app = create_app(core, osint or StubOsint(), live_reload=live_reload)
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Send one request without opening a network socket."""

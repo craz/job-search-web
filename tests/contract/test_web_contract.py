@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-from tests.support import StubCore
+from tests.support import StubCore, StubOsint
 
 from job_search_web.app import create_app
 
 
 def test_openapi_publishes_vacancy_facade() -> None:
     """Browser operations remain discoverable as one versioned facade."""
-    paths = create_app(StubCore()).openapi()["paths"]
+    paths = create_app(StubCore(), StubOsint()).openapi()["paths"]
 
     assert {"get", "post"} <= paths["/api/v1/vacancies"].keys()
     assert "patch" in paths["/api/v1/vacancies/{vacancy_id}"]
@@ -21,6 +21,8 @@ def test_openapi_publishes_vacancy_facade() -> None:
     assert {"get", "post"} <= paths["/api/v1/hypotheses"].keys()
     assert "post" in paths["/api/v1/hypotheses/{hypothesis_id}/close"]
     assert {"get", "post"} <= paths["/api/v1/assessments"].keys()
+    assert "get" in paths["/api/v1/osint/people-proposals"]
+    assert "post" in paths["/api/v1/osint/people-research"]
 
 
 def test_web_source_does_not_import_core_or_database_drivers() -> None:

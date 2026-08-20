@@ -6,6 +6,11 @@
 к компаниям и вакансиям и менять их локальный статус, чтобы управлять referral и
 коммуникационным workflow с Web-даша.
 
-Web proxies `GET/POST /api/v1/people` and `PATCH /api/v1/people/{id}` only
-through Core HTTP. It does not run OSINT, retain provider payloads or send
-messages. The `contacted` status is local tracking, not delivery evidence.
+Confirmed people still use `GET/POST /api/v1/people` and
+`PATCH /api/v1/people/{id}` through Core HTTP.
+
+Vacancy cards separately read normalized proposals from OSINT. When a confirmed
+company website exists, the user can start a bounded search and see proposed
+name, title, evidence excerpt, source URL and observation time. These results
+are visibly marked `не проверено`, stay outside Core and never trigger a message.
+OSINT loading or failure cannot make Core vacancy data unavailable.

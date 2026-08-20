@@ -73,6 +73,15 @@ class PersonStatusUpdate(BaseModel):
     status: str = Field(pattern="^(new|researching|contacted|replied|dropped)$")
 
 
+class PeopleResearchRequest(BaseModel):
+    """Browser-triggered bounded research request sent to OSINT."""
+
+    company_id: UUID
+    vacancy_id: UUID
+    company_name: str = Field(min_length=1, max_length=255)
+    website_url: HttpUrl
+
+
 class HypothesisCreate(BaseModel):
     """Browser-submitted measurable experiment forwarded to Core."""
 

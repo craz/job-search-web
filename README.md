@@ -2,7 +2,8 @@
 
 Browser vacancy board for the local job-search system. Web owns presentation
 only: it talks to Core through versioned HTTP and never imports Core code,
-connects to PostgreSQL, or mounts Core data volumes.
+connects to PostgreSQL, or mounts service data volumes. A separate read-only
+OSINT HTTP adapter exposes normalized research proposals without raw payloads.
 
 ## Current status
 
@@ -12,7 +13,8 @@ Core-owned Daily Metrics, tracks confirmed people connected to a company and
 manages measurable search Hypotheses. Hypothesis results are local evidence;
 normalized vacancy Assessments are displayed without invoking a model provider;
 vacancy. Application and contact statuses are local tracking workflows only:
-the Web service never submits to an employer, starts OSINT, or sends a message.
+the Web service never submits to an employer or sends a message. It can trigger
+bounded public OSINT research and displays the result as unverified evidence.
 Loading, empty, success and error states are explicit.
 
 ## Development
@@ -35,7 +37,7 @@ asset caching and no polling dependency.
 ## Boundaries
 
 - Browser requests use Web's same-origin `/api/v1` facade.
-- Web forwards only the public Core HTTP contract.
+- Web forwards the public Core contract and normalized OSINT research contract.
 - Core error status and payloads are preserved.
 - Transport failures become a stable `503 core_unavailable` response.
 - Fixtures and examples are synthetic.
