@@ -115,3 +115,50 @@ def metric_comes_from_core(metric_flow: tuple[httpx.Response, httpx.Response, St
     assert updated.status_code == 201
     assert listing.json()["items"][0]["replies"] == 1
     assert [call[0] for call in core.calls] == ["metric-update", "metric-list"]
+
+
+@when(
+    "Web добавляет человека и меняет статус контакта",
+    target_fixture="person_flow",
+)
+def create_and_update_person(
+    available_core: StubCore,
+) -> tuple[httpx.Response, httpx.Response, httpx.Response, StubCore]:
+    """Track a confirmed synthetic person without any external contact action."""
+    client = WebClient(available_core)
+    created = client.request(
+        "POST",
+        "/api/v1/people",
+        headers={"Idempotency-Key": "bdd-web-person"},
+        json={
+            "company_id": "00000000-0000-0000-0000-000000000043",
+            "vacancy_id": "00000000-0000-0000-0000-000000000042",
+            "source": "manual",
+            "external_id": "bdd-person-45",
+            "full_name": "Alex Example",
+            "role": "referral",
+        },
+    )
+    listing = client.request("GET", "/api/v1/people")
+    updated = client.request(
+        "PATCH",
+        f"/api/v1/people/{created.json()['id']}",
+        json={"status": "contacted"},
+    )
+    return created, listing, updated, available_core
+
+
+@then("Web возвращает человека только через Core")
+def person_comes_from_core(
+    person_flow: tuple[httpx.Response, httpx.Response, httpx.Response, StubCore],
+) -> None:
+    """Require the complete Web facade flow and its gateway-only call trace."""
+    created, listing, updated, core = person_flow
+    assert created.status_code == 201
+    assert listing.json()["items"][0]["full_name"] == "Alex Example"
+    assert updated.json()["status"] == "contacted"
+    assert [call[0] for call in core.calls] == [
+        "person-create",
+        "person-list",
+        "person-status",
+    ]

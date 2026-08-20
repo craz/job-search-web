@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260820-metrics">
-    <script src="/assets/app.js?v=20260820-metrics" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260820-people">
+    <script src="/assets/app.js?v=20260820-people" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#vacancies">К списку вакансий</a>
@@ -70,6 +70,22 @@
           <span class="loader" aria-hidden="true"></span>
           <h3>Загружаем показатели</h3>
           <p>Web запрашивает историю у Core API.</p>
+        </article>
+      </section>
+
+      <section class="toolbar people-toolbar" aria-labelledby="people-title">
+        <div>
+          <p class="section-number">04 / КОНТАКТЫ</p>
+          <h2 id="people-title">Люди <span id="people-count">—</span></h2>
+        </div>
+        <button class="primary-button" id="open-person-form" type="button">+ Добавить контакт</button>
+      </section>
+
+      <section id="people" class="people-grid" aria-live="polite" aria-busy="true">
+        <article class="state-card">
+          <span class="loader" aria-hidden="true"></span>
+          <h3>Загружаем контакты</h3>
+          <p>Web запрашивает подтверждённые карточки у Core API.</p>
         </article>
       </section>
     </main>
@@ -150,6 +166,39 @@
         <div class="dialog-actions">
           <button class="text-button" id="cancel-metric-form" type="button">Отмена</button>
           <button class="primary-button" id="submit-metric-form" type="submit">Сохранить снимок</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="person-dialog" aria-labelledby="person-dialog-title">
+      <form id="person-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="section-number">ПОДТВЕРЖДЁННЫЙ КОНТАКТ</p>
+            <h2 id="person-dialog-title">Добавить человека</h2>
+          </div>
+          <button class="icon-button" id="close-person-form" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="wide">Компания / вакансия<select name="vacancy_id" required></select></label>
+          <label>Имя<input name="full_name" required maxlength="255" placeholder="Alex Example"></label>
+          <label>Роль<select name="role" required>
+            <option value="hiring_manager">Нанимающий менеджер</option>
+            <option value="recruiter">Рекрутер</option>
+            <option value="referral">Referral-контакт</option>
+            <option value="peer">Будущий коллега</option>
+          </select></label>
+          <label>Должность<input name="title" maxlength="500" placeholder="Senior Engineer"></label>
+          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
+          <label>Публичная ссылка<input name="url" type="url" placeholder="https://example.com/profile"></label>
+          <label>Уверенность 0–1<input name="confidence" min="0" max="1" step="0.01" type="number"></label>
+          <label class="wide">Заметка<textarea name="notes" maxlength="4000" rows="3"></textarea></label>
+        </div>
+        <p class="safety-note">Форма не запускает OSINT и не отправляет человеку сообщения.</p>
+        <p id="person-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="text-button" id="cancel-person-form" type="button">Отмена</button>
+          <button class="primary-button" id="submit-person-form" type="submit">Сохранить контакт</button>
         </div>
       </form>
     </dialog>

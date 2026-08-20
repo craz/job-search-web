@@ -71,6 +71,27 @@ def daily_metric() -> dict[str, Any]:
     }
 
 
+def person() -> dict[str, Any]:
+    """Return one confirmed synthetic Person linked to fixture identities."""
+    item = vacancy()
+    return {
+        "id": "00000000-0000-0000-0000-000000000045",
+        "source": "manual",
+        "external_id": "person-45",
+        "full_name": "Alex Example",
+        "role": "referral",
+        "title": "Senior Engineer",
+        "url": "https://example.com/people/alex-example",
+        "confidence": 0.9,
+        "status": "new",
+        "notes": "Synthetic confirmed contact.",
+        "created_at": "2026-08-20T10:00:00Z",
+        "updated_at": "2026-08-20T10:00:00Z",
+        "company": item["company"],
+        "vacancy": {"id": item["id"], "title": item["title"], "status": item["status"]},
+    }
+
+
 class StubCore:
     """In-memory contract double recording every Web-to-Core operation."""
 
@@ -80,6 +101,7 @@ class StubCore:
         self.items = [vacancy()]
         self.application_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
+        self.person_items: list[dict[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -141,6 +163,35 @@ class StubCore:
         created["metric_date"] = metric_date
         self.metric_items = [created]
         return 201, created
+
+    def list_people(self) -> tuple[int, Any]:
+        """Return confirmed synthetic contacts."""
+        self._guard()
+        self.calls.append(("person-list", None))
+        return 200, {"items": self.person_items, "total": len(self.person_items)}
+
+    def create_person(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Record one confirmed contact and retry metadata."""
+        self._guard()
+        self.calls.append(("person-create", (payload, key)))
+        created = person()
+        created.update(
+            {
+                name: value
+                for name, value in payload.items()
+                if name not in {"company_id", "vacancy_id"}
+            }
+        )
+        self.person_items.insert(0, created)
+        return 201, created
+
+    def update_person_status(self, person_id: str, status: str) -> tuple[int, Any]:
+        """Apply one synthetic local contact status."""
+        self._guard()
+        self.calls.append(("person-status", (person_id, status)))
+        updated = {**self.person_items[0], "status": status}
+        self.person_items[0] = updated
+        return 200, updated
 
 
 class WebClient:

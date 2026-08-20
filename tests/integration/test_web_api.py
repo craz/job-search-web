@@ -32,8 +32,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
 
     assert page.status_code == 200
     assert "Работа — это воронка" in page.text
-    assert "/assets/app.js?v=20260820-metrics" in page.text
-    assert "/assets/styles.css?v=20260820-metrics" in page.text
+    assert "/assets/app.js?v=20260820-people" in page.text
+    assert "/assets/styles.css?v=20260820-people" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
@@ -124,3 +124,29 @@ def test_metric_path_and_body_dates_must_match() -> None:
     assert response.status_code == 400
     assert response.json()["code"] == "metric_date_mismatch"
     assert core.calls == []
+
+
+def test_people_flow_creates_lists_and_updates_only_through_core() -> None:
+    """Web manages confirmed contacts without storage or external writes."""
+    core = StubCore()
+    client = WebClient(core)
+    payload = {
+        "company_id": "00000000-0000-0000-0000-000000000043",
+        "vacancy_id": "00000000-0000-0000-0000-000000000042",
+        "source": "manual",
+        "external_id": "person-45",
+        "full_name": "Alex Example",
+        "role": "referral",
+    }
+    created = client.request(
+        "POST", "/api/v1/people", json=payload, headers={"Idempotency-Key": "person-key"}
+    )
+    listing = client.request("GET", "/api/v1/people")
+    updated = client.request(
+        "PATCH", f"/api/v1/people/{created.json()['id']}", json={"status": "contacted"}
+    )
+
+    assert created.status_code == 201
+    assert listing.json()["total"] == 1
+    assert updated.json()["status"] == "contacted"
+    assert [call[0] for call in core.calls] == ["person-create", "person-list", "person-status"]

@@ -94,9 +94,15 @@ select { max-width: 9rem; background: var(--paper); border: 1px solid var(--ink)
 .metric-bar { display: block; min-width: 2px; height: 100%; background: var(--rust); }
 .metric-row-detail { grid-column: 2 / -1; color: var(--muted); font-size: .75rem; }
 
+.people-toolbar { margin-top: clamp(4rem, 9vw, 8rem); }
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); gap: 1.5rem; }
+.person-card { display: flex; flex-direction: column; min-height: 18rem; border: 2px solid var(--ink); background: var(--surface); padding: 1.5rem; box-shadow: var(--shadow); }
+.person-card h3 { font-family: Georgia, serif; font-size: 1.75rem; line-height: 1.05; margin: 2rem 0 .5rem; }
+.person-notes { flex: 1; border-left: 3px solid var(--acid); color: var(--muted); line-height: 1.5; padding-left: .8rem; }
+
 dialog { width: min(44rem, calc(100% - 2rem)); border: 2px solid var(--ink); background: var(--surface); padding: 0; box-shadow: var(--shadow); }
 dialog::backdrop { background: rgb(22 33 28 / 72%); }
-#vacancy-form, #application-form { padding: 1.5rem; }
+#vacancy-form, #application-form, #metric-form, #person-form { padding: 1.5rem; }
 .dialog-head, .dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .icon-button, .text-button { border: 0; background: transparent; color: var(--ink); font-weight: 800; }
 .icon-button { font-size: 2rem; }

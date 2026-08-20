@@ -7,10 +7,11 @@ connects to PostgreSQL, or mounts Core data volumes.
 ## Current status
 
 The browser lists and creates vacancies, changes their controlled funnel status,
-records local Applications linked to existing Vacancies, and displays/updates
-Core-owned Daily Metrics. The Application journal is a tracking workflow only:
-it never submits to an employer or external job platform. Loading, empty,
-success and error states are explicit.
+records local Applications linked to existing Vacancies, displays/updates
+Core-owned Daily Metrics, and tracks confirmed people connected to a company and
+vacancy. Application and contact statuses are local tracking workflows only:
+the Web service never submits to an employer, starts OSINT, or sends a message.
+Loading, empty, success and error states are explicit.
 
 ## Development
 
@@ -39,4 +40,5 @@ asset caching and no polling dependency.
 
 See the [vacancy board](docs/specs/vacancy-board.md) and
 [Application journal](docs/specs/application-journal.md) and
-[Daily Metrics dashboard](docs/specs/metrics-dashboard.md) feature specs.
+[Daily Metrics dashboard](docs/specs/metrics-dashboard.md) and
+[People dashboard](docs/specs/people-dashboard.md) feature specs.

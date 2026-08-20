@@ -14,6 +14,8 @@ from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableE
 from job_search_web.schemas import (
     ApplicationCreate,
     DailyMetricUpdate,
+    PersonCreate,
+    PersonStatusUpdate,
     VacancyCreate,
     VacancyStatusUpdate,
 )
@@ -148,6 +150,35 @@ def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = No
         payload = request.model_dump(mode="json", exclude={"metric_date"}, exclude_none=True)
         try:
             return proxy_response(*gateway.update_metric(metric_date, payload, idempotency_key))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/people")
+    def get_people() -> JSONResponse:
+        """Return confirmed contacts obtained only through Core HTTP."""
+        try:
+            return proxy_response(*gateway.list_people())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/people")
+    def post_person(
+        request: PersonCreate,
+        idempotency_key: str = Header(min_length=1, alias="Idempotency-Key"),
+    ) -> JSONResponse:
+        """Forward a confirmed contact without discovery or messaging."""
+        try:
+            return proxy_response(
+                *gateway.create_person(request.model_dump(mode="json"), idempotency_key)
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/people/{person_id}")
+    def patch_person(person_id: str, request: PersonStatusUpdate) -> JSONResponse:
+        """Forward a local contact workflow state change."""
+        try:
+            return proxy_response(*gateway.update_person_status(person_id, request.status))
         except CoreUnavailableError:
             return unavailable_response()
 

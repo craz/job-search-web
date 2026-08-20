@@ -50,3 +50,24 @@ class DailyMetricUpdate(BaseModel):
     invitations: int | None = Field(default=None, ge=0)
     rejections: int | None = Field(default=None, ge=0)
     notes: str | None = Field(default=None, max_length=4000)
+
+
+class PersonCreate(BaseModel):
+    """Browser-submitted confirmed contact forwarded to Core."""
+
+    company_id: UUID
+    vacancy_id: UUID | None = None
+    source: str = Field(min_length=1, max_length=64)
+    external_id: str = Field(min_length=1, max_length=255)
+    full_name: str = Field(min_length=1, max_length=255)
+    role: str = Field(pattern="^(hiring_manager|recruiter|referral|peer)$")
+    title: str | None = Field(default=None, max_length=500)
+    url: HttpUrl | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class PersonStatusUpdate(BaseModel):
+    """Browser-requested controlled local contact workflow state."""
+
+    status: str = Field(pattern="^(new|researching|contacted|replied|dropped)$")

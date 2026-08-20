@@ -81,3 +81,36 @@ def test_metric_update_forwards_dated_contract_and_idempotency(
         "json": {"applications": 2},
         "headers": {"Idempotency-Key": "metric-key"},
     }
+
+
+def test_person_create_and_status_forward_public_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Person writes use only versioned Core paths and explicit retry metadata."""
+    captured: list[tuple[str, str, dict[str, object]]] = []
+
+    def fake_request(method: str, url: str, **kwargs: object) -> httpx.Response:
+        captured.append((method, url, kwargs))
+        return httpx.Response(201 if method == "POST" else 200, json={"status": "contacted"})
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+    client = CoreClient("http://core.test")
+    client.create_person({"full_name": "Alex Example"}, "person-key")
+    client.update_person_status("person-45", "contacted")
+
+    assert captured == [
+        (
+            "POST",
+            "http://core.test/api/v1/people",
+            {
+                "timeout": 5.0,
+                "json": {"full_name": "Alex Example"},
+                "headers": {"Idempotency-Key": "person-key"},
+            },
+        ),
+        (
+            "PATCH",
+            "http://core.test/api/v1/people/person-45",
+            {"timeout": 5.0, "json": {"status": "contacted"}},
+        ),
+    ]

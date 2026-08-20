@@ -42,6 +42,12 @@ class CoreGateway(Protocol):
         """Apply one replay-safe partial Daily Metric snapshot through Core."""
         ...
 
+    def list_people(self) -> tuple[int, Any]: ...
+
+    def create_person(self, payload: dict[str, Any], key: str) -> tuple[int, Any]: ...
+
+    def update_person_status(self, person_id: str, status: str) -> tuple[int, Any]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -110,3 +116,17 @@ class CoreClient:
             json=payload,
             headers={"Idempotency-Key": key},
         )
+
+    def list_people(self) -> tuple[int, Any]:
+        """Fetch confirmed contacts from Core."""
+        return self._request("GET", "/api/v1/people")
+
+    def create_person(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Forward a confirmed contact with its retry key."""
+        return self._request(
+            "POST", "/api/v1/people", json=payload, headers={"Idempotency-Key": key}
+        )
+
+    def update_person_status(self, person_id: str, status: str) -> tuple[int, Any]:
+        """Forward a controlled local contact status update."""
+        return self._request("PATCH", f"/api/v1/people/{person_id}", json={"status": status})

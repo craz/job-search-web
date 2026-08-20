@@ -20,6 +20,13 @@ const metricDialog = document.querySelector("#metric-dialog");
 const metricForm = document.querySelector("#metric-form");
 const metricFormError = document.querySelector("#metric-form-error");
 const metricSubmitButton = document.querySelector("#submit-metric-form");
+const peopleGrid = document.querySelector("#people");
+const peopleCount = document.querySelector("#people-count");
+const personDialog = document.querySelector("#person-dialog");
+const personForm = document.querySelector("#person-form");
+const personFormError = document.querySelector("#person-form-error");
+const personSubmitButton = document.querySelector("#submit-person-form");
+let knownVacancies = [];
 
 const statusLabels = {
   new: "Новая",
@@ -27,6 +34,8 @@ const statusLabels = {
   shortlisted: "В шорт-листе",
   rejected: "Не подходит",
 };
+const personStatusLabels = { new: "Новый", researching: "Изучаю", contacted: "Связался", replied: "Ответил", dropped: "Закрыт" };
+const personRoleLabels = { hiring_manager: "Нанимающий менеджер", recruiter: "Рекрутер", referral: "Referral", peer: "Коллега" };
 
 async function startLiveReload() {
   let initialRevision;
@@ -140,6 +149,33 @@ function metricsView(items) {
     <div class="metric-history"><h3>Отклики по дням</h3>${history}</div>`;
 }
 
+function personCard(item) {
+  const options = Object.entries(personStatusLabels).map(([value, label]) => `<option value="${value}" ${value === item.status ? "selected" : ""}>${label}</option>`).join("");
+  const link = item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Профиль ↗</a>` : "";
+  return `<article class="person-card" data-person-id="${escapeHtml(item.id)}">
+    <div class="card-meta"><span>${escapeHtml(personRoleLabels[item.role] || item.role)}</span><span>${escapeHtml(item.source)}</span></div>
+    <h3>${escapeHtml(item.full_name)}</h3><p class="company">${escapeHtml(item.company.name)}</p>
+    <p class="description">${escapeHtml(item.title || item.vacancy?.title || "Должность не указана")}</p>
+    <p class="person-notes">${escapeHtml(item.notes || "Заметок пока нет.")}</p>
+    <div class="card-footer">${link}<label><span class="sr-only">Статус контакта</span><select data-person-status>${options}</select></label></div>
+  </article>`;
+}
+
+async function loadPeople() {
+  peopleGrid.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/people");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить контакты");
+    peopleCount.textContent = String(payload.total).padStart(2, "0");
+    peopleGrid.innerHTML = payload.total ? payload.items.map(personCard).join("") : "";
+    if (!payload.total) stateCard(peopleGrid, "Контактов пока нет", "Добавьте подтверждённого человека к вакансии.");
+  } catch (error) {
+    peopleCount.textContent = "—";
+    stateCard(peopleGrid, "Не удалось загрузить контакты", error.message);
+  } finally { peopleGrid.setAttribute("aria-busy", "false"); }
+}
+
 async function loadMetrics() {
   metricsDashboard.setAttribute("aria-busy", "true");
   try {
@@ -184,6 +220,7 @@ async function loadVacancies() {
     signal.classList.add("online");
     signal.classList.remove("offline");
     connectionLabel.textContent = "Core доступен";
+    knownVacancies = payload.items;
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyCard).join("")
       : "";
@@ -349,7 +386,61 @@ metricForm.addEventListener("submit", async (event) => {
   }
 });
 
+document.querySelector("#open-person-form").addEventListener("click", () => {
+  personForm.reset();
+  personForm.elements.source.value = "manual";
+  personForm.elements.vacancy_id.innerHTML = knownVacancies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company.name)} — ${escapeHtml(item.title)}</option>`).join("");
+  personFormError.hidden = true;
+  if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию с компанией", true); return; }
+  personDialog.showModal();
+});
+document.querySelector("#close-person-form").addEventListener("click", () => personDialog.close());
+document.querySelector("#cancel-person-form").addEventListener("click", () => personDialog.close());
+
+personForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  personFormError.hidden = true;
+  personSubmitButton.disabled = true;
+  const values = Object.fromEntries(new FormData(personForm));
+  const vacancy = knownVacancies.find((item) => item.id === values.vacancy_id);
+  const identity = crypto.randomUUID();
+  values.company_id = vacancy.company.id;
+  values.external_id = identity;
+  if (values.confidence === "") delete values.confidence;
+  else values.confidence = Number(values.confidence);
+  for (const field of ["title", "url", "notes"]) if (!values[field]) delete values[field];
+  try {
+    const response = await fetch("/api/v1/people", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": identity }, body: JSON.stringify(values) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Контакт не сохранён");
+    personDialog.close();
+    showNotice("Подтверждённый контакт сохранён в Core");
+    await loadPeople();
+  } catch (error) {
+    personFormError.textContent = error.message;
+    personFormError.hidden = false;
+  } finally { personSubmitButton.disabled = false; }
+});
+
+peopleGrid.addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-person-status]");
+  if (!select) return;
+  const card = select.closest("[data-person-id]");
+  select.disabled = true;
+  try {
+    const response = await fetch(`/api/v1/people/${card.dataset.personId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: select.value }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Статус контакта не изменён");
+    showNotice(`Локальный статус: ${personStatusLabels[payload.status]}`);
+    await loadPeople();
+  } catch (error) {
+    showNotice(error.message, true);
+    await loadPeople();
+  } finally { select.disabled = false; }
+});
+
 loadVacancies();
 loadApplications();
 loadMetrics();
+loadPeople();
 startLiveReload();
