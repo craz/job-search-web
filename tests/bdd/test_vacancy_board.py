@@ -267,6 +267,48 @@ def proposal_stays_outside_core(osint_flow: tuple[httpx.Response, StubCore, Stub
     assert core.calls == []
 
 
+@when("Web подтверждает предложение OSINT", target_fixture="confirm_flow")
+def confirm_osint_proposal(
+    available_core: StubCore,
+) -> tuple[httpx.Response, StubCore, StubOsint]:
+    osint = StubOsint()
+    person = osint.items[0]["people"][0]
+    response = WebClient(available_core, osint=osint).request(
+        "POST",
+        "/api/v1/osint/people-confirm",
+        json={"report_id": osint.items[0]["report_id"], "person_id": person["id"]},
+    )
+    return response, available_core, osint
+
+
+@then("OSINT получает confirm, а Core напрямую не вызывается")
+def confirm_goes_through_osint(
+    confirm_flow: tuple[httpx.Response, StubCore, StubOsint],
+) -> None:
+    response, core, osint = confirm_flow
+    assert response.status_code == 200
+    assert response.json()["core_person"]["full_name"] == "Alex Example"
+    assert osint.calls == [
+        (
+            "confirm",
+            {
+                "report_id": "report-1",
+                "person_id": "00000000-0000-0000-0000-000000000044",
+            },
+        )
+    ]
+    assert core.calls == []
+
+
+@then("предложение помечается confirmed")
+def proposal_becomes_confirmed(
+    confirm_flow: tuple[httpx.Response, StubCore, StubOsint],
+) -> None:
+    response, _, osint = confirm_flow
+    assert response.json()["person"]["status"] == "confirmed"
+    assert osint.items[0]["people"][0]["status"] == "confirmed"
+
+
 @when("Web запрашивает нормализованные зеркала OSINT", target_fixture="mirror_flow")
 def list_osint_mirrors(available_core: StubCore) -> tuple[httpx.Response, StubCore, StubOsint]:
     osint = StubOsint()

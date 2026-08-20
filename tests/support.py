@@ -287,6 +287,7 @@ class StubOsint:
                 "observed_at": "2026-08-20T12:00:00Z",
                 "people": [
                     {
+                        "id": "00000000-0000-0000-0000-000000000044",
                         "full_name": "Alex Example",
                         "title": "CTO",
                         "source_url": "https://example.test/team/alex",
@@ -331,6 +332,28 @@ class StubOsint:
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
         self.calls.append(("research", payload))
         return 200, self.items[0]
+
+    def confirm_person(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        self.calls.append(("confirm", payload))
+        person = self.items[0]["people"][0]
+        confirmed = {
+            **person,
+            "status": "confirmed",
+            "confirmed_at": "2026-08-20T12:30:00Z",
+        }
+        self.items[0]["people"][0] = confirmed
+        return 200, {
+            "person": confirmed,
+            "core_person": {
+                "id": "00000000-0000-0000-0000-000000000045",
+                "source": "osint",
+                "external_id": person["id"],
+                "full_name": person["full_name"],
+                "role": "hiring_manager",
+                "title": person["title"],
+                "status": "new",
+            },
+        }
 
     def list_vacancy_mirrors(self) -> tuple[int, Any]:
         self.calls.append(("mirror-list", None))

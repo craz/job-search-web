@@ -82,6 +82,13 @@ class PeopleResearchRequest(BaseModel):
     website_url: HttpUrl
 
 
+class PeopleConfirmRequest(BaseModel):
+    """Browser-triggered promotion of one proposed contact through OSINT."""
+
+    report_id: str = Field(min_length=1, max_length=128)
+    person_id: str = Field(min_length=1, max_length=128)
+
+
 class VacancyMirrorRequest(BaseModel):
     """Browser-triggered bounded vacancy-mirror search sent to OSINT."""
 

@@ -98,12 +98,23 @@ function vacancyCard(item) {
   const mirrorReport = mirrorReports.find((candidate) => candidate.vacancy_id === item.id);
   const mirrors = mirrorReport?.mirrors || [];
   const evidence = people.length ? `<div class="research-results">
-    <p class="research-heading">Найденные контакты · не проверено</p>
-    ${people.slice(0, 3).map((person) => `<article class="research-person">
+    <p class="research-heading">Найденные контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
+    ${people.slice(0, 3).map((person) => {
+      const proposed = person.status === "proposed" && person.id && report?.report_id;
+      const confirmControl = proposed
+        ? `<button class="confirm-button" type="button" data-confirm data-report-id="${escapeHtml(report.report_id)}" data-person-id="${escapeHtml(person.id)}">Подтвердить в Core</button>`
+        : person.status === "confirmed"
+          ? `<span class="research-status">В Core</span>`
+          : "";
+      return `<article class="research-person">
       <div><strong>${escapeHtml(person.full_name)}</strong><span>${escapeHtml(person.title || "Роль не определена")}</span></div>
       <p>${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
-      <a href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
-    </article>`).join("")}</div>` : `<p class="research-empty">Непроверенные контакты ещё не найдены.</p>`;
+      <div class="research-person-footer">
+        <a href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
+        ${confirmControl}
+      </div>
+    </article>`;
+    }).join("")}</div>` : `<p class="research-empty">Непроверенные контакты ещё не найдены.</p>`;
   const mirrorEvidence = mirrors.length ? `<div class="research-results">
     <p class="research-heading">Зеркала вакансии · не проверено</p>
     ${mirrors.slice(0, 3).map((mirror) => `<article class="research-person">
@@ -389,6 +400,31 @@ grid.addEventListener("change", async (event) => {
 });
 
 grid.addEventListener("click", async (event) => {
+  const confirmButton = event.target.closest("[data-confirm]");
+  if (confirmButton) {
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Подтверждаем…";
+    try {
+      const response = await fetch("/api/v1/osint/people-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          report_id: confirmButton.dataset.reportId,
+          person_id: confirmButton.dataset.personId,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Подтверждение не выполнено");
+      const name = payload.person?.full_name || payload.core_person?.full_name || "контакт";
+      showNotice(`В Core: ${name}`);
+      await Promise.all([loadVacancies(), loadPeople()]);
+    } catch (error) {
+      showNotice(error.message, true);
+      confirmButton.disabled = false;
+      confirmButton.textContent = "Подтвердить в Core";
+    }
+    return;
+  }
   const researchButton = event.target.closest("[data-research]");
   if (researchButton) {
     const card = researchButton.closest("[data-id]");

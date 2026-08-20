@@ -18,6 +18,7 @@ from job_search_web.schemas import (
     DailyMetricUpdate,
     HypothesisClose,
     HypothesisCreate,
+    PeopleConfirmRequest,
     PeopleResearchRequest,
     PersonCreate,
     PersonStatusUpdate,
@@ -210,6 +211,17 @@ def create_app(
         """Trigger bounded public research without creating a Core Person."""
         try:
             return proxy_response(*osint_gateway.research_people(request.model_dump(mode="json")))
+        except OsintUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "osint_unavailable", "message": "OSINT API is unavailable"},
+            )
+
+    @application.post("/api/v1/osint/people-confirm")
+    def post_people_confirm(request: PeopleConfirmRequest) -> JSONResponse:
+        """Promote one proposed contact through OSINT into a Core Person."""
+        try:
+            return proxy_response(*osint_gateway.confirm_person(request.model_dump(mode="json")))
         except OsintUnavailableError:
             return JSONResponse(
                 status_code=503,

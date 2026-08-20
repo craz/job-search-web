@@ -16,6 +16,8 @@ class OsintGateway(Protocol):
 
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
 
+    def confirm_person(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
+
     def list_vacancy_mirrors(self) -> tuple[int, Any]: ...
 
     def discover_vacancy_mirrors(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
@@ -42,6 +44,9 @@ class OsintClient:
 
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/people-research", json=payload)
+
+    def confirm_person(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        return self._request("POST", "/api/v1/people-confirm", json=payload)
 
     def list_vacancy_mirrors(self) -> tuple[int, Any]:
         return self._request("GET", "/api/v1/vacancy-mirrors")
