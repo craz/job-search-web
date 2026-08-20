@@ -47,3 +47,27 @@ def test_core_transport_failure_has_stable_response() -> None:
         "code": "core_unavailable",
         "message": "Core API is unavailable",
     }
+
+
+def test_application_flow_records_only_through_core_gateway() -> None:
+    """Web creates and lists a local Application linked to an existing Vacancy."""
+    core = StubCore()
+    client = WebClient(core)
+    created = client.request(
+        "POST",
+        "/api/v1/applications",
+        headers={"Idempotency-Key": "web-application-create"},
+        json={
+            "vacancy_id": "00000000-0000-0000-0000-000000000042",
+            "source": "manual",
+            "external_id": "application-44",
+            "resume_version": "backend-v3",
+            "next_action": "Check for a reply",
+        },
+    )
+    listing = client.request("GET", "/api/v1/applications")
+
+    assert created.status_code == 201
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["vacancy"]["title"] == "Backend Engineer"
+    assert [call[0] for call in core.calls] == ["application-create", "application-list"]

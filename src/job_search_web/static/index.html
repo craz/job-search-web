@@ -40,6 +40,22 @@
           <p>Web запрашивает данные у Core API.</p>
         </article>
       </section>
+
+      <section class="toolbar journal-toolbar" aria-labelledby="journal-title">
+        <div>
+          <p class="section-number">02 / ОТКЛИКИ</p>
+          <h2 id="journal-title">Журнал <span id="application-count">—</span></h2>
+        </div>
+        <p class="toolbar-note">Только локальные факты — без автоматической отправки.</p>
+      </section>
+
+      <section id="applications" class="application-list" aria-live="polite" aria-busy="true">
+        <article class="state-card">
+          <span class="loader" aria-hidden="true"></span>
+          <h3>Загружаем отклики</h3>
+          <p>Web запрашивает журнал у Core API.</p>
+        </article>
+      </section>
     </main>
 
     <dialog id="vacancy-dialog" aria-labelledby="dialog-title">
@@ -62,6 +78,34 @@
         <div class="dialog-actions">
           <button class="text-button" id="cancel-form" type="button">Отмена</button>
           <button class="primary-button" id="submit-form" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="application-dialog" aria-labelledby="application-dialog-title">
+      <form id="application-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="section-number">ЛОКАЛЬНЫЙ ФАКТ ОТКЛИКА</p>
+            <h2 id="application-dialog-title">Записать отклик</h2>
+            <p id="application-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="icon-button" id="close-application-form" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <input name="vacancy_id" type="hidden">
+        <div class="form-grid">
+          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
+          <label>Дата и время<input name="applied_at" type="datetime-local"></label>
+          <label>Версия резюме<input name="resume_version" maxlength="255" placeholder="backend-v3"></label>
+          <label>Следующий шаг<input name="next_action" maxlength="500" placeholder="Проверить ответ через неделю"></label>
+          <label>Когда напомнить<input name="next_action_at" type="datetime-local"></label>
+          <label class="wide">Сопроводительное письмо<textarea name="cover_letter_text" rows="4" placeholder="Необязательно; хранится только локально"></textarea></label>
+        </div>
+        <p class="safety-note">Эта форма ничего не отправляет работодателю или в HeadHunter.</p>
+        <p id="application-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="text-button" id="cancel-application-form" type="button">Отмена</button>
+          <button class="primary-button" id="submit-application-form" type="submit">Записать факт</button>
         </div>
       </form>
     </dialog>

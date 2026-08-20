@@ -6,8 +6,10 @@ connects to PostgreSQL, or mounts Core data volumes.
 
 ## Current status
 
-The first MVP lists and creates vacancies, changes their controlled funnel
-status, and presents loading, empty, success and error states.
+The browser lists and creates vacancies, changes their controlled funnel status,
+and records local Applications linked to existing Vacancies. The Application
+journal is a tracking workflow only: it never submits to an employer or external
+job platform. Loading, empty, success and error states are explicit.
 
 ## Development
 
@@ -30,4 +32,5 @@ Compose stack so the browser reaches Web and Web reaches `core:8000` internally.
 - Transport failures become a stable `503 core_unavailable` response.
 - Fixtures and examples are synthetic.
 
-See [the vacancy board feature spec](docs/specs/vacancy-board.md).
+See the [vacancy board](docs/specs/vacancy-board.md) and
+[Application journal](docs/specs/application-journal.md) feature specs.

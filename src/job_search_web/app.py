@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
-from job_search_web.schemas import VacancyCreate, VacancyStatusUpdate
+from job_search_web.schemas import ApplicationCreate, VacancyCreate, VacancyStatusUpdate
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -71,6 +71,27 @@ def create_app(core: CoreGateway | None = None) -> FastAPI:
         """Forward a browser funnel transition to Core."""
         try:
             return proxy_response(*gateway.update_status(vacancy_id, request.status))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/applications")
+    def get_applications() -> JSONResponse:
+        """Return local Application records obtained only through Core HTTP."""
+        try:
+            return proxy_response(*gateway.list_applications())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/applications")
+    def post_application(
+        request: ApplicationCreate,
+        idempotency_key: str = Header(min_length=1, alias="Idempotency-Key"),
+    ) -> JSONResponse:
+        """Record an Application fact without performing any external submission."""
+        try:
+            return proxy_response(
+                *gateway.create_application(request.model_dump(mode="json"), idempotency_key)
+            )
         except CoreUnavailableError:
             return unavailable_response()
 

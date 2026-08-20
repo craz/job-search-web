@@ -55,3 +55,36 @@ def stable_unavailable_error(unavailable_response: httpx.Response) -> None:
     """Expose an actionable stable code to the browser."""
     assert unavailable_response.status_code == 503
     assert unavailable_response.json()["code"] == "core_unavailable"
+
+
+@when(
+    "Web создаёт отклик и запрашивает журнал откликов",
+    target_fixture="application_flow",
+)
+def create_and_list_application(
+    available_core: StubCore,
+) -> tuple[httpx.Response, httpx.Response, StubCore]:
+    """Record one synthetic local Application through the Web facade."""
+    client = WebClient(available_core)
+    created = client.request(
+        "POST",
+        "/api/v1/applications",
+        headers={"Idempotency-Key": "bdd-web-application"},
+        json={
+            "vacancy_id": "00000000-0000-0000-0000-000000000042",
+            "source": "manual",
+            "external_id": "bdd-application-44",
+        },
+    )
+    return created, client.request("GET", "/api/v1/applications"), available_core
+
+
+@then("Web возвращает отклик связанный с вакансией")
+def application_is_linked(
+    application_flow: tuple[httpx.Response, httpx.Response, StubCore],
+) -> None:
+    """Require a persisted record with stable Vacancy identity and gateway calls."""
+    created, listing, core = application_flow
+    assert created.status_code == 201
+    assert listing.json()["items"][0]["vacancy"]["id"].endswith("42")
+    assert [call[0] for call in core.calls] == ["application-create", "application-list"]

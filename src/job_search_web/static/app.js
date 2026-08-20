@@ -7,6 +7,13 @@ const formError = document.querySelector("#form-error");
 const submitButton = document.querySelector("#submit-form");
 const signal = document.querySelector(".signal");
 const connectionLabel = document.querySelector("#connection-label");
+const applicationList = document.querySelector("#applications");
+const applicationCount = document.querySelector("#application-count");
+const applicationDialog = document.querySelector("#application-dialog");
+const applicationForm = document.querySelector("#application-form");
+const applicationFormError = document.querySelector("#application-form-error");
+const applicationSubmitButton = document.querySelector("#submit-application-form");
+const applicationVacancyTitle = document.querySelector("#application-vacancy-title");
 
 const statusLabels = {
   new: "Новая",
@@ -28,8 +35,8 @@ function showNotice(message, isError = false) {
   window.setTimeout(() => { notice.hidden = true; }, 4500);
 }
 
-function stateCard(title, detail) {
-  grid.innerHTML = `<article class="state-card"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></div></article>`;
+function stateCard(target, title, detail) {
+  target.innerHTML = `<article class="state-card"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></div></article>`;
 }
 
 function vacancyCard(item) {
@@ -45,7 +52,45 @@ function vacancyCard(item) {
       <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
       <label><span class="sr-only">Статус</span><select data-status>${options}</select></label>
     </div>
+    <button class="application-button" data-apply type="button">Записать отклик</button>
   </article>`;
+}
+
+function formatDate(value) {
+  if (!value) return "Дата не указана";
+  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function applicationCard(item) {
+  return `<article class="application-card">
+    <div class="application-date">${escapeHtml(formatDate(item.applied_at))}</div>
+    <div>
+      <p class="card-meta"><span>${escapeHtml(item.source)}</span><span>Отклик записан</span></p>
+      <h3>${escapeHtml(item.vacancy.title)}</h3>
+      <p>${escapeHtml(item.next_action || "Следующий шаг пока не указан.")}</p>
+    </div>
+    <div class="application-details">
+      <span>Резюме</span>
+      <strong>${escapeHtml(item.resume_version || "—")}</strong>
+    </div>
+  </article>`;
+}
+
+async function loadApplications() {
+  applicationList.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/applications");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить отклики");
+    applicationCount.textContent = String(payload.total).padStart(2, "0");
+    applicationList.innerHTML = payload.total ? payload.items.map(applicationCard).join("") : "";
+    if (!payload.total) stateCard(applicationList, "Откликов пока нет", "Запишите первый факт отклика из карточки вакансии.");
+  } catch (error) {
+    applicationCount.textContent = "—";
+    stateCard(applicationList, "Не удалось загрузить отклики", error.message);
+  } finally {
+    applicationList.setAttribute("aria-busy", "false");
+  }
 }
 
 async function loadVacancies() {
@@ -61,13 +106,13 @@ async function loadVacancies() {
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyCard).join("")
       : "";
-    if (!payload.total) stateCard("Воронка пока пуста", "Добавьте первую вакансию — она сохранится в Core.");
+    if (!payload.total) stateCard(grid, "Воронка пока пуста", "Добавьте первую вакансию — она сохранится в Core.");
   } catch (error) {
     count.textContent = "—";
     signal.classList.add("offline");
     signal.classList.remove("online");
     connectionLabel.textContent = "Core недоступен";
-    stateCard("Не удалось загрузить вакансии", error.message);
+    stateCard(grid, "Не удалось загрузить вакансии", error.message);
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
@@ -129,4 +174,53 @@ grid.addEventListener("change", async (event) => {
   }
 });
 
+grid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-apply]");
+  if (!button) return;
+  const card = button.closest("[data-id]");
+  applicationForm.reset();
+  applicationForm.elements.source.value = "manual";
+  applicationForm.elements.vacancy_id.value = card.dataset.id;
+  applicationVacancyTitle.textContent = card.querySelector("h3").textContent;
+  applicationFormError.hidden = true;
+  applicationDialog.showModal();
+});
+
+document.querySelector("#close-application-form").addEventListener("click", () => applicationDialog.close());
+document.querySelector("#cancel-application-form").addEventListener("click", () => applicationDialog.close());
+
+applicationForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  applicationFormError.hidden = true;
+  applicationSubmitButton.disabled = true;
+  const values = Object.fromEntries(new FormData(applicationForm));
+  const identity = crypto.randomUUID();
+  values.external_id = identity;
+  for (const field of ["applied_at", "next_action_at"]) {
+    if (values[field]) values[field] = new Date(values[field]).toISOString();
+    else delete values[field];
+  }
+  for (const field of ["resume_version", "next_action", "cover_letter_text"]) {
+    if (!values[field]) delete values[field];
+  }
+  try {
+    const response = await fetch("/api/v1/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": identity },
+      body: JSON.stringify(values),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Отклик не записан");
+    applicationDialog.close();
+    showNotice("Факт отклика сохранён в Core");
+    await loadApplications();
+  } catch (error) {
+    applicationFormError.textContent = error.message;
+    applicationFormError.hidden = false;
+  } finally {
+    applicationSubmitButton.disabled = false;
+  }
+});
+
 loadVacancies();
+loadApplications();

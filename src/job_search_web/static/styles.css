@@ -42,7 +42,7 @@ h2 { font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.8rem); margin: 0
 h2 span { color: var(--muted); font-family: inherit; font-size: .55em; vertical-align: top; }
 .primary-button { border: 2px solid var(--ink); background: var(--acid); color: var(--ink); padding: .9rem 1.2rem; font-weight: 850; box-shadow: 4px 4px 0 var(--ink); }
 .primary-button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
-.primary-button:focus-visible, .icon-button:focus-visible, .text-button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--rust); outline-offset: 3px; }
+.primary-button:focus-visible, .application-button:focus-visible, .icon-button:focus-visible, .text-button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--rust); outline-offset: 3px; }
 .primary-button:disabled { opacity: .55; cursor: wait; }
 
 .vacancy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1.5rem; }
@@ -54,6 +54,7 @@ h2 span { color: var(--muted); font-family: inherit; font-size: .55em; vertical-
 .description { color: var(--muted); line-height: 1.5; flex: 1; }
 .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; margin-top: 1.5rem; }
 .card-footer a { color: var(--ink); font-weight: 800; }
+.application-button { margin-top: 1rem; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); padding: .7rem; font-weight: 800; }
 select { max-width: 9rem; background: var(--paper); border: 1px solid var(--ink); padding: .5rem; }
 .state-card { grid-column: 1 / -1; display: grid; place-items: center; text-align: center; min-height: 20rem; border-style: dashed; }
 .state-card h3 { font-family: Georgia, serif; font-size: 2rem; margin: .8rem 0 .3rem; }
@@ -63,9 +64,21 @@ select { max-width: 9rem; background: var(--paper); border: 1px solid var(--ink)
 .notice { border: 2px solid var(--ink); background: var(--acid); padding: 1rem; margin-bottom: 1.5rem; font-weight: 750; }
 .notice.error { background: #ffd2c5; }
 
+.journal-toolbar { margin-top: clamp(4rem, 9vw, 8rem); }
+.toolbar-note { color: var(--muted); max-width: 24rem; line-height: 1.5; margin: 0; }
+.application-list { display: grid; gap: 1rem; }
+.application-card { display: grid; grid-template-columns: minmax(8rem, .45fr) minmax(0, 2fr) minmax(7rem, .5fr); gap: 1.5rem; align-items: center; border: 2px solid var(--ink); background: var(--surface); padding: 1.25rem 1.5rem; }
+.application-card h3 { font-family: Georgia, serif; font-size: 1.45rem; margin: .45rem 0; }
+.application-card p { margin: 0; color: var(--muted); }
+.application-date { font-weight: 850; }
+.application-details { display: grid; gap: .35rem; border-left: 1px solid var(--line); padding-left: 1.25rem; }
+.application-details span { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; }
+.dialog-context { color: var(--muted); font-weight: 750; margin: .6rem 0 0; }
+.safety-note { border-left: 4px solid var(--acid); padding: .7rem 1rem; background: var(--paper); font-weight: 700; }
+
 dialog { width: min(44rem, calc(100% - 2rem)); border: 2px solid var(--ink); background: var(--surface); padding: 0; box-shadow: var(--shadow); }
 dialog::backdrop { background: rgb(22 33 28 / 72%); }
-#vacancy-form { padding: 1.5rem; }
+#vacancy-form, #application-form { padding: 1.5rem; }
 .dialog-head, .dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .icon-button, .text-button { border: 0; background: transparent; color: var(--ink); font-weight: 800; }
 .icon-button { font-size: 2rem; }
@@ -82,6 +95,8 @@ textarea { resize: vertical; }
   .primary-button { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }
   label.wide { grid-column: auto; }
+  .application-card { grid-template-columns: 1fr; }
+  .application-details { border-left: 0; border-top: 1px solid var(--line); padding: 1rem 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -12,7 +12,7 @@ class CoreUnavailableError(Exception):
 
 
 class CoreGateway(Protocol):
-    """Minimal Core operations required by the vacancy board."""
+    """Minimal Core operations required by the vacancy and Application views."""
 
     def list_vacancies(self) -> tuple[int, Any]:
         """Return the Core status and decoded vacancy collection."""
@@ -24,6 +24,14 @@ class CoreGateway(Protocol):
 
     def update_status(self, vacancy_id: str, status: str) -> tuple[int, Any]:
         """Update one vacancy status through Core."""
+        ...
+
+    def list_applications(self) -> tuple[int, Any]:
+        """Return normalized Applications from Core."""
+        ...
+
+    def create_application(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Create or replay one local Application record through Core."""
         ...
 
 
@@ -68,3 +76,16 @@ class CoreClient:
     def update_status(self, vacancy_id: str, status: str) -> tuple[int, Any]:
         """Forward a controlled status update to Core."""
         return self._request("PATCH", f"/api/v1/vacancies/{vacancy_id}", json={"status": status})
+
+    def list_applications(self) -> tuple[int, Any]:
+        """Fetch normalized Applications from Core."""
+        return self._request("GET", "/api/v1/applications")
+
+    def create_application(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Forward a validated local Application with its idempotency key."""
+        return self._request(
+            "POST",
+            "/api/v1/applications",
+            json=payload,
+            headers={"Idempotency-Key": key},
+        )
