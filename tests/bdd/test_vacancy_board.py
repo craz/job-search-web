@@ -204,3 +204,39 @@ def hypothesis_comes_from_core(
         "hypothesis-list",
         "hypothesis-close",
     ]
+
+
+@when("Web записывает и читает объяснимую оценку", target_fixture="assessment_flow")
+def create_and_list_assessment(
+    available_core: StubCore,
+) -> tuple[httpx.Response, httpx.Response, StubCore]:
+    """Forward one normalized result without invoking a model provider."""
+    client = WebClient(available_core)
+    created = client.request(
+        "POST",
+        "/api/v1/assessments",
+        headers={"Idempotency-Key": "bdd-assessment"},
+        json={
+            "vacancy_id": "00000000-0000-0000-0000-000000000042",
+            "source": "manual",
+            "external_id": "bdd-assessment",
+            "relevance_score": 82,
+            "verdict": "apply",
+            "reason": "Strong match",
+            "action": "Prepare application",
+            "model": "fixture-model",
+            "prompt_version": "v1",
+            "assessed_at": "2026-08-20T12:00:00Z",
+        },
+    )
+    return created, client.request("GET", "/api/v1/assessments"), available_core
+
+
+@then("Web возвращает Assessment только через Core")
+def assessment_comes_from_core(
+    assessment_flow: tuple[httpx.Response, httpx.Response, StubCore],
+) -> None:
+    """Require normalized create/list and an HTTP-only call trace."""
+    created, listing, core = assessment_flow
+    assert created.status_code == 201 and listing.json()["items"][0]["relevance_score"] == 82
+    assert [call[0] for call in core.calls] == ["assessment-create", "assessment-list"]

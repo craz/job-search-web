@@ -88,3 +88,19 @@ class HypothesisClose(BaseModel):
     """Browser-submitted observed result for an active experiment."""
 
     result: str = Field(min_length=1, max_length=4000)
+
+
+class AssessmentCreate(BaseModel):
+    """Browser-submitted normalized scoring result forwarded to Core."""
+
+    vacancy_id: UUID
+    source: str = Field(min_length=1, max_length=64)
+    external_id: str = Field(min_length=1, max_length=255)
+    relevance_score: int = Field(ge=0, le=100)
+    verdict: str = Field(pattern="^(apply|maybe|skip)$")
+    reason: str = Field(min_length=1, max_length=4000)
+    risk: str | None = Field(default=None, max_length=4000)
+    action: str = Field(min_length=1, max_length=1000)
+    model: str = Field(min_length=1, max_length=255)
+    prompt_version: str = Field(min_length=1, max_length=255)
+    assessed_at: datetime

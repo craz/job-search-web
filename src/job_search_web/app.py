@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
 from job_search_web.schemas import (
     ApplicationCreate,
+    AssessmentCreate,
     DailyMetricUpdate,
     HypothesisClose,
     HypothesisCreate,
@@ -210,6 +211,27 @@ def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = No
         """Forward an observed result without triggering external actions."""
         try:
             return proxy_response(*gateway.close_hypothesis(hypothesis_id, request.result))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/assessments")
+    def get_assessments() -> JSONResponse:
+        """Return normalized results obtained only through Core HTTP."""
+        try:
+            return proxy_response(*gateway.list_assessments())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/assessments")
+    def post_assessment(
+        request: AssessmentCreate,
+        idempotency_key: str = Header(min_length=1, alias="Idempotency-Key"),
+    ) -> JSONResponse:
+        """Forward a normalized result without invoking a scoring provider."""
+        try:
+            return proxy_response(
+                *gateway.create_assessment(request.model_dump(mode="json"), idempotency_key)
+            )
         except CoreUnavailableError:
             return unavailable_response()
 

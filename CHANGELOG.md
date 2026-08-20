@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a Core-backed normalized Assessments dashboard and manual contract form.
 - Add a Core-backed Hypotheses dashboard with experiment creation and result capture.
 - Add a Core-backed confirmed People dashboard with local contact statuses and no
   automated OSINT or messaging behavior.

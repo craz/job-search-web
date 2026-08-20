@@ -10,6 +10,7 @@ The browser lists and creates vacancies, changes their controlled funnel status,
 records local Applications linked to existing Vacancies, displays/updates
 Core-owned Daily Metrics, tracks confirmed people connected to a company and
 manages measurable search Hypotheses. Hypothesis results are local evidence;
+normalized vacancy Assessments are displayed without invoking a model provider;
 vacancy. Application and contact statuses are local tracking workflows only:
 the Web service never submits to an employer, starts OSINT, or sends a message.
 Loading, empty, success and error states are explicit.

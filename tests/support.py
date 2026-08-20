@@ -109,6 +109,26 @@ def hypothesis() -> dict[str, Any]:
     }
 
 
+def assessment() -> dict[str, Any]:
+    """Return one normalized synthetic scoring result."""
+    item = vacancy()
+    return {
+        "id": "00000000-0000-0000-0000-000000000047",
+        "source": "manual",
+        "external_id": "assessment-47",
+        "relevance_score": 82,
+        "verdict": "apply",
+        "reason": "Strong synthetic match",
+        "risk": "Limited domain context",
+        "action": "Prepare a tailored application",
+        "model": "fixture-model",
+        "prompt_version": "fixture-v1",
+        "assessed_at": "2026-08-20T12:00:00Z",
+        "created_at": "2026-08-20T12:00:00Z",
+        "vacancy": {"id": item["id"], "title": item["title"], "status": item["status"]},
+    }
+
+
 class StubCore:
     """In-memory contract double recording every Web-to-Core operation."""
 
@@ -120,6 +140,7 @@ class StubCore:
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
+        self.assessment_items: list[dict[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -233,6 +254,21 @@ class StubCore:
         updated = {**self.hypothesis_items[0], "status": "done", "result": result}
         self.hypothesis_items[0] = updated
         return 200, updated
+
+    def list_assessments(self) -> tuple[int, Any]:
+        """Return normalized synthetic scoring results."""
+        self._guard()
+        self.calls.append(("assessment-list", None))
+        return 200, {"items": self.assessment_items, "total": len(self.assessment_items)}
+
+    def create_assessment(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Record one normalized result and retry metadata."""
+        self._guard()
+        self.calls.append(("assessment-create", (payload, key)))
+        created = assessment()
+        created.update({k: v for k, v in payload.items() if k != "vacancy_id"})
+        self.assessment_items.insert(0, created)
+        return 201, created
 
 
 class WebClient:

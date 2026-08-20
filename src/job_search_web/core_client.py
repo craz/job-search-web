@@ -54,6 +54,10 @@ class CoreGateway(Protocol):
 
     def close_hypothesis(self, hypothesis_id: str, result: str) -> tuple[int, Any]: ...
 
+    def list_assessments(self) -> tuple[int, Any]: ...
+
+    def create_assessment(self, payload: dict[str, Any], key: str) -> tuple[int, Any]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -154,4 +158,17 @@ class CoreClient:
         """Forward the observed result that closes an active experiment."""
         return self._request(
             "POST", f"/api/v1/hypotheses/{hypothesis_id}/close", json={"result": result}
+        )
+
+    def list_assessments(self) -> tuple[int, Any]:
+        """Fetch normalized vacancy assessments from Core."""
+        return self._request("GET", "/api/v1/assessments")
+
+    def create_assessment(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Forward a normalized result and explicit retry key."""
+        return self._request(
+            "POST",
+            "/api/v1/assessments",
+            json=payload,
+            headers={"Idempotency-Key": key},
         )

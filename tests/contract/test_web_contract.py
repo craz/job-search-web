@@ -20,6 +20,7 @@ def test_openapi_publishes_vacancy_facade() -> None:
     assert "patch" in paths["/api/v1/people/{person_id}"]
     assert {"get", "post"} <= paths["/api/v1/hypotheses"].keys()
     assert "post" in paths["/api/v1/hypotheses/{hypothesis_id}/close"]
+    assert {"get", "post"} <= paths["/api/v1/assessments"].keys()
 
 
 def test_web_source_does_not_import_core_or_database_drivers() -> None:

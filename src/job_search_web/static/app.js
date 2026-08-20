@@ -34,6 +34,11 @@ const hypothesisFormError = document.querySelector("#hypothesis-form-error");
 const hypothesisCloseDialog = document.querySelector("#hypothesis-close-dialog");
 const hypothesisCloseForm = document.querySelector("#hypothesis-close-form");
 const hypothesisCloseError = document.querySelector("#hypothesis-close-error");
+const assessmentGrid = document.querySelector("#assessments");
+const assessmentCount = document.querySelector("#assessment-count");
+const assessmentDialog = document.querySelector("#assessment-dialog");
+const assessmentForm = document.querySelector("#assessment-form");
+const assessmentFormError = document.querySelector("#assessment-form-error");
 let knownVacancies = [];
 
 const statusLabels = {
@@ -204,6 +209,25 @@ async function loadHypotheses() {
     if (!payload.total) stateCard(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.");
   } catch (error) { hypothesisCount.textContent = "—"; stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
   finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
+}
+
+function assessmentCard(item) {
+  const verdict = {apply: "Откликаться", maybe: "Подумать", skip: "Пропустить"}[item.verdict] || item.verdict;
+  return `<article class="assessment-card"><p class="card-meta"><span>${escapeHtml(verdict)}</span><span>${escapeHtml(item.model)}</span></p>
+    <div class="assessment-score">${escapeHtml(item.relevance_score)}</div><h3>${escapeHtml(item.vacancy.title)}</h3>
+    <p>${escapeHtml(item.reason)}</p>${item.risk ? `<p class="hypothesis-result">Риск: ${escapeHtml(item.risk)}</p>` : ""}
+    <p><strong>Действие:</strong> ${escapeHtml(item.action)}</p></article>`;
+}
+
+async function loadAssessments() {
+  assessmentGrid.setAttribute("aria-busy", "true");
+  try { const response = await fetch("/api/v1/assessments"); const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить оценки");
+    assessmentCount.textContent = String(payload.total).padStart(2, "0");
+    assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentCard).join("") : "";
+    if (!payload.total) stateCard(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.");
+  } catch (error) { assessmentCount.textContent = "—"; stateCard(assessmentGrid, "Не удалось загрузить оценки", error.message); }
+  finally { assessmentGrid.setAttribute("aria-busy", "false"); }
 }
 
 async function loadMetrics() {
@@ -502,9 +526,29 @@ hypothesisCloseForm.addEventListener("submit", async (event) => {
   } catch (error) { hypothesisCloseError.textContent = error.message; hypothesisCloseError.hidden = false; }
 });
 
+document.querySelector("#open-assessment-form").addEventListener("click", () => {
+  assessmentForm.reset(); assessmentForm.elements.source.value = "manual";
+  assessmentForm.elements.model.value = "manual"; assessmentForm.elements.prompt_version.value = "manual-v1";
+  assessmentForm.elements.vacancy_id.innerHTML = knownVacancies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company.name)} — ${escapeHtml(item.title)}</option>`).join("");
+  assessmentFormError.hidden = true; if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию", true); return; }
+  assessmentDialog.showModal();
+});
+document.querySelector("#close-assessment-form").addEventListener("click", () => assessmentDialog.close());
+document.querySelector("#cancel-assessment-form").addEventListener("click", () => assessmentDialog.close());
+assessmentForm.addEventListener("submit", async (event) => {
+  event.preventDefault(); assessmentFormError.hidden = true; const values = Object.fromEntries(new FormData(assessmentForm));
+  const identity = crypto.randomUUID(); values.external_id = identity; values.relevance_score = Number(values.relevance_score);
+  values.assessed_at = new Date().toISOString(); if (!values.risk) delete values.risk;
+  try { const response = await fetch("/api/v1/assessments", {method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": identity}, body: JSON.stringify(values)});
+    const payload = await response.json(); if (!response.ok) throw new Error(payload.message || "Оценка не сохранена");
+    assessmentDialog.close(); showNotice("Нормализованная оценка сохранена"); await loadAssessments();
+  } catch (error) { assessmentFormError.textContent = error.message; assessmentFormError.hidden = false; }
+});
+
 loadVacancies();
 loadApplications();
 loadMetrics();
 loadPeople();
 loadHypotheses();
+loadAssessments();
 startLiveReload();

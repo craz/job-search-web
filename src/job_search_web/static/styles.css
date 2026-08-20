@@ -105,10 +105,15 @@ select { max-width: 9rem; background: var(--paper); border: 1px solid var(--ink)
 .hypothesis-card h3 { font-family: Georgia, serif; font-size: 1.65rem; margin: .6rem 0; }
 .hypothesis-result { border-left: 3px solid var(--acid); padding-left: 1rem; color: var(--muted); }
 .hypothesis-action { display: grid; align-content: center; gap: .7rem; border-left: 1px solid var(--line); padding-left: 1.5rem; }
+.assessments-toolbar { margin-top: clamp(4rem, 9vw, 8rem); }
+.assessment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); gap: 1.5rem; }
+.assessment-card { border: 2px solid var(--ink); background: var(--surface); padding: 1.5rem; box-shadow: var(--shadow); }
+.assessment-score { font-family: Georgia, serif; font-size: 4rem; line-height: 1; color: var(--rust); }
+.assessment-card h3 { font-family: Georgia, serif; font-size: 1.5rem; }
 
 dialog { width: min(44rem, calc(100% - 2rem)); border: 2px solid var(--ink); background: var(--surface); padding: 0; box-shadow: var(--shadow); }
 dialog::backdrop { background: rgb(22 33 28 / 72%); }
-#vacancy-form, #application-form, #metric-form, #person-form, #hypothesis-form, #hypothesis-close-form { padding: 1.5rem; }
+#vacancy-form, #application-form, #metric-form, #person-form, #hypothesis-form, #hypothesis-close-form, #assessment-form { padding: 1.5rem; }
 .dialog-head, .dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .icon-button, .text-button { border: 0; background: transparent; color: var(--ink); font-weight: 800; }
 .icon-button { font-size: 2rem; }

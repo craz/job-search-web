@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260820-hypotheses">
-    <script src="/assets/app.js?v=20260820-hypotheses" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260820-assessments">
+    <script src="/assets/app.js?v=20260820-assessments" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#vacancies">К списку вакансий</a>
@@ -97,6 +97,13 @@
       <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
         <article class="state-card"><span class="loader" aria-hidden="true"></span>
           <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
+      </section>
+      <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
+        <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
+        <button class="primary-button" id="open-assessment-form" type="button">+ Записать оценку</button>
+      </section>
+      <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
+        <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
       </section>
     </main>
 
@@ -239,5 +246,21 @@
         <div class="dialog-actions"><button class="text-button" id="cancel-hypothesis-close" type="button">Отмена</button>
           <button class="primary-button" type="submit">Зафиксировать результат</button></div></form>
     </dialog>
+    <dialog id="assessment-dialog" aria-labelledby="assessment-dialog-title"><form id="assessment-form" method="dialog">
+      <div class="dialog-head"><div><p class="section-number">НОРМАЛИЗОВАННЫЙ РЕЗУЛЬТАТ</p><h2 id="assessment-dialog-title">Записать оценку</h2></div>
+        <button class="icon-button" id="close-assessment-form" type="button" aria-label="Закрыть">×</button></div>
+      <div class="form-grid"><label class="wide">Вакансия<select name="vacancy_id" required></select></label>
+        <label>Релевантность 0–100<input name="relevance_score" type="number" min="0" max="100" required></label>
+        <label>Вердикт<select name="verdict" required><option value="apply">Откликаться</option><option value="maybe">Подумать</option><option value="skip">Пропустить</option></select></label>
+        <label class="wide">Причина<textarea name="reason" required maxlength="4000" rows="3"></textarea></label>
+        <label class="wide">Риск<textarea name="risk" maxlength="4000" rows="2"></textarea></label>
+        <label class="wide">Действие<input name="action" required maxlength="1000"></label>
+        <label>Модель<input name="model" required maxlength="255" value="manual"></label>
+        <label>Версия prompt<input name="prompt_version" required maxlength="255" value="manual-v1"></label>
+        <label>Источник<input name="source" required maxlength="64" value="manual"></label></div>
+      <p class="safety-note">Форма не запускает Ollama: она сохраняет только готовый нормализованный результат.</p>
+      <p id="assessment-form-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">
+        <button class="text-button" id="cancel-assessment-form" type="button">Отмена</button><button class="primary-button" type="submit">Сохранить оценку</button></div>
+    </form></dialog>
   </body>
 </html>

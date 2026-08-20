@@ -32,8 +32,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
 
     assert page.status_code == 200
     assert "Работа — это воронка" in page.text
-    assert "/assets/app.js?v=20260820-hypotheses" in page.text
-    assert "/assets/styles.css?v=20260820-hypotheses" in page.text
+    assert "/assets/app.js?v=20260820-assessments" in page.text
+    assert "/assets/styles.css?v=20260820-assessments" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
@@ -181,3 +181,28 @@ def test_hypothesis_flow_creates_lists_and_closes_only_through_core() -> None:
         "hypothesis-list",
         "hypothesis-close",
     ]
+
+
+def test_assessment_flow_creates_and_lists_only_through_core() -> None:
+    """Web forwards normalized results without invoking any model provider."""
+    core = StubCore()
+    client = WebClient(core)
+    payload = {
+        "vacancy_id": "00000000-0000-0000-0000-000000000042",
+        "source": "manual",
+        "external_id": "assessment-47",
+        "relevance_score": 82,
+        "verdict": "apply",
+        "reason": "Strong match",
+        "risk": "Limited context",
+        "action": "Prepare application",
+        "model": "fixture-model",
+        "prompt_version": "v1",
+        "assessed_at": "2026-08-20T12:00:00Z",
+    }
+    created = client.request(
+        "POST", "/api/v1/assessments", json=payload, headers={"Idempotency-Key": "assessment-key"}
+    )
+    listing = client.request("GET", "/api/v1/assessments")
+    assert created.status_code == 201 and listing.json()["total"] == 1
+    assert [call[0] for call in core.calls] == ["assessment-create", "assessment-list"]
