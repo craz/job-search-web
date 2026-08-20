@@ -32,8 +32,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
 
     assert page.status_code == 200
     assert "Работа — это воронка" in page.text
-    assert "/assets/app.js?v=20260820-people" in page.text
-    assert "/assets/styles.css?v=20260820-people" in page.text
+    assert "/assets/app.js?v=20260820-hypotheses" in page.text
+    assert "/assets/styles.css?v=20260820-hypotheses" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
@@ -150,3 +150,34 @@ def test_people_flow_creates_lists_and_updates_only_through_core() -> None:
     assert listing.json()["total"] == 1
     assert updated.json()["status"] == "contacted"
     assert [call[0] for call in core.calls] == ["person-create", "person-list", "person-status"]
+
+
+def test_hypothesis_flow_creates_lists_and_closes_only_through_core() -> None:
+    """Web tracks one experiment without storage or external actions."""
+    core = StubCore()
+    client = WebClient(core)
+    payload = {
+        "source": "manual",
+        "external_id": "hypothesis-46",
+        "title": "Focused applications improve replies",
+        "test_size": 10,
+        "metric": "reply_rate",
+    }
+    created = client.request(
+        "POST", "/api/v1/hypotheses", json=payload, headers={"Idempotency-Key": "hypothesis-key"}
+    )
+    listing = client.request("GET", "/api/v1/hypotheses")
+    closed = client.request(
+        "POST",
+        f"/api/v1/hypotheses/{created.json()['id']}/close",
+        json={"result": "Reply rate improved"},
+    )
+
+    assert created.status_code == 201
+    assert listing.json()["total"] == 1
+    assert closed.json()["status"] == "done"
+    assert [call[0] for call in core.calls] == [
+        "hypothesis-create",
+        "hypothesis-list",
+        "hypothesis-close",
+    ]

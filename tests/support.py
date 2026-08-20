@@ -92,6 +92,23 @@ def person() -> dict[str, Any]:
     }
 
 
+def hypothesis() -> dict[str, Any]:
+    """Return one synthetic measurable search experiment."""
+    return {
+        "id": "00000000-0000-0000-0000-000000000046",
+        "source": "manual",
+        "external_id": "hypothesis-46",
+        "title": "Focused applications improve replies",
+        "description": "Synthetic Web experiment.",
+        "test_size": 10,
+        "metric": "reply_rate",
+        "status": "active",
+        "result": None,
+        "created_at": "2026-08-20T10:00:00Z",
+        "updated_at": "2026-08-20T10:00:00Z",
+    }
+
+
 class StubCore:
     """In-memory contract double recording every Web-to-Core operation."""
 
@@ -102,6 +119,7 @@ class StubCore:
         self.application_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
+        self.hypothesis_items: list[dict[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -191,6 +209,29 @@ class StubCore:
         self.calls.append(("person-status", (person_id, status)))
         updated = {**self.person_items[0], "status": status}
         self.person_items[0] = updated
+        return 200, updated
+
+    def list_hypotheses(self) -> tuple[int, Any]:
+        """Return synthetic search experiments."""
+        self._guard()
+        self.calls.append(("hypothesis-list", None))
+        return 200, {"items": self.hypothesis_items, "total": len(self.hypothesis_items)}
+
+    def create_hypothesis(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Record one synthetic experiment and retry metadata."""
+        self._guard()
+        self.calls.append(("hypothesis-create", (payload, key)))
+        created = hypothesis()
+        created.update(payload)
+        self.hypothesis_items.insert(0, created)
+        return 201, created
+
+    def close_hypothesis(self, hypothesis_id: str, result: str) -> tuple[int, Any]:
+        """Close one synthetic experiment with an observed result."""
+        self._guard()
+        self.calls.append(("hypothesis-close", (hypothesis_id, result)))
+        updated = {**self.hypothesis_items[0], "status": "done", "result": result}
+        self.hypothesis_items[0] = updated
         return 200, updated
 
 

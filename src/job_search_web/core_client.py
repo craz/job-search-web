@@ -48,6 +48,12 @@ class CoreGateway(Protocol):
 
     def update_person_status(self, person_id: str, status: str) -> tuple[int, Any]: ...
 
+    def list_hypotheses(self) -> tuple[int, Any]: ...
+
+    def create_hypothesis(self, payload: dict[str, Any], key: str) -> tuple[int, Any]: ...
+
+    def close_hypothesis(self, hypothesis_id: str, result: str) -> tuple[int, Any]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -130,3 +136,22 @@ class CoreClient:
     def update_person_status(self, person_id: str, status: str) -> tuple[int, Any]:
         """Forward a controlled local contact status update."""
         return self._request("PATCH", f"/api/v1/people/{person_id}", json={"status": status})
+
+    def list_hypotheses(self) -> tuple[int, Any]:
+        """Fetch measurable experiments from Core."""
+        return self._request("GET", "/api/v1/hypotheses")
+
+    def create_hypothesis(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Forward an experiment with its explicit retry key."""
+        return self._request(
+            "POST",
+            "/api/v1/hypotheses",
+            json=payload,
+            headers={"Idempotency-Key": key},
+        )
+
+    def close_hypothesis(self, hypothesis_id: str, result: str) -> tuple[int, Any]:
+        """Forward the observed result that closes an active experiment."""
+        return self._request(
+            "POST", f"/api/v1/hypotheses/{hypothesis_id}/close", json={"result": result}
+        )

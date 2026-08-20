@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a Core-backed Hypotheses dashboard with experiment creation and result capture.
 - Add a Core-backed confirmed People dashboard with local contact statuses and no
   automated OSINT or messaging behavior.
 - Add a Core-backed Daily Metrics summary, bounded history and dated update form.

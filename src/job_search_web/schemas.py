@@ -71,3 +71,20 @@ class PersonStatusUpdate(BaseModel):
     """Browser-requested controlled local contact workflow state."""
 
     status: str = Field(pattern="^(new|researching|contacted|replied|dropped)$")
+
+
+class HypothesisCreate(BaseModel):
+    """Browser-submitted measurable experiment forwarded to Core."""
+
+    source: str = Field(min_length=1, max_length=64)
+    external_id: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=500)
+    description: str | None = Field(default=None, max_length=4000)
+    test_size: int | None = Field(default=None, gt=0)
+    metric: str | None = Field(default=None, max_length=500)
+
+
+class HypothesisClose(BaseModel):
+    """Browser-submitted observed result for an active experiment."""
+
+    result: str = Field(min_length=1, max_length=4000)

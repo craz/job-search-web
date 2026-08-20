@@ -14,6 +14,8 @@ from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableE
 from job_search_web.schemas import (
     ApplicationCreate,
     DailyMetricUpdate,
+    HypothesisClose,
+    HypothesisCreate,
     PersonCreate,
     PersonStatusUpdate,
     VacancyCreate,
@@ -179,6 +181,35 @@ def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = No
         """Forward a local contact workflow state change."""
         try:
             return proxy_response(*gateway.update_person_status(person_id, request.status))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/hypotheses")
+    def get_hypotheses() -> JSONResponse:
+        """Return experiments obtained only through Core HTTP."""
+        try:
+            return proxy_response(*gateway.list_hypotheses())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hypotheses")
+    def post_hypothesis(
+        request: HypothesisCreate,
+        idempotency_key: str = Header(min_length=1, alias="Idempotency-Key"),
+    ) -> JSONResponse:
+        """Forward a measurable experiment under replay-safe metadata."""
+        try:
+            return proxy_response(
+                *gateway.create_hypothesis(request.model_dump(mode="json"), idempotency_key)
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hypotheses/{hypothesis_id}/close")
+    def post_hypothesis_close(hypothesis_id: str, request: HypothesisClose) -> JSONResponse:
+        """Forward an observed result without triggering external actions."""
+        try:
+            return proxy_response(*gateway.close_hypothesis(hypothesis_id, request.result))
         except CoreUnavailableError:
             return unavailable_response()
 

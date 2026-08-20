@@ -162,3 +162,45 @@ def person_comes_from_core(
         "person-list",
         "person-status",
     ]
+
+
+@when("Web создаёт гипотезу и фиксирует результат", target_fixture="hypothesis_flow")
+def create_and_close_hypothesis(
+    available_core: StubCore,
+) -> tuple[httpx.Response, httpx.Response, httpx.Response, StubCore]:
+    """Track one synthetic experiment exclusively through the Web facade."""
+    client = WebClient(available_core)
+    created = client.request(
+        "POST",
+        "/api/v1/hypotheses",
+        headers={"Idempotency-Key": "bdd-web-hypothesis"},
+        json={
+            "source": "manual",
+            "external_id": "bdd-hypothesis",
+            "title": "Focused applications improve replies",
+            "test_size": 10,
+            "metric": "reply_rate",
+        },
+    )
+    listing = client.request("GET", "/api/v1/hypotheses")
+    closed = client.request(
+        "POST",
+        f"/api/v1/hypotheses/{created.json()['id']}/close",
+        json={"result": "Reply rate improved"},
+    )
+    return created, listing, closed, available_core
+
+
+@then("Web возвращает эксперимент только через Core")
+def hypothesis_comes_from_core(
+    hypothesis_flow: tuple[httpx.Response, httpx.Response, httpx.Response, StubCore],
+) -> None:
+    """Require create/list/close and an observable HTTP-only call trace."""
+    created, listing, closed, core = hypothesis_flow
+    assert created.status_code == 201 and listing.json()["total"] == 1
+    assert closed.json()["status"] == "done"
+    assert [call[0] for call in core.calls] == [
+        "hypothesis-create",
+        "hypothesis-list",
+        "hypothesis-close",
+    ]

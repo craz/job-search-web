@@ -26,6 +26,14 @@ const personDialog = document.querySelector("#person-dialog");
 const personForm = document.querySelector("#person-form");
 const personFormError = document.querySelector("#person-form-error");
 const personSubmitButton = document.querySelector("#submit-person-form");
+const hypothesisGrid = document.querySelector("#hypotheses");
+const hypothesisCount = document.querySelector("#hypothesis-count");
+const hypothesisDialog = document.querySelector("#hypothesis-dialog");
+const hypothesisForm = document.querySelector("#hypothesis-form");
+const hypothesisFormError = document.querySelector("#hypothesis-form-error");
+const hypothesisCloseDialog = document.querySelector("#hypothesis-close-dialog");
+const hypothesisCloseForm = document.querySelector("#hypothesis-close-form");
+const hypothesisCloseError = document.querySelector("#hypothesis-close-error");
 let knownVacancies = [];
 
 const statusLabels = {
@@ -174,6 +182,28 @@ async function loadPeople() {
     peopleCount.textContent = "—";
     stateCard(peopleGrid, "Не удалось загрузить контакты", error.message);
   } finally { peopleGrid.setAttribute("aria-busy", "false"); }
+}
+
+function hypothesisCard(item) {
+  const detail = [item.test_size ? `выборка ${item.test_size}` : null, item.metric].filter(Boolean).join(" · ");
+  const result = item.result ? `<p class="hypothesis-result">${escapeHtml(item.result)}</p>` : `<p>${escapeHtml(item.description || "Описание не добавлено.")}</p>`;
+  const action = item.status === "active" ? `<button class="primary-button" data-close-hypothesis type="button">Зафиксировать результат</button>` : `<strong>Эксперимент завершён</strong>`;
+  return `<article class="hypothesis-card" data-hypothesis-id="${escapeHtml(item.id)}"><div>
+    <p class="card-meta"><span>${escapeHtml(item.status === "active" ? "Активна" : "Завершена")}</span><span>${escapeHtml(item.source)}</span></p>
+    <h3>${escapeHtml(item.title)}</h3><p class="description">${escapeHtml(detail || "Метрика не указана")}</p>${result}</div>
+    <div class="hypothesis-action">${action}</div></article>`;
+}
+
+async function loadHypotheses() {
+  hypothesisGrid.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/hypotheses"); const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить гипотезы");
+    hypothesisCount.textContent = String(payload.total).padStart(2, "0");
+    hypothesisGrid.innerHTML = payload.total ? payload.items.map(hypothesisCard).join("") : "";
+    if (!payload.total) stateCard(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.");
+  } catch (error) { hypothesisCount.textContent = "—"; stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
+  finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
 }
 
 async function loadMetrics() {
@@ -439,8 +469,42 @@ peopleGrid.addEventListener("change", async (event) => {
   } finally { select.disabled = false; }
 });
 
+document.querySelector("#open-hypothesis-form").addEventListener("click", () => {
+  hypothesisForm.reset(); hypothesisForm.elements.source.value = "manual";
+  hypothesisFormError.hidden = true; hypothesisDialog.showModal();
+});
+document.querySelector("#close-hypothesis-form").addEventListener("click", () => hypothesisDialog.close());
+document.querySelector("#cancel-hypothesis-form").addEventListener("click", () => hypothesisDialog.close());
+hypothesisForm.addEventListener("submit", async (event) => {
+  event.preventDefault(); hypothesisFormError.hidden = true;
+  const values = Object.fromEntries(new FormData(hypothesisForm)); const identity = crypto.randomUUID();
+  values.external_id = identity; if (values.test_size) values.test_size = Number(values.test_size); else delete values.test_size;
+  for (const field of ["description", "metric"]) if (!values[field]) delete values[field];
+  try { const response = await fetch("/api/v1/hypotheses", {method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": identity}, body: JSON.stringify(values)});
+    const payload = await response.json(); if (!response.ok) throw new Error(payload.message || "Гипотеза не сохранена");
+    hypothesisDialog.close(); showNotice("Эксперимент сохранён в Core"); await loadHypotheses();
+  } catch (error) { hypothesisFormError.textContent = error.message; hypothesisFormError.hidden = false; }
+});
+hypothesisGrid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-close-hypothesis]"); if (!button) return;
+  const card = button.closest("[data-hypothesis-id]"); hypothesisCloseForm.reset();
+  hypothesisCloseForm.elements.hypothesis_id.value = card.dataset.hypothesisId;
+  document.querySelector("#hypothesis-close-context").textContent = card.querySelector("h3").textContent;
+  hypothesisCloseError.hidden = true; hypothesisCloseDialog.showModal();
+});
+document.querySelector("#close-hypothesis-close").addEventListener("click", () => hypothesisCloseDialog.close());
+document.querySelector("#cancel-hypothesis-close").addEventListener("click", () => hypothesisCloseDialog.close());
+hypothesisCloseForm.addEventListener("submit", async (event) => {
+  event.preventDefault(); hypothesisCloseError.hidden = true; const values = Object.fromEntries(new FormData(hypothesisCloseForm));
+  try { const response = await fetch(`/api/v1/hypotheses/${values.hypothesis_id}/close`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({result: values.result})});
+    const payload = await response.json(); if (!response.ok) throw new Error(payload.message || "Результат не сохранён");
+    hypothesisCloseDialog.close(); showNotice("Результат эксперимента зафиксирован"); await loadHypotheses();
+  } catch (error) { hypothesisCloseError.textContent = error.message; hypothesisCloseError.hidden = false; }
+});
+
 loadVacancies();
 loadApplications();
 loadMetrics();
 loadPeople();
+loadHypotheses();
 startLiveReload();

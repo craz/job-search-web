@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260820-people">
-    <script src="/assets/app.js?v=20260820-people" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260820-hypotheses">
+    <script src="/assets/app.js?v=20260820-hypotheses" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#vacancies">К списку вакансий</a>
@@ -87,6 +87,16 @@
           <h3>Загружаем контакты</h3>
           <p>Web запрашивает подтверждённые карточки у Core API.</p>
         </article>
+      </section>
+
+      <section class="toolbar hypotheses-toolbar" aria-labelledby="hypotheses-title">
+        <div><p class="section-number">05 / ЭКСПЕРИМЕНТЫ</p>
+          <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
+        <button class="primary-button" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
+      </section>
+      <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
+        <article class="state-card"><span class="loader" aria-hidden="true"></span>
+          <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
       </section>
     </main>
 
@@ -201,6 +211,33 @@
           <button class="primary-button" id="submit-person-form" type="submit">Сохранить контакт</button>
         </div>
       </form>
+    </dialog>
+    <dialog id="hypothesis-dialog" aria-labelledby="hypothesis-dialog-title">
+      <form id="hypothesis-form" method="dialog">
+        <div class="dialog-head"><div><p class="section-number">ИЗМЕРИМЫЙ ЭКСПЕРИМЕНТ</p>
+          <h2 id="hypothesis-dialog-title">Новая гипотеза</h2></div>
+          <button class="icon-button" id="close-hypothesis-form" type="button" aria-label="Закрыть">×</button></div>
+        <div class="form-grid">
+          <label class="wide">Гипотеза<input name="title" required maxlength="500" placeholder="Точечные отклики повышают долю ответов"></label>
+          <label>Размер выборки<input name="test_size" min="1" type="number"></label>
+          <label>Метрика<input name="metric" maxlength="500" placeholder="reply_rate"></label>
+          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
+          <label class="wide">Описание<textarea name="description" maxlength="4000" rows="3"></textarea></label>
+        </div><p id="hypothesis-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="text-button" id="cancel-hypothesis-form" type="button">Отмена</button>
+          <button class="primary-button" id="submit-hypothesis-form" type="submit">Начать эксперимент</button></div>
+      </form>
+    </dialog>
+    <dialog id="hypothesis-close-dialog" aria-labelledby="hypothesis-close-title">
+      <form id="hypothesis-close-form" method="dialog"><div class="dialog-head"><div>
+        <p class="section-number">НАБЛЮДАЕМЫЙ РЕЗУЛЬТАТ</p><h2 id="hypothesis-close-title">Закрыть гипотезу</h2>
+        <p id="hypothesis-close-context" class="dialog-context"></p></div>
+        <button class="icon-button" id="close-hypothesis-close" type="button" aria-label="Закрыть">×</button></div>
+        <input name="hypothesis_id" type="hidden"><div class="form-grid">
+          <label class="wide">Результат<textarea name="result" required maxlength="4000" rows="4"></textarea></label></div>
+        <p id="hypothesis-close-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions"><button class="text-button" id="cancel-hypothesis-close" type="button">Отмена</button>
+          <button class="primary-button" type="submit">Зафиксировать результат</button></div></form>
     </dialog>
   </body>
 </html>

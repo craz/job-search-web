@@ -8,7 +8,8 @@ connects to PostgreSQL, or mounts Core data volumes.
 
 The browser lists and creates vacancies, changes their controlled funnel status,
 records local Applications linked to existing Vacancies, displays/updates
-Core-owned Daily Metrics, and tracks confirmed people connected to a company and
+Core-owned Daily Metrics, tracks confirmed people connected to a company and
+manages measurable search Hypotheses. Hypothesis results are local evidence;
 vacancy. Application and contact statuses are local tracking workflows only:
 the Web service never submits to an employer, starts OSINT, or sends a message.
 Loading, empty, success and error states are explicit.
