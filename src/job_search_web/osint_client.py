@@ -16,6 +16,10 @@ class OsintGateway(Protocol):
 
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
 
+    def list_vacancy_mirrors(self) -> tuple[int, Any]: ...
+
+    def discover_vacancy_mirrors(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
+
 
 class OsintClient:
     """Bounded HTTP client without access to OSINT storage or providers."""
@@ -38,3 +42,9 @@ class OsintClient:
 
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/people-research", json=payload)
+
+    def list_vacancy_mirrors(self) -> tuple[int, Any]:
+        return self._request("GET", "/api/v1/vacancy-mirrors")
+
+    def discover_vacancy_mirrors(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        return self._request("POST", "/api/v1/vacancy-mirrors", json=payload)

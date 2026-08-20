@@ -41,6 +41,7 @@ const assessmentForm = document.querySelector("#assessment-form");
 const assessmentFormError = document.querySelector("#assessment-form-error");
 let knownVacancies = [];
 let osintReports = [];
+let mirrorReports = [];
 
 const statusLabels = {
   new: "Новая",
@@ -94,6 +95,8 @@ function vacancyCard(item) {
     .join("");
   const report = osintReports.find((candidate) => candidate.vacancy_id === item.id);
   const people = report?.people || [];
+  const mirrorReport = mirrorReports.find((candidate) => candidate.vacancy_id === item.id);
+  const mirrors = mirrorReport?.mirrors || [];
   const evidence = people.length ? `<div class="research-results">
     <p class="research-heading">Найденные контакты · не проверено</p>
     ${people.slice(0, 3).map((person) => `<article class="research-person">
@@ -101,14 +104,25 @@ function vacancyCard(item) {
       <p>${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
       <a href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
     </article>`).join("")}</div>` : `<p class="research-empty">Непроверенные контакты ещё не найдены.</p>`;
+  const mirrorEvidence = mirrors.length ? `<div class="research-results">
+    <p class="research-heading">Зеркала вакансии · не проверено</p>
+    ${mirrors.slice(0, 3).map((mirror) => `<article class="research-person">
+      <div><strong>${escapeHtml(mirror.title || item.title)}</strong><span>score ${escapeHtml(String(mirror.score ?? "—"))}</span></div>
+      <p>${escapeHtml((mirror.reasons || []).join(", ") || "Совпадение по названию на career-странице")}</p>
+      <a href="${escapeHtml(mirror.url)}" target="_blank" rel="noreferrer">Открыть зеркало · ${escapeHtml(formatDate(mirror.observed_at))} ↗</a>
+    </article>`).join("")}</div>` : `<p class="research-empty">Зеркала вакансии ещё не найдены.</p>`;
   const researchAction = item.company.website_url
-    ? `<button class="research-button" data-research type="button">${report ? "Обновить поиск" : "Найти контакты"}</button>`
-    : `<p class="research-empty">Для поиска контактов сначала нужен сайт компании.</p>`;
+    ? `<div class="research-actions">
+        <button class="research-button" data-research type="button">${report ? "Обновить контакты" : "Найти контакты"}</button>
+        <button class="research-button" data-mirrors type="button">${mirrorReport ? "Обновить зеркала" : "Найти зеркала"}</button>
+      </div>`
+    : `<p class="research-empty">Для поиска контактов и зеркал сначала нужен сайт компании.</p>`;
   return `<article class="vacancy-card" data-id="${escapeHtml(item.id)}">
     <div class="card-meta"><span>${escapeHtml(item.source)}</span><span>${escapeHtml(statusLabels[item.status] || item.status)}</span></div>
     <h3>${escapeHtml(item.title)}</h3>
     <p class="company">${escapeHtml(item.company.name)}</p>
     <p class="description">${escapeHtml(item.description || "Описание пока не добавлено.")}</p>
+    ${mirrorEvidence}
     ${evidence}
     ${researchAction}
     <div class="card-footer">
@@ -291,10 +305,18 @@ async function loadVacancies() {
     connectionLabel.textContent = "Core доступен";
     knownVacancies = payload.items;
     try {
-      const osintResponse = await fetch("/api/v1/osint/people-proposals");
+      const [osintResponse, mirrorResponse] = await Promise.all([
+        fetch("/api/v1/osint/people-proposals"),
+        fetch("/api/v1/osint/vacancy-mirrors"),
+      ]);
       const osintPayload = await osintResponse.json();
+      const mirrorPayload = await mirrorResponse.json();
       osintReports = osintResponse.ok ? osintPayload.items : [];
-    } catch (_error) { osintReports = []; }
+      mirrorReports = mirrorResponse.ok ? mirrorPayload.items : [];
+    } catch (_error) {
+      osintReports = [];
+      mirrorReports = [];
+    }
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyCard).join("")
       : "";
@@ -392,6 +414,35 @@ grid.addEventListener("click", async (event) => {
       showNotice(error.message, true);
       researchButton.disabled = false;
       researchButton.textContent = "Повторить поиск";
+    }
+    return;
+  }
+  const mirrorButton = event.target.closest("[data-mirrors]");
+  if (mirrorButton) {
+    const card = mirrorButton.closest("[data-id]");
+    const vacancy = knownVacancies.find((item) => item.id === card.dataset.id);
+    mirrorButton.disabled = true;
+    mirrorButton.textContent = "Ищем…";
+    try {
+      const response = await fetch("/api/v1/osint/vacancy-mirrors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: vacancy.company.id,
+          vacancy_id: vacancy.id,
+          company_name: vacancy.company.name,
+          website_url: vacancy.company.website_url,
+          vacancy_title: vacancy.title,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Поиск зеркал не выполнен");
+      showNotice(`Зеркала: ${(payload.mirrors || []).length} найдено`);
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, true);
+      mirrorButton.disabled = false;
+      mirrorButton.textContent = "Повторить зеркала";
     }
     return;
   }

@@ -15,6 +15,8 @@ normalized vacancy Assessments are displayed without invoking a model provider;
 vacancy. Application and contact statuses are local tracking workflows only:
 the Web service never submits to an employer or sends a message. It can trigger
 bounded public OSINT research and displays the result as unverified evidence.
+Vacancy cards can also request career-page mirrors and show scored URLs without
+writing them to Core.
 Loading, empty, success and error states are explicit.
 
 ## Development

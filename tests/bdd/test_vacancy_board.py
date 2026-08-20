@@ -265,3 +265,28 @@ def proposal_stays_outside_core(osint_flow: tuple[httpx.Response, StubCore, Stub
     response, core, _ = osint_flow
     assert response.json()["items"][0]["people"][0]["status"] == "proposed"
     assert core.calls == []
+
+
+@when("Web запрашивает нормализованные зеркала OSINT", target_fixture="mirror_flow")
+def list_osint_mirrors(available_core: StubCore) -> tuple[httpx.Response, StubCore, StubOsint]:
+    osint = StubOsint()
+    response = WebClient(available_core, osint=osint).request(
+        "GET", "/api/v1/osint/vacancy-mirrors"
+    )
+    return response, available_core, osint
+
+
+@then("URL и оценка зеркала доступны карточке вакансии")
+def mirror_evidence_is_visible(mirror_flow: tuple[httpx.Response, StubCore, StubOsint]) -> None:
+    response, _, osint = mirror_flow
+    mirror = response.json()["items"][0]["mirrors"][0]
+    assert response.status_code == 200
+    assert mirror["url"] and mirror["score"] >= 15
+    assert osint.calls == [("mirror-list", None)]
+
+
+@then("зеркало остаётся непроверенным и не записывается в Core")
+def mirror_stays_outside_core(mirror_flow: tuple[httpx.Response, StubCore, StubOsint]) -> None:
+    response, core, _ = mirror_flow
+    assert response.json()["items"][0]["mirrors"][0]["status"] == "proposed"
+    assert core.calls == []

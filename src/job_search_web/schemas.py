@@ -82,6 +82,16 @@ class PeopleResearchRequest(BaseModel):
     website_url: HttpUrl
 
 
+class VacancyMirrorRequest(BaseModel):
+    """Browser-triggered bounded vacancy-mirror search sent to OSINT."""
+
+    company_id: UUID
+    vacancy_id: UUID
+    company_name: str = Field(min_length=1, max_length=255)
+    website_url: HttpUrl
+    vacancy_title: str = Field(min_length=1, max_length=500)
+
+
 class HypothesisCreate(BaseModel):
     """Browser-submitted measurable experiment forwarded to Core."""
 

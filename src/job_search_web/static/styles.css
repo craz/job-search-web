@@ -58,6 +58,8 @@ h2 span { color: var(--muted); font-family: inherit; font-size: .55em; vertical-
 .research-person p { margin: .5rem 0; max-height: 3.6em; overflow: hidden; }
 .research-person a { color: var(--ink); font-size: .75rem; font-weight: 750; }
 .research-button { border: 1px solid var(--ink); background: transparent; padding: .7rem 1rem; margin-top: 1rem; font-weight: 800; cursor: pointer; }
+.research-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
+.research-actions .research-button { margin-top: 0; }
 .research-button:disabled { cursor: wait; opacity: .6; }
 .company { margin: 0 0 1.2rem; font-weight: 750; }
 .description { color: var(--muted); line-height: 1.5; flex: 1; }

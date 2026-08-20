@@ -299,6 +299,30 @@ class StubOsint:
                 ],
             }
         ]
+        self.mirrors = [
+            {
+                "report_id": "mirror-1",
+                "company_id": "00000000-0000-0000-0000-000000000043",
+                "vacancy_id": "00000000-0000-0000-0000-000000000042",
+                "company_name": "Example Labs",
+                "website_url": "https://example.test/",
+                "vacancy_title": "Synthetic Integration Engineer",
+                "observed_at": "2026-08-20T12:05:00Z",
+                "mirrors": [
+                    {
+                        "url": "https://example.test/vacancies/synthetic-integration-engineer",
+                        "title": "Synthetic Integration Engineer",
+                        "score": 48.0,
+                        "reasons": ["title_tokens=2/2"],
+                        "source": "company-site",
+                        "source_url": "https://example.test/vacancies/synthetic-integration-engineer",
+                        "confidence": 0.48,
+                        "observed_at": "2026-08-20T12:05:00Z",
+                        "status": "proposed",
+                    }
+                ],
+            }
+        ]
 
     def list_people_proposals(self) -> tuple[int, Any]:
         self.calls.append(("list", None))
@@ -307,6 +331,14 @@ class StubOsint:
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
         self.calls.append(("research", payload))
         return 200, self.items[0]
+
+    def list_vacancy_mirrors(self) -> tuple[int, Any]:
+        self.calls.append(("mirror-list", None))
+        return 200, {"items": self.mirrors, "total": len(self.mirrors)}
+
+    def discover_vacancy_mirrors(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        self.calls.append(("mirror-discover", payload))
+        return 200, self.mirrors[0]
 
 
 class WebClient:

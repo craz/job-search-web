@@ -22,6 +22,7 @@ from job_search_web.schemas import (
     PersonCreate,
     PersonStatusUpdate,
     VacancyCreate,
+    VacancyMirrorRequest,
     VacancyStatusUpdate,
 )
 
@@ -209,6 +210,30 @@ def create_app(
         """Trigger bounded public research without creating a Core Person."""
         try:
             return proxy_response(*osint_gateway.research_people(request.model_dump(mode="json")))
+        except OsintUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "osint_unavailable", "message": "OSINT API is unavailable"},
+            )
+
+    @application.get("/api/v1/osint/vacancy-mirrors")
+    def get_vacancy_mirrors() -> JSONResponse:
+        """Return normalized unconfirmed vacancy mirrors without touching Core."""
+        try:
+            return proxy_response(*osint_gateway.list_vacancy_mirrors())
+        except OsintUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "osint_unavailable", "message": "OSINT API is unavailable"},
+            )
+
+    @application.post("/api/v1/osint/vacancy-mirrors")
+    def post_vacancy_mirrors(request: VacancyMirrorRequest) -> JSONResponse:
+        """Trigger bounded career-page mirror search without Core writes."""
+        try:
+            return proxy_response(
+                *osint_gateway.discover_vacancy_mirrors(request.model_dump(mode="json"))
+            )
         except OsintUnavailableError:
             return JSONResponse(
                 status_code=503,
