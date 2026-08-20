@@ -32,6 +32,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
 
     assert page.status_code == 200
     assert "Работа — это воронка" in page.text
+    assert "/assets/app.js?v=20260820-applications" in page.text
+    assert "/assets/styles.css?v=20260820-applications" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
