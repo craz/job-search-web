@@ -1,6 +1,6 @@
 """Web boundary schemas independent from Core implementation modules."""
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -37,3 +37,16 @@ class ApplicationCreate(BaseModel):
     result: str | None = Field(default=None, pattern="^(reply|interview|rejected|offer)$")
     next_action: str | None = Field(default=None, max_length=500)
     next_action_at: datetime | None = None
+
+
+class DailyMetricUpdate(BaseModel):
+    """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
+
+    metric_date: date
+    views_total: int | None = Field(default=None, ge=0)
+    views_new: int | None = Field(default=None, ge=0)
+    applications: int | None = Field(default=None, ge=0)
+    replies: int | None = Field(default=None, ge=0)
+    invitations: int | None = Field(default=None, ge=0)
+    rejections: int | None = Field(default=None, ge=0)
+    notes: str | None = Field(default=None, max_length=4000)

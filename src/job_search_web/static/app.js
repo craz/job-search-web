@@ -14,6 +14,12 @@ const applicationForm = document.querySelector("#application-form");
 const applicationFormError = document.querySelector("#application-form-error");
 const applicationSubmitButton = document.querySelector("#submit-application-form");
 const applicationVacancyTitle = document.querySelector("#application-vacancy-title");
+const metricsDashboard = document.querySelector("#metrics");
+const metricCount = document.querySelector("#metric-count");
+const metricDialog = document.querySelector("#metric-dialog");
+const metricForm = document.querySelector("#metric-form");
+const metricFormError = document.querySelector("#metric-form-error");
+const metricSubmitButton = document.querySelector("#submit-metric-form");
 
 const statusLabels = {
   new: "Новая",
@@ -94,6 +100,61 @@ function applicationCard(item) {
       <strong>${escapeHtml(item.resume_version || "—")}</strong>
     </div>
   </article>`;
+}
+
+const metricLabels = {
+  views_new: "Новые просмотры",
+  applications: "Отклики",
+  replies: "Ответы",
+  invitations: "Приглашения",
+  rejections: "Отказы",
+};
+
+function metricValue(value) {
+  return value ?? "—";
+}
+
+function metricsView(items) {
+  const latest = items[0];
+  const summary = Object.entries(metricLabels).map(([field, label]) => `
+    <article class="metric-summary-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(metricValue(latest[field]))}</strong>
+    </article>`).join("");
+  const maxApplications = Math.max(1, ...items.map((item) => item.applications || 0));
+  const history = items.map((item) => {
+    const width = Math.round(((item.applications || 0) / maxApplications) * 100);
+    return `<article class="metric-history-row">
+      <time datetime="${escapeHtml(item.metric_date)}">${escapeHtml(item.metric_date)}</time>
+      <div class="metric-bar-track" aria-label="Откликов: ${escapeHtml(metricValue(item.applications))}">
+        <span class="metric-bar" style="width:${width}%"></span>
+      </div>
+      <strong>${escapeHtml(metricValue(item.applications))}</strong>
+      <span class="metric-row-detail">ответы ${escapeHtml(metricValue(item.replies))} · отказы ${escapeHtml(metricValue(item.rejections))}</span>
+    </article>`;
+  }).join("");
+  return `<div class="metric-latest">
+      <div class="metric-latest-head"><div><p class="section-number">ПОСЛЕДНИЙ СНИМОК</p><h3>${escapeHtml(latest.metric_date)}</h3></div><span>${escapeHtml(latest.notes || "Без заметки")}</span></div>
+      <div class="metric-summary-grid">${summary}</div>
+    </div>
+    <div class="metric-history"><h3>Отклики по дням</h3>${history}</div>`;
+}
+
+async function loadMetrics() {
+  metricsDashboard.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/metrics");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить метрики");
+    metricCount.textContent = String(payload.total).padStart(2, "0");
+    metricsDashboard.innerHTML = payload.total ? metricsView(payload.items) : "";
+    if (!payload.total) stateCard(metricsDashboard, "Метрик пока нет", "Запишите первый дневной снимок.");
+  } catch (error) {
+    metricCount.textContent = "—";
+    stateCard(metricsDashboard, "Не удалось загрузить метрики", error.message);
+  } finally {
+    metricsDashboard.setAttribute("aria-busy", "false");
+  }
 }
 
 async function loadApplications() {
@@ -242,6 +303,53 @@ applicationForm.addEventListener("submit", async (event) => {
   }
 });
 
+document.querySelector("#open-metric-form").addEventListener("click", () => {
+  metricForm.reset();
+  metricForm.elements.metric_date.value = new Date().toISOString().slice(0, 10);
+  metricFormError.hidden = true;
+  metricDialog.showModal();
+});
+document.querySelector("#close-metric-form").addEventListener("click", () => metricDialog.close());
+document.querySelector("#cancel-metric-form").addEventListener("click", () => metricDialog.close());
+
+metricForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  metricFormError.hidden = true;
+  metricSubmitButton.disabled = true;
+  const values = Object.fromEntries(new FormData(metricForm));
+  const metricDate = values.metric_date;
+  for (const field of ["views_total", "views_new", "applications", "replies", "invitations", "rejections"]) {
+    if (values[field] === "") delete values[field];
+    else values[field] = Number(values[field]);
+  }
+  if (!values.notes) delete values.notes;
+  if (Object.keys(values).length === 1) {
+    metricFormError.textContent = "Укажите хотя бы один показатель или заметку";
+    metricFormError.hidden = false;
+    metricSubmitButton.disabled = false;
+    return;
+  }
+  const identity = crypto.randomUUID();
+  try {
+    const response = await fetch(`/api/v1/metrics/${metricDate}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": identity },
+      body: JSON.stringify(values),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Метрики не сохранены");
+    metricDialog.close();
+    showNotice(`Метрики за ${payload.metric_date} сохранены`);
+    await loadMetrics();
+  } catch (error) {
+    metricFormError.textContent = error.message;
+    metricFormError.hidden = false;
+  } finally {
+    metricSubmitButton.disabled = false;
+  }
+});
+
 loadVacancies();
 loadApplications();
+loadMetrics();
 startLiveReload();

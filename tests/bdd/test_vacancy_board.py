@@ -88,3 +88,30 @@ def application_is_linked(
     assert created.status_code == 201
     assert listing.json()["items"][0]["vacancy"]["id"].endswith("42")
     assert [call[0] for call in core.calls] == ["application-create", "application-list"]
+
+
+@when(
+    "Web записывает дневной снимок и запрашивает историю",
+    target_fixture="metric_flow",
+)
+def update_and_list_metric(
+    available_core: StubCore,
+) -> tuple[httpx.Response, httpx.Response, StubCore]:
+    """Apply one synthetic snapshot through the Web facade and list it."""
+    client = WebClient(available_core)
+    updated = client.request(
+        "PUT",
+        "/api/v1/metrics/2026-08-20",
+        headers={"Idempotency-Key": "bdd-web-metric"},
+        json={"metric_date": "2026-08-20", "applications": 2, "replies": 1},
+    )
+    return updated, client.request("GET", "/api/v1/metrics"), available_core
+
+
+@then("Web возвращает метрики только через Core")
+def metric_comes_from_core(metric_flow: tuple[httpx.Response, httpx.Response, StubCore]) -> None:
+    """Require a successful dated update and observable gateway-only reads."""
+    updated, listing, core = metric_flow
+    assert updated.status_code == 201
+    assert listing.json()["items"][0]["replies"] == 1
+    assert [call[0] for call in core.calls] == ["metric-update", "metric-list"]

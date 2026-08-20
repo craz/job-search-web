@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260820-applications">
-    <script src="/assets/app.js?v=20260820-applications" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260820-metrics">
+    <script src="/assets/app.js?v=20260820-metrics" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#vacancies">К списку вакансий</a>
@@ -54,6 +54,22 @@
           <span class="loader" aria-hidden="true"></span>
           <h3>Загружаем отклики</h3>
           <p>Web запрашивает журнал у Core API.</p>
+        </article>
+      </section>
+
+      <section class="toolbar metrics-toolbar" aria-labelledby="metrics-title">
+        <div>
+          <p class="section-number">03 / ТЕМП</p>
+          <h2 id="metrics-title">Дневные метрики <span id="metric-count">—</span></h2>
+        </div>
+        <button class="primary-button" id="open-metric-form" type="button">+ Записать день</button>
+      </section>
+
+      <section id="metrics" class="metrics-dashboard" aria-live="polite" aria-busy="true">
+        <article class="state-card">
+          <span class="loader" aria-hidden="true"></span>
+          <h3>Загружаем показатели</h3>
+          <p>Web запрашивает историю у Core API.</p>
         </article>
       </section>
     </main>
@@ -106,6 +122,34 @@
         <div class="dialog-actions">
           <button class="text-button" id="cancel-application-form" type="button">Отмена</button>
           <button class="primary-button" id="submit-application-form" type="submit">Записать факт</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="metric-dialog" aria-labelledby="metric-dialog-title">
+      <form id="metric-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="section-number">ДНЕВНОЙ СНИМОК</p>
+            <h2 id="metric-dialog-title">Записать показатели</h2>
+          </div>
+          <button class="icon-button" id="close-metric-form" type="button" aria-label="Закрыть">×</button>
+        </div>
+        <div class="form-grid metrics-form-grid">
+          <label class="wide">Дата<input name="metric_date" required type="date"></label>
+          <label>Просмотров всего<input name="views_total" min="0" type="number"></label>
+          <label>Новых просмотров<input name="views_new" min="0" type="number"></label>
+          <label>Откликов<input name="applications" min="0" type="number"></label>
+          <label>Ответов<input name="replies" min="0" type="number"></label>
+          <label>Приглашений<input name="invitations" min="0" type="number"></label>
+          <label>Отказов<input name="rejections" min="0" type="number"></label>
+          <label class="wide">Заметка<textarea name="notes" maxlength="4000" rows="3" placeholder="Контекст дня — необязательно"></textarea></label>
+        </div>
+        <p class="safety-note">Web сохраняет только введённый снимок и не подменяет данные HH.</p>
+        <p id="metric-form-error" class="form-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="text-button" id="cancel-metric-form" type="button">Отмена</button>
+          <button class="primary-button" id="submit-metric-form" type="submit">Сохранить снимок</button>
         </div>
       </form>
     </dialog>

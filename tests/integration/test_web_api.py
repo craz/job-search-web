@@ -32,8 +32,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
 
     assert page.status_code == 200
     assert "Работа — это воронка" in page.text
-    assert "/assets/app.js?v=20260820-applications" in page.text
-    assert "/assets/styles.css?v=20260820-applications" in page.text
+    assert "/assets/app.js?v=20260820-metrics" in page.text
+    assert "/assets/styles.css?v=20260820-metrics" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
@@ -86,3 +86,41 @@ def test_live_reload_revision_disables_asset_cache_in_dev_mode() -> None:
     assert revision.json()["enabled"] is True
     assert revision.json()["revision"].isdigit()
     assert asset.headers["cache-control"] == "no-store"
+
+
+def test_metric_flow_lists_and_updates_only_through_core_gateway() -> None:
+    """The dashboard persists a validated partial snapshot through Core HTTP."""
+    core = StubCore()
+    client = WebClient(core)
+    created = client.request(
+        "PUT",
+        "/api/v1/metrics/2026-08-20",
+        headers={"Idempotency-Key": "web-metric-key"},
+        json={
+            "metric_date": "2026-08-20",
+            "applications": 3,
+            "views_new": 7,
+            "notes": "Synthetic dashboard request.",
+        },
+    )
+    listing = client.request("GET", "/api/v1/metrics")
+
+    assert created.status_code == 201
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["applications"] == 3
+    assert [call[0] for call in core.calls] == ["metric-update", "metric-list"]
+
+
+def test_metric_path_and_body_dates_must_match() -> None:
+    """Web rejects ambiguous dated writes before contacting Core."""
+    core = StubCore()
+    response = WebClient(core).request(
+        "PUT",
+        "/api/v1/metrics/2026-08-20",
+        headers={"Idempotency-Key": "mismatch"},
+        json={"metric_date": "2026-08-19", "applications": 1},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "metric_date_mismatch"
+    assert core.calls == []

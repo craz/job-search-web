@@ -55,6 +55,22 @@ def application() -> dict[str, Any]:
     }
 
 
+def daily_metric() -> dict[str, Any]:
+    """Return one normalized public Daily Metric snapshot."""
+    return {
+        "metric_date": "2026-08-20",
+        "views_total": 12,
+        "views_new": 3,
+        "applications": 2,
+        "replies": 1,
+        "invitations": 1,
+        "rejections": 0,
+        "notes": "Synthetic dashboard fixture.",
+        "created_at": "2026-08-20T10:00:00Z",
+        "updated_at": "2026-08-20T10:00:00Z",
+    }
+
+
 class StubCore:
     """In-memory contract double recording every Web-to-Core operation."""
 
@@ -63,6 +79,7 @@ class StubCore:
         self.unavailable = unavailable
         self.items = [vacancy()]
         self.application_items: list[dict[str, Any]] = []
+        self.metric_items: list[dict[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -107,6 +124,22 @@ class StubCore:
         created["source"] = payload["source"]
         created["external_id"] = payload["external_id"]
         self.application_items.insert(0, created)
+        return 201, created
+
+    def list_metrics(self) -> tuple[int, Any]:
+        """Return the current synthetic Daily Metric history."""
+        self._guard()
+        self.calls.append(("metric-list", None))
+        return 200, {"items": self.metric_items, "total": len(self.metric_items)}
+
+    def update_metric(self, metric_date: str, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Record one partial dated snapshot and retry metadata."""
+        self._guard()
+        self.calls.append(("metric-update", (metric_date, payload, key)))
+        created = daily_metric()
+        created.update(payload)
+        created["metric_date"] = metric_date
+        self.metric_items = [created]
         return 201, created
 
 

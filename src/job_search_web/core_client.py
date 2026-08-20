@@ -34,6 +34,14 @@ class CoreGateway(Protocol):
         """Create or replay one local Application record through Core."""
         ...
 
+    def list_metrics(self) -> tuple[int, Any]:
+        """Return bounded Daily Metric history from Core."""
+        ...
+
+    def update_metric(self, metric_date: str, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Apply one replay-safe partial Daily Metric snapshot through Core."""
+        ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -86,6 +94,19 @@ class CoreClient:
         return self._request(
             "POST",
             "/api/v1/applications",
+            json=payload,
+            headers={"Idempotency-Key": key},
+        )
+
+    def list_metrics(self) -> tuple[int, Any]:
+        """Fetch bounded Daily Metric history from Core."""
+        return self._request("GET", "/api/v1/metrics?limit=90")
+
+    def update_metric(self, metric_date: str, payload: dict[str, Any], key: str) -> tuple[int, Any]:
+        """Forward a partial dated snapshot with its retry key."""
+        return self._request(
+            "PUT",
+            f"/api/v1/metrics/{metric_date}",
             json=payload,
             headers={"Idempotency-Key": key},
         )

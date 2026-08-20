@@ -11,7 +11,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
-from job_search_web.schemas import ApplicationCreate, VacancyCreate, VacancyStatusUpdate
+from job_search_web.schemas import (
+    ApplicationCreate,
+    DailyMetricUpdate,
+    VacancyCreate,
+    VacancyStatusUpdate,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -117,6 +122,32 @@ def create_app(core: CoreGateway | None = None, *, live_reload: bool | None = No
             return proxy_response(
                 *gateway.create_application(request.model_dump(mode="json"), idempotency_key)
             )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/metrics")
+    def get_metrics() -> JSONResponse:
+        """Return bounded Daily Metric history obtained only through Core HTTP."""
+        try:
+            return proxy_response(*gateway.list_metrics())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.put("/api/v1/metrics/{metric_date}")
+    def put_metric(
+        metric_date: str,
+        request: DailyMetricUpdate,
+        idempotency_key: str = Header(min_length=1, alias="Idempotency-Key"),
+    ) -> JSONResponse:
+        """Forward one browser metric snapshot under replay-safe metadata."""
+        if request.metric_date.isoformat() != metric_date:
+            return JSONResponse(
+                status_code=400,
+                content={"code": "metric_date_mismatch", "message": "Metric dates differ"},
+            )
+        payload = request.model_dump(mode="json", exclude={"metric_date"}, exclude_none=True)
+        try:
+            return proxy_response(*gateway.update_metric(metric_date, payload, idempotency_key))
         except CoreUnavailableError:
             return unavailable_response()
 
