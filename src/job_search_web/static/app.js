@@ -108,8 +108,34 @@ const vacancyStatusBadge = {
   rejected: "danger",
 };
 
+const personStatusBadge = {
+  new: "neutral",
+  researching: "info",
+  contacted: "info",
+  replied: "success",
+  dropped: "neutral",
+};
+
+const hypothesisStatusBadge = {
+  active: "info",
+  done: "neutral",
+};
+
+const assessmentVerdictBadge = {
+  apply: "success",
+  maybe: "warning",
+  skip: "danger",
+};
+
 function renderBadge(label, variant = "neutral") {
   return `<span class="badge badge--${variant}"><span class="badge__dot" aria-hidden="true"></span>${escapeHtml(label)}</span>`;
+}
+
+function excerpt(text, maxLength = 120) {
+  const value = String(text || "").trim();
+  if (!value) return "Описание пока не добавлено.";
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trim()}…`;
 }
 
 async function startLiveReload() {
@@ -149,7 +175,38 @@ function stateCard(target, title, detail) {
   target.innerHTML = `<article class="state-card"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></div></article>`;
 }
 
-function vacancyCard(item) {
+function renderEvidencePerson(person, report) {
+  const proposed = person.status === "proposed" && person.id && report?.report_id;
+  const confirmControl = proposed
+    ? `<button class="btn btn--secondary btn--sm" type="button" data-confirm data-report-id="${escapeHtml(report.report_id)}" data-person-id="${escapeHtml(person.id)}">Подтвердить в Core</button>`
+    : person.status === "confirmed"
+      ? renderBadge("В Core", "success")
+      : "";
+  return `<div class="evidence-item">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(person.full_name)}</strong>
+      <span>${escapeHtml(person.title || "Роль не определена")}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
+    <div class="evidence-item__foot">
+      <a class="inline-link" href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
+      ${confirmControl}
+    </div>
+  </div>`;
+}
+
+function renderMirrorItem(mirror, item) {
+  return `<div class="evidence-item">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(mirror.title || item.title)}</strong>
+      <span>score ${escapeHtml(String(mirror.score ?? "—"))}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml((mirror.reasons || []).join(", ") || "Совпадение по названию на career-странице")}</p>
+    <a class="inline-link" href="${escapeHtml(mirror.url)}" target="_blank" rel="noreferrer">Открыть зеркало · ${escapeHtml(formatDate(mirror.observed_at))} ↗</a>
+  </div>`;
+}
+
+function vacancyRow(item) {
   const options = Object.entries(statusLabels)
     .map(([value, label]) => `<option value="${value}" ${value === item.status ? "selected" : ""}>${label}</option>`)
     .join("");
@@ -157,50 +214,62 @@ function vacancyCard(item) {
   const people = report?.people || [];
   const mirrorReport = mirrorReports.find((candidate) => candidate.vacancy_id === item.id);
   const mirrors = mirrorReport?.mirrors || [];
-  const evidence = people.length ? `<div class="research-results">
-    <p class="research-heading">Найденные контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
-    ${people.slice(0, 3).map((person) => {
-      const proposed = person.status === "proposed" && person.id && report?.report_id;
-      const confirmControl = proposed
-        ? `<button class="btn btn--secondary btn--sm" type="button" data-confirm data-report-id="${escapeHtml(report.report_id)}" data-person-id="${escapeHtml(person.id)}">Подтвердить в Core</button>`
-        : person.status === "confirmed"
-          ? renderBadge("В Core", "success")
-          : "";
-      return `<article class="research-person">
-      <div><strong>${escapeHtml(person.full_name)}</strong><span>${escapeHtml(person.title || "Роль не определена")}</span></div>
-      <p>${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
-      <div class="research-person-footer">
-        <a href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
-        ${confirmControl}
-      </div>
-    </article>`;
-    }).join("")}</div>` : `<p class="research-empty">Непроверенные контакты ещё не найдены.</p>`;
-  const mirrorEvidence = mirrors.length ? `<div class="research-results">
-    <p class="research-heading">Зеркала вакансии · не проверено</p>
-    ${mirrors.slice(0, 3).map((mirror) => `<article class="research-person">
-      <div><strong>${escapeHtml(mirror.title || item.title)}</strong><span>score ${escapeHtml(String(mirror.score ?? "—"))}</span></div>
-      <p>${escapeHtml((mirror.reasons || []).join(", ") || "Совпадение по названию на career-странице")}</p>
-      <a href="${escapeHtml(mirror.url)}" target="_blank" rel="noreferrer">Открыть зеркало · ${escapeHtml(formatDate(mirror.observed_at))} ↗</a>
-    </article>`).join("")}</div>` : `<p class="research-empty">Зеркала вакансии ещё не найдены.</p>`;
-  const researchAction = item.company.website_url
-    ? `<div class="research-actions">
+  const peopleHtml = people.length
+    ? people.slice(0, 3).map((person) => renderEvidencePerson(person, report)).join("")
+    : `<p class="row-detail__empty">Непроверенные контакты ещё не найдены.</p>`;
+  const mirrorsHtml = mirrors.length
+    ? mirrors.slice(0, 3).map((mirror) => renderMirrorItem(mirror, item)).join("")
+    : `<p class="row-detail__empty">Зеркала вакансии ещё не найдены.</p>`;
+  const researchButtons = item.company.website_url
+    ? `<div class="row-detail__actions">
         <button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Обновить контакты" : "Найти контакты"}</button>
         <button class="btn btn--ghost btn--sm" data-mirrors type="button">${mirrorReport ? "Обновить зеркала" : "Найти зеркала"}</button>
       </div>`
-    : `<p class="research-empty">Для поиска контактов и зеркал сначала нужен сайт компании.</p>`;
-  return `<article class="vacancy-card" data-id="${escapeHtml(item.id)}">
-    <div class="card-meta"><span>${escapeHtml(item.source)}</span>${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}</div>
-    <h3>${escapeHtml(item.title)}</h3>
-    <p class="company">${escapeHtml(item.company.name)}</p>
-    <p class="description">${escapeHtml(item.description || "Описание пока не добавлено.")}</p>
-    ${mirrorEvidence}
-    ${evidence}
-    ${researchAction}
-    <div class="card-footer">
-      <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
-      <label><span class="sr-only">Статус</span><select class="control control--select" data-status>${options}</select></label>
+    : `<p class="row-detail__empty">Для поиска контактов и зеркал сначала нужен сайт компании.</p>`;
+  const evidenceCount = people.length + mirrors.length;
+  const detailSummary = evidenceCount
+    ? `Контакты и зеркала · ${evidenceCount}`
+    : item.company.website_url
+      ? "OSINT и зеркала"
+      : "";
+  const detailBlock = detailSummary
+    ? `<details class="row-detail"${evidenceCount ? " open" : ""}>
+        <summary class="row-detail__summary">${escapeHtml(detailSummary)}</summary>
+        <div class="row-detail__body">
+          ${researchButtons}
+          <div class="row-detail__section">
+            <p class="row-detail__label">Зеркала · не проверено</p>
+            ${mirrorsHtml}
+          </div>
+          <div class="row-detail__section">
+            <p class="row-detail__label">Контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
+            ${peopleHtml}
+          </div>
+        </div>
+      </details>`
+    : "";
+  return `<article class="list-row-group" data-id="${escapeHtml(item.id)}">
+    <div class="list-row">
+      <div class="list-row__primary">
+        <div class="list-row__head">
+          <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
+          <div class="list-row__badges">
+            ${renderBadge(item.source, "neutral")}
+            ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
+          </div>
+        </div>
+        <p class="list-row__secondary">${escapeHtml(item.company.name)}</p>
+        <p class="list-row__excerpt">${escapeHtml(excerpt(item.description))}</p>
+      </div>
+      <div class="list-row__trailing">
+        <div class="list-row__actions">
+          <a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
+          <label class="list-row__control"><span class="sr-only">Статус</span><select class="control control--select" data-status>${options}</select></label>
+          <button class="btn btn--secondary btn--sm" data-apply type="button">Записать отклик</button>
+        </div>
+      </div>
     </div>
-    <button class="btn btn--secondary" data-apply type="button">Записать отклик</button>
+    ${detailBlock}
   </article>`;
 }
 
@@ -209,14 +278,16 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function applicationCard(item) {
+function applicationRow(item) {
   return `<article class="list-row">
     <div class="list-row__leading">
       <time datetime="${escapeHtml(item.applied_at || "")}">${escapeHtml(formatDate(item.applied_at))}</time>
     </div>
     <div class="list-row__primary">
-      <p class="list-row__secondary">${escapeHtml(item.source)}</p>
-      <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
+      <div class="list-row__head">
+        <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
+        ${renderBadge(item.source, "neutral")}
+      </div>
       <p class="list-row__secondary">${escapeHtml(item.next_action || "Следующий шаг пока не указан.")}</p>
     </div>
     <div class="list-row__trailing">
@@ -241,10 +312,10 @@ function metricValue(value) {
 function metricsView(items) {
   const latest = items[0];
   const summary = Object.entries(metricLabels).map(([field, label]) => `
-    <article class="metric-summary-card">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(metricValue(latest[field]))}</strong>
-    </article>`).join("");
+    <div class="metric-cell">
+      <span class="metric-cell__label">${escapeHtml(label)}</span>
+      <strong class="metric-cell__value">${escapeHtml(metricValue(latest[field]))}</strong>
+    </div>`).join("");
   const maxApplications = Math.max(1, ...items.map((item) => item.applications || 0));
   const history = items.map((item) => {
     const width = Math.round(((item.applications || 0) / maxApplications) * 100);
@@ -261,18 +332,32 @@ function metricsView(items) {
       <div class="metric-latest-head"><div><p class="section-number">ПОСЛЕДНИЙ СНИМОК</p><h3>${escapeHtml(latest.metric_date)}</h3></div><span>${escapeHtml(latest.notes || "Без заметки")}</span></div>
       <div class="metric-summary-grid">${summary}</div>
     </div>
-    <div class="surface surface--panel metric-history"><h3>Отклики по дням</h3>${history}</div>`;
+    <div class="surface surface--panel metric-history"><h3 class="metric-panel__title">Отклики по дням</h3>${history}</div>`;
 }
 
-function personCard(item) {
+function personRow(item) {
   const options = Object.entries(personStatusLabels).map(([value, label]) => `<option value="${value}" ${value === item.status ? "selected" : ""}>${label}</option>`).join("");
-  const link = item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Профиль ↗</a>` : "";
-  return `<article class="person-card" data-person-id="${escapeHtml(item.id)}">
-    <div class="card-meta"><span>${escapeHtml(personRoleLabels[item.role] || item.role)}</span><span>${escapeHtml(item.source)}</span></div>
-    <h3>${escapeHtml(item.full_name)}</h3><p class="company">${escapeHtml(item.company.name)}</p>
-    <p class="description">${escapeHtml(item.title || item.vacancy?.title || "Должность не указана")}</p>
-    <p class="person-notes">${escapeHtml(item.notes || "Заметок пока нет.")}</p>
-    <div class="card-footer">${link}<label><span class="sr-only">Статус контакта</span><select data-person-status>${options}</select></label></div>
+  const profileLink = item.url ? `<a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Профиль ↗</a>` : "";
+  const roleLabel = personRoleLabels[item.role] || item.role;
+  return `<article class="list-row" data-person-id="${escapeHtml(item.id)}">
+    <div class="list-row__primary">
+      <div class="list-row__head">
+        <h3 class="list-row__title">${escapeHtml(item.full_name)}</h3>
+        <div class="list-row__badges">
+          ${renderBadge(roleLabel, "neutral")}
+          ${renderBadge(personStatusLabels[item.status] || item.status, personStatusBadge[item.status] || "neutral")}
+        </div>
+      </div>
+      <p class="list-row__secondary">${escapeHtml(item.company.name)}</p>
+      <p class="list-row__meta">${escapeHtml(item.title || item.vacancy?.title || "Должность не указана")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</p>
+    </div>
+    <div class="list-row__trailing">
+      <div class="list-row__actions">
+        ${profileLink}
+        <label class="list-row__control"><span class="sr-only">Статус контакта</span><select class="control control--select" data-person-status>${options}</select></label>
+      </div>
+      <p class="list-row__meta">${escapeHtml(item.source)}</p>
+    </div>
   </article>`;
 }
 
@@ -283,7 +368,7 @@ async function loadPeople() {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить контакты");
     peopleCount.textContent = String(payload.total).padStart(2, "0");
-    peopleGrid.innerHTML = payload.total ? payload.items.map(personCard).join("") : "";
+    peopleGrid.innerHTML = payload.total ? payload.items.map(personRow).join("") : "";
     if (!payload.total) stateCard(peopleGrid, "Контактов пока нет", "Добавьте подтверждённого человека к вакансии.");
   } catch (error) {
     peopleCount.textContent = "—";
@@ -291,14 +376,32 @@ async function loadPeople() {
   } finally { peopleGrid.setAttribute("aria-busy", "false"); }
 }
 
-function hypothesisCard(item) {
+function hypothesisRow(item) {
   const detail = [item.test_size ? `выборка ${item.test_size}` : null, item.metric].filter(Boolean).join(" · ");
-  const result = item.result ? `<p class="hypothesis-result">${escapeHtml(item.result)}</p>` : `<p>${escapeHtml(item.description || "Описание не добавлено.")}</p>`;
-  const action = item.status === "active" ? `<button class="btn btn--secondary" data-close-hypothesis type="button">Зафиксировать результат</button>` : renderBadge("Завершена", "neutral");
-  return `<article class="hypothesis-card" data-hypothesis-id="${escapeHtml(item.id)}"><div>
-    <p class="card-meta"><span>${escapeHtml(item.status === "active" ? "Активна" : "Завершена")}</span><span>${escapeHtml(item.source)}</span></p>
-    <h3>${escapeHtml(item.title)}</h3><p class="description">${escapeHtml(detail || "Метрика не указана")}</p>${result}</div>
-    <div class="hypothesis-action">${action}</div></article>`;
+  const isActive = item.status === "active";
+  const statusLabel = isActive ? "Активна" : "Завершена";
+  const body = item.result
+    ? `<p class="list-row__secondary">${escapeHtml(item.result)}</p>`
+    : `<p class="list-row__secondary">${escapeHtml(item.description || "Описание не добавлено.")}</p>`;
+  const action = isActive
+    ? `<button class="btn btn--ghost btn--sm" data-close-hypothesis type="button">Зафиксировать результат</button>`
+    : "";
+  return `<article class="list-row" data-hypothesis-id="${escapeHtml(item.id)}">
+    <div class="list-row__primary">
+      <div class="list-row__head">
+        <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
+        <div class="list-row__badges">
+          ${renderBadge(statusLabel, hypothesisStatusBadge[item.status] || "neutral")}
+          ${renderBadge(item.source, "neutral")}
+        </div>
+      </div>
+      <p class="list-row__meta">${escapeHtml(detail || "Метрика не указана")}</p>
+      ${body}
+    </div>
+    <div class="list-row__trailing">
+      <div class="list-row__actions">${action}</div>
+    </div>
+  </article>`;
 }
 
 async function loadHypotheses() {
@@ -307,18 +410,38 @@ async function loadHypotheses() {
     const response = await fetch("/api/v1/hypotheses"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить гипотезы");
     hypothesisCount.textContent = String(payload.total).padStart(2, "0");
-    hypothesisGrid.innerHTML = payload.total ? payload.items.map(hypothesisCard).join("") : "";
+    hypothesisGrid.innerHTML = payload.total ? payload.items.map(hypothesisRow).join("") : "";
     if (!payload.total) stateCard(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.");
   } catch (error) { hypothesisCount.textContent = "—"; stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
   finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
 }
 
-function assessmentCard(item) {
-  const verdict = {apply: "Откликаться", maybe: "Подумать", skip: "Пропустить"}[item.verdict] || item.verdict;
-  return `<article class="assessment-card"><p class="card-meta"><span>${escapeHtml(verdict)}</span><span>${escapeHtml(item.model)}</span></p>
-    <div class="assessment-score">${escapeHtml(item.relevance_score)}</div><h3>${escapeHtml(item.vacancy.title)}</h3>
-    <p>${escapeHtml(item.reason)}</p>${item.risk ? `<p class="hypothesis-result">Риск: ${escapeHtml(item.risk)}</p>` : ""}
-    <p><strong>Действие:</strong> ${escapeHtml(item.action)}</p></article>`;
+function assessmentRow(item) {
+  const verdictLabels = { apply: "Откликаться", maybe: "Подумать", skip: "Пропустить" };
+  const verdict = verdictLabels[item.verdict] || item.verdict;
+  const detail = `<div class="row-detail__body row-detail__body--plain">
+      <p class="assessment-detail__reason">${escapeHtml(item.reason)}</p>
+      ${item.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(item.risk)}</p>` : ""}
+      <p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(item.action)}</p>
+    </div>`;
+  return `<article class="list-row-group">
+    <div class="list-row">
+      <div class="list-row__primary">
+        <div class="list-row__head">
+          <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
+          <div class="list-row__badges">${renderBadge(verdict, assessmentVerdictBadge[item.verdict] || "neutral")}</div>
+        </div>
+        <p class="list-row__meta">${escapeHtml(item.model)} · ${escapeHtml(item.prompt_version || "—")}</p>
+      </div>
+      <div class="list-row__trailing">
+        <span class="assessment-score" aria-label="Релевантность">${escapeHtml(item.relevance_score)}</span>
+      </div>
+    </div>
+    <details class="row-detail">
+      <summary class="row-detail__summary">Подробнее</summary>
+      ${detail}
+    </details>
+  </article>`;
 }
 
 async function loadAssessments() {
@@ -326,7 +449,7 @@ async function loadAssessments() {
   try { const response = await fetch("/api/v1/assessments"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить оценки");
     assessmentCount.textContent = String(payload.total).padStart(2, "0");
-    assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentCard).join("") : "";
+    assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentRow).join("") : "";
     if (!payload.total) stateCard(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.");
   } catch (error) { assessmentCount.textContent = "—"; stateCard(assessmentGrid, "Не удалось загрузить оценки", error.message); }
   finally { assessmentGrid.setAttribute("aria-busy", "false"); }
@@ -357,16 +480,13 @@ async function loadApplications() {
     if (!response.ok) throw new Error(payload.message || "Не удалось получить отклики");
     applicationCount.textContent = String(payload.total).padStart(2, "0");
     if (payload.total) {
-      applicationList.classList.add("list-rows");
-      applicationList.innerHTML = payload.items.map(applicationCard).join("");
+      applicationList.innerHTML = payload.items.map(applicationRow).join("");
     } else {
-      applicationList.classList.remove("list-rows");
       applicationList.innerHTML = "";
       stateCard(applicationList, "Откликов пока нет", "Запишите первый факт отклика из карточки вакансии.");
     }
   } catch (error) {
     applicationCount.textContent = "—";
-    applicationList.classList.remove("list-rows");
     stateCard(applicationList, "Не удалось загрузить отклики", error.message);
   } finally {
     applicationList.setAttribute("aria-busy", "false");
@@ -398,7 +518,7 @@ async function loadVacancies() {
       mirrorReports = [];
     }
     grid.innerHTML = payload.total
-      ? payload.items.map(vacancyCard).join("")
+      ? payload.items.map(vacancyRow).join("")
       : "";
     if (!payload.total) stateCard(grid, "Воронка пока пуста", "Добавьте первую вакансию — она сохранится в Core.");
   } catch (error) {

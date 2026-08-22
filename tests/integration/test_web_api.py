@@ -40,8 +40,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-nav" in page.text
-    assert "/assets/styles.css?v=20260822-nav" in page.text
+    assert "/assets/app.js?v=20260822-screens" in page.text
+    assert "/assets/styles.css?v=20260822-screens" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -130,6 +130,66 @@ def test_styles_expose_navigation_active_state() -> None:
     assert css.status_code == 200
     assert '.app-nav__link[aria-current="page"]' in css.text
     assert ".section-view[hidden]" in css.text
+
+
+def test_index_exposes_migrated_screen_shell() -> None:
+    """T-UX-00.6: collections are list-first and dialogs use foundation markup."""
+    page = WebClient(StubCore()).request("GET", "/")
+    text = page.text
+
+    assert 'id="vacancies" class="list-rows vacancy-list"' in text
+    assert 'id="people" class="list-rows people-list"' in text
+    assert 'id="hypotheses" class="list-rows hypothesis-list"' in text
+    assert 'id="assessments" class="list-rows assessment-list"' in text
+    assert "vacancy-grid" not in text
+    assert "person-card" not in text
+    assert "hypothesis-card" not in text
+    assert "assessment-card" not in text
+    assert 'id="application-form" class="dialog__form"' in text
+    assert 'id="metric-form" class="dialog__form"' in text
+    assert 'id="person-form" class="dialog__form"' in text
+    assert 'id="hypothesis-form" class="dialog__form"' in text
+    assert 'id="assessment-form" class="dialog__form"' in text
+    assert text.count('class="dialog__body"') >= 6
+    assert text.count('class="dialog__actions"') >= 6
+
+
+def test_app_js_uses_list_first_renderers() -> None:
+    """Generated markup targets list-row primitives, not legacy cards."""
+    js = WebClient(StubCore()).request("GET", "/assets/app.js").text
+
+    for fragment in (
+        "function vacancyRow",
+        "function personRow",
+        "function hypothesisRow",
+        "function assessmentRow",
+        "function applicationRow",
+        "list-row-group",
+        "row-detail",
+        "metric-cell",
+    ):
+        assert fragment in js
+    for legacy in ("vacancy-card", "person-card", "hypothesis-card", "assessment-card"):
+        assert legacy not in js
+
+
+def test_styles_drop_legacy_collection_selectors() -> None:
+    """Legacy card/grid selectors are removed after screen migration."""
+    css = WebClient(StubCore()).request("GET", "/assets/styles.css").text
+
+    assert ".list-row-group" in css
+    assert ".metric-cell" in css
+    assert ".row-detail" in css
+    for legacy in (
+        ".vacancy-card",
+        ".person-card",
+        ".hypothesis-card",
+        ".assessment-card",
+        ".primary-button:not(.btn)",
+        ".dialog-head",
+        ".dialog-actions",
+    ):
+        assert legacy not in css
 
 
 def test_core_transport_failure_has_stable_response() -> None:

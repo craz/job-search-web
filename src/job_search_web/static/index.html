@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-nav">
-    <script src="/assets/app.js?v=20260822-nav" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-screens">
+    <script src="/assets/app.js?v=20260822-screens" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -46,7 +46,7 @@
             <button class="btn btn--primary" id="open-form" type="button">+ Добавить вакансию</button>
           </section>
 
-          <section id="vacancies" class="vacancy-grid" aria-live="polite" aria-busy="true">
+          <section id="vacancies" class="list-rows vacancy-list" aria-live="polite" aria-busy="true">
             <article class="state-card" id="loading-state">
               <span class="loader" aria-hidden="true"></span>
               <h3>Загружаем воронку</h3>
@@ -103,7 +103,7 @@
             <button class="btn btn--primary" id="open-person-form" type="button">+ Добавить контакт</button>
           </section>
 
-          <section id="people" class="people-grid" aria-live="polite" aria-busy="true">
+          <section id="people" class="list-rows people-list" aria-live="polite" aria-busy="true">
             <article class="state-card">
               <span class="loader" aria-hidden="true"></span>
               <h3>Загружаем контакты</h3>
@@ -119,7 +119,7 @@
               <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
             <button class="btn btn--primary" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
           </section>
-          <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
+          <section id="hypotheses" class="list-rows hypothesis-list" aria-live="polite" aria-busy="true">
             <article class="state-card"><span class="loader" aria-hidden="true"></span>
               <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
           </section>
@@ -131,7 +131,7 @@
             <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
             <button class="btn btn--primary" id="open-assessment-form" type="button">+ Записать оценку</button>
           </section>
-          <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
+          <section id="assessments" class="list-rows assessment-list" aria-live="polite" aria-busy="true">
             <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
           </section>
           </div>
@@ -182,136 +182,292 @@
     </dialog>
 
     <dialog id="application-dialog" class="dialog" aria-labelledby="application-dialog-title">
-      <form id="application-form" method="dialog">
-        <div class="dialog-head">
+      <form id="application-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
           <div>
             <p class="section-number">ЛОКАЛЬНЫЙ ФАКТ ОТКЛИКА</p>
             <h2 id="application-dialog-title">Записать отклик</h2>
             <p id="application-vacancy-title" class="dialog-context"></p>
           </div>
           <button class="btn btn--ghost btn--icon" id="close-application-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <input class="control" name="source" required maxlength="64" value="manual">
+            </label>
+            <label class="field">
+              <span class="field__label">Дата и время</span>
+              <input class="control" name="applied_at" type="datetime-local">
+            </label>
+            <label class="field">
+              <span class="field__label">Версия резюме</span>
+              <input class="control" name="resume_version" maxlength="255" placeholder="backend-v3">
+            </label>
+            <label class="field">
+              <span class="field__label">Следующий шаг</span>
+              <input class="control" name="next_action" maxlength="500" placeholder="Проверить ответ через неделю">
+            </label>
+            <label class="field">
+              <span class="field__label">Когда напомнить</span>
+              <input class="control" name="next_action_at" type="datetime-local">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Сопроводительное письмо</span>
+              <textarea class="control control--textarea" name="cover_letter_text" rows="4" placeholder="Необязательно; хранится только локально"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Эта форма ничего не отправляет работодателю или в HeadHunter.</p>
+          <p id="application-form-error" class="field__error form-error" role="alert" hidden></p>
         </div>
-        <input name="vacancy_id" type="hidden">
-        <div class="form-grid">
-          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
-          <label>Дата и время<input name="applied_at" type="datetime-local"></label>
-          <label>Версия резюме<input name="resume_version" maxlength="255" placeholder="backend-v3"></label>
-          <label>Следующий шаг<input name="next_action" maxlength="500" placeholder="Проверить ответ через неделю"></label>
-          <label>Когда напомнить<input name="next_action_at" type="datetime-local"></label>
-          <label class="wide">Сопроводительное письмо<textarea name="cover_letter_text" rows="4" placeholder="Необязательно; хранится только локально"></textarea></label>
-        </div>
-        <p class="safety-note">Эта форма ничего не отправляет работодателю или в HeadHunter.</p>
-        <p id="application-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions">
+        <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-application-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-application-form" type="submit">Записать факт</button>
-        </div>
+        </footer>
       </form>
     </dialog>
 
     <dialog id="metric-dialog" class="dialog" aria-labelledby="metric-dialog-title">
-      <form id="metric-form" method="dialog">
-        <div class="dialog-head">
+      <form id="metric-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
           <div>
             <p class="section-number">ДНЕВНОЙ СНИМОК</p>
             <h2 id="metric-dialog-title">Записать показатели</h2>
           </div>
           <button class="btn btn--ghost btn--icon" id="close-metric-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid metrics-form-grid">
+            <label class="field wide">
+              <span class="field__label">Дата</span>
+              <input class="control" name="metric_date" required type="date">
+            </label>
+            <label class="field">
+              <span class="field__label">Просмотров всего</span>
+              <input class="control" name="views_total" min="0" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Новых просмотров</span>
+              <input class="control" name="views_new" min="0" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Откликов</span>
+              <input class="control" name="applications" min="0" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Ответов</span>
+              <input class="control" name="replies" min="0" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Приглашений</span>
+              <input class="control" name="invitations" min="0" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Отказов</span>
+              <input class="control" name="rejections" min="0" type="number">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Заметка</span>
+              <textarea class="control control--textarea" name="notes" maxlength="4000" rows="3" placeholder="Контекст дня — необязательно"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Web сохраняет только введённый снимок и не подменяет данные HH.</p>
+          <p id="metric-form-error" class="field__error form-error" role="alert" hidden></p>
         </div>
-        <div class="form-grid metrics-form-grid">
-          <label class="wide">Дата<input name="metric_date" required type="date"></label>
-          <label>Просмотров всего<input name="views_total" min="0" type="number"></label>
-          <label>Новых просмотров<input name="views_new" min="0" type="number"></label>
-          <label>Откликов<input name="applications" min="0" type="number"></label>
-          <label>Ответов<input name="replies" min="0" type="number"></label>
-          <label>Приглашений<input name="invitations" min="0" type="number"></label>
-          <label>Отказов<input name="rejections" min="0" type="number"></label>
-          <label class="wide">Заметка<textarea name="notes" maxlength="4000" rows="3" placeholder="Контекст дня — необязательно"></textarea></label>
-        </div>
-        <p class="safety-note">Web сохраняет только введённый снимок и не подменяет данные HH.</p>
-        <p id="metric-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions">
+        <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-metric-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-metric-form" type="submit">Сохранить снимок</button>
-        </div>
+        </footer>
       </form>
     </dialog>
 
     <dialog id="person-dialog" class="dialog" aria-labelledby="person-dialog-title">
-      <form id="person-form" method="dialog">
-        <div class="dialog-head">
+      <form id="person-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
           <div>
             <p class="section-number">ПОДТВЕРЖДЁННЫЙ КОНТАКТ</p>
             <h2 id="person-dialog-title">Добавить человека</h2>
           </div>
           <button class="btn btn--ghost btn--icon" id="close-person-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Компания / вакансия</span>
+              <select class="control control--select" name="vacancy_id" required></select>
+            </label>
+            <label class="field">
+              <span class="field__label">Имя</span>
+              <input class="control" name="full_name" required maxlength="255" placeholder="Alex Example">
+            </label>
+            <label class="field">
+              <span class="field__label">Роль</span>
+              <select class="control control--select" name="role" required>
+                <option value="hiring_manager">Нанимающий менеджер</option>
+                <option value="recruiter">Рекрутер</option>
+                <option value="referral">Referral-контакт</option>
+                <option value="peer">Будущий коллега</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Должность</span>
+              <input class="control" name="title" maxlength="500" placeholder="Senior Engineer">
+            </label>
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <input class="control" name="source" required maxlength="64" value="manual">
+            </label>
+            <label class="field">
+              <span class="field__label">Публичная ссылка</span>
+              <input class="control" name="url" type="url" placeholder="https://example.com/profile">
+            </label>
+            <label class="field">
+              <span class="field__label">Уверенность 0–1</span>
+              <input class="control" name="confidence" min="0" max="1" step="0.01" type="number">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Заметка</span>
+              <textarea class="control control--textarea" name="notes" maxlength="4000" rows="3"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Форма не запускает OSINT и не отправляет человеку сообщения.</p>
+          <p id="person-form-error" class="field__error form-error" role="alert" hidden></p>
         </div>
-        <div class="form-grid">
-          <label class="wide">Компания / вакансия<select name="vacancy_id" required></select></label>
-          <label>Имя<input name="full_name" required maxlength="255" placeholder="Alex Example"></label>
-          <label>Роль<select name="role" required>
-            <option value="hiring_manager">Нанимающий менеджер</option>
-            <option value="recruiter">Рекрутер</option>
-            <option value="referral">Referral-контакт</option>
-            <option value="peer">Будущий коллега</option>
-          </select></label>
-          <label>Должность<input name="title" maxlength="500" placeholder="Senior Engineer"></label>
-          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
-          <label>Публичная ссылка<input name="url" type="url" placeholder="https://example.com/profile"></label>
-          <label>Уверенность 0–1<input name="confidence" min="0" max="1" step="0.01" type="number"></label>
-          <label class="wide">Заметка<textarea name="notes" maxlength="4000" rows="3"></textarea></label>
-        </div>
-        <p class="safety-note">Форма не запускает OSINT и не отправляет человеку сообщения.</p>
-        <p id="person-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions">
+        <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-person-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-person-form" type="submit">Сохранить контакт</button>
-        </div>
+        </footer>
       </form>
     </dialog>
     <dialog id="hypothesis-dialog" class="dialog" aria-labelledby="hypothesis-dialog-title">
-      <form id="hypothesis-form" method="dialog">
-        <div class="dialog-head"><div><p class="section-number">ИЗМЕРИМЫЙ ЭКСПЕРИМЕНТ</p>
-          <h2 id="hypothesis-dialog-title">Новая гипотеза</h2></div>
-          <button class="btn btn--ghost btn--icon" id="close-hypothesis-form" type="button" aria-label="Закрыть">×</button></div>
-        <div class="form-grid">
-          <label class="wide">Гипотеза<input name="title" required maxlength="500" placeholder="Точечные отклики повышают долю ответов"></label>
-          <label>Размер выборки<input name="test_size" min="1" type="number"></label>
-          <label>Метрика<input name="metric" maxlength="500" placeholder="reply_rate"></label>
-          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
-          <label class="wide">Описание<textarea name="description" maxlength="4000" rows="3"></textarea></label>
-        </div><p id="hypothesis-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="btn btn--ghost" id="cancel-hypothesis-form" type="button">Отмена</button>
-          <button class="btn btn--primary" id="submit-hypothesis-form" type="submit">Начать эксперимент</button></div>
+      <form id="hypothesis-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ИЗМЕРИМЫЙ ЭКСПЕРИМЕНТ</p>
+            <h2 id="hypothesis-dialog-title">Новая гипотеза</h2>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hypothesis-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Гипотеза</span>
+              <input class="control" name="title" required maxlength="500" placeholder="Точечные отклики повышают долю ответов">
+            </label>
+            <label class="field">
+              <span class="field__label">Размер выборки</span>
+              <input class="control" name="test_size" min="1" type="number">
+            </label>
+            <label class="field">
+              <span class="field__label">Метрика</span>
+              <input class="control" name="metric" maxlength="500" placeholder="reply_rate">
+            </label>
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <input class="control" name="source" required maxlength="64" value="manual">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Описание</span>
+              <textarea class="control control--textarea" name="description" maxlength="4000" rows="3"></textarea>
+            </label>
+          </div>
+          <p id="hypothesis-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hypothesis-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hypothesis-form" type="submit">Начать эксперимент</button>
+        </footer>
       </form>
     </dialog>
     <dialog id="hypothesis-close-dialog" class="dialog" aria-labelledby="hypothesis-close-title">
-      <form id="hypothesis-close-form" method="dialog"><div class="dialog-head"><div>
-        <p class="section-number">НАБЛЮДАЕМЫЙ РЕЗУЛЬТАТ</p><h2 id="hypothesis-close-title">Закрыть гипотезу</h2>
-        <p id="hypothesis-close-context" class="dialog-context"></p></div>
-        <button class="btn btn--ghost btn--icon" id="close-hypothesis-close" type="button" aria-label="Закрыть">×</button></div>
-        <input name="hypothesis_id" type="hidden"><div class="form-grid">
-          <label class="wide">Результат<textarea name="result" required maxlength="4000" rows="4"></textarea></label></div>
-        <p id="hypothesis-close-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="btn btn--ghost" id="cancel-hypothesis-close" type="button">Отмена</button>
-          <button class="btn btn--primary" type="submit">Зафиксировать результат</button></div></form>
+      <form id="hypothesis-close-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">НАБЛЮДАЕМЫЙ РЕЗУЛЬТАТ</p>
+            <h2 id="hypothesis-close-title">Закрыть гипотезу</h2>
+            <p id="hypothesis-close-context" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hypothesis-close" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="hypothesis_id" type="hidden">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Результат</span>
+              <textarea class="control control--textarea" name="result" required maxlength="4000" rows="4"></textarea>
+            </label>
+          </div>
+          <p id="hypothesis-close-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hypothesis-close" type="button">Отмена</button>
+          <button class="btn btn--primary" type="submit">Зафиксировать результат</button>
+        </footer>
+      </form>
     </dialog>
-    <dialog id="assessment-dialog" class="dialog" aria-labelledby="assessment-dialog-title"><form id="assessment-form" method="dialog">
-      <div class="dialog-head"><div><p class="section-number">НОРМАЛИЗОВАННЫЙ РЕЗУЛЬТАТ</p><h2 id="assessment-dialog-title">Записать оценку</h2></div>
-        <button class="btn btn--ghost btn--icon" id="close-assessment-form" type="button" aria-label="Закрыть">×</button></div>
-      <div class="form-grid"><label class="wide">Вакансия<select name="vacancy_id" required></select></label>
-        <label>Релевантность 0–100<input name="relevance_score" type="number" min="0" max="100" required></label>
-        <label>Вердикт<select name="verdict" required><option value="apply">Откликаться</option><option value="maybe">Подумать</option><option value="skip">Пропустить</option></select></label>
-        <label class="wide">Причина<textarea name="reason" required maxlength="4000" rows="3"></textarea></label>
-        <label class="wide">Риск<textarea name="risk" maxlength="4000" rows="2"></textarea></label>
-        <label class="wide">Действие<input name="action" required maxlength="1000"></label>
-        <label>Модель<input name="model" required maxlength="255" value="manual"></label>
-        <label>Версия prompt<input name="prompt_version" required maxlength="255" value="manual-v1"></label>
-        <label>Источник<input name="source" required maxlength="64" value="manual"></label></div>
-      <p class="safety-note">Форма не запускает Ollama: она сохраняет только готовый нормализованный результат.</p>
-      <p id="assessment-form-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">
-        <button class="btn btn--ghost" id="cancel-assessment-form" type="button">Отмена</button><button class="btn btn--primary" type="submit">Сохранить оценку</button></div>
-    </form></dialog>
+    <dialog id="assessment-dialog" class="dialog" aria-labelledby="assessment-dialog-title">
+      <form id="assessment-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">НОРМАЛИЗОВАННЫЙ РЕЗУЛЬТАТ</p>
+            <h2 id="assessment-dialog-title">Записать оценку</h2>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-assessment-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Вакансия</span>
+              <select class="control control--select" name="vacancy_id" required></select>
+            </label>
+            <label class="field">
+              <span class="field__label">Релевантность 0–100</span>
+              <input class="control" name="relevance_score" type="number" min="0" max="100" required>
+            </label>
+            <label class="field">
+              <span class="field__label">Вердикт</span>
+              <select class="control control--select" name="verdict" required>
+                <option value="apply">Откликаться</option>
+                <option value="maybe">Подумать</option>
+                <option value="skip">Пропустить</option>
+              </select>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Причина</span>
+              <textarea class="control control--textarea" name="reason" required maxlength="4000" rows="3"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Риск</span>
+              <textarea class="control control--textarea" name="risk" maxlength="4000" rows="2"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Действие</span>
+              <input class="control" name="action" required maxlength="1000">
+            </label>
+            <label class="field">
+              <span class="field__label">Модель</span>
+              <input class="control" name="model" required maxlength="255" value="manual">
+            </label>
+            <label class="field">
+              <span class="field__label">Версия prompt</span>
+              <input class="control" name="prompt_version" required maxlength="255" value="manual-v1">
+            </label>
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <input class="control" name="source" required maxlength="64" value="manual">
+            </label>
+          </div>
+          <p class="safety-note">Форма не запускает Ollama: она сохраняет только готовый нормализованный результат.</p>
+          <p id="assessment-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-assessment-form" type="button">Отмена</button>
+          <button class="btn btn--primary" type="submit">Сохранить оценку</button>
+        </footer>
+      </form>
+    </dialog>
     </div>
   </body>
 </html>
