@@ -43,6 +43,55 @@ let knownVacancies = [];
 let osintReports = [];
 let mirrorReports = [];
 
+const NAV_SECTIONS = [
+  "vacancies",
+  "journal",
+  "metrics",
+  "people",
+  "hypotheses",
+  "assessments",
+];
+const NAV_DEFAULT_SECTION = "vacancies";
+const NAV_LEGACY_HASH_ALIASES = { applications: "journal" };
+
+function resolveSectionFromHash(rawHash = window.location.hash) {
+  const hash = String(rawHash || "").replace(/^#/, "");
+  if (!hash) return NAV_DEFAULT_SECTION;
+  if (NAV_LEGACY_HASH_ALIASES[hash]) return NAV_LEGACY_HASH_ALIASES[hash];
+  if (NAV_SECTIONS.includes(hash)) return hash;
+  return NAV_DEFAULT_SECTION;
+}
+
+function activateSection(sectionId) {
+  const activeId = NAV_SECTIONS.includes(sectionId) ? sectionId : NAV_DEFAULT_SECTION;
+  document.querySelectorAll(".section-view[data-section]").forEach((view) => {
+    view.hidden = view.dataset.section !== activeId;
+  });
+  document.querySelectorAll(".app-nav__link[data-nav]").forEach((link) => {
+    if (link.dataset.nav === activeId) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+}
+
+function syncNavigationFromHash() {
+  activateSection(resolveSectionFromHash());
+}
+
+function initNavigation() {
+  const rawHash = window.location.hash.replace(/^#/, "");
+  const sectionId = resolveSectionFromHash();
+  activateSection(sectionId);
+
+  if (!rawHash || sectionId !== rawHash) {
+    history.replaceState(null, "", `#${sectionId}`);
+  }
+
+  window.addEventListener("hashchange", syncNavigationFromHash);
+}
+
 const statusLabels = {
   new: "Новая",
   reviewing: "Изучаю",
@@ -700,6 +749,7 @@ assessmentForm.addEventListener("submit", async (event) => {
   } catch (error) { assessmentFormError.textContent = error.message; assessmentFormError.hidden = false; }
 });
 
+initNavigation();
 loadVacancies();
 loadApplications();
 loadMetrics();

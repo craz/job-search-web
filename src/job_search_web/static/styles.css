@@ -191,6 +191,13 @@ button { cursor: pointer; }
   color: var(--color-text);
 }
 
+.app-nav__link[aria-current="page"] {
+  color: var(--color-text);
+  background: var(--color-accent-soft);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
 .app-main {
   flex: 1;
   min-width: 0;
@@ -269,12 +276,8 @@ button { cursor: pointer; }
   margin: 0;
 }
 
-.journal-toolbar,
-.metrics-toolbar,
-.people-toolbar,
-.hypotheses-toolbar,
-.assessments-toolbar {
-  margin-top: var(--space-6);
+.section-view[hidden] {
+  display: none !important;
 }
 
 /* --- UI primitives (T-UX-00.4) --- */

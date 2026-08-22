@@ -1,5 +1,7 @@
 """ASGI integration coverage for the browser facade."""
 
+import re
+
 from tests.support import StubCore, WebClient
 
 
@@ -38,8 +40,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-primitives" in page.text
-    assert "/assets/styles.css?v=20260822-primitives" in page.text
+    assert "/assets/app.js?v=20260822-nav" in page.text
+    assert "/assets/styles.css?v=20260822-nav" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -67,6 +69,67 @@ def test_styles_expose_ui_primitives() -> None:
         ".surface--panel",
     ):
         assert selector in css.text
+
+
+def test_index_exposes_global_navigation() -> None:
+    """R0 navigation: six sections, default Vacancies, one visible view."""
+    page = WebClient(StubCore()).request("GET", "/")
+    text = page.text
+
+    assert page.status_code == 200
+    for section_id, hash_target, label in (
+        ("vacancies", "#vacancies", "Вакансии"),
+        ("journal", "#journal", "Журнал"),
+        ("metrics", "#metrics", "Метрики"),
+        ("people", "#people", "Люди"),
+        ("hypotheses", "#hypotheses", "Гипотезы"),
+        ("assessments", "#assessments", "Оценки"),
+    ):
+        assert f'data-nav="{section_id}"' in text
+        assert f'href="{hash_target}"' in text
+        assert label in text
+
+    assert 'data-section="vacancies"' in text
+    assert 'id="section-vacancies" data-section="vacancies" role="region"' in text
+    assert 'id="section-vacancies" data-section="vacancies" role="region" hidden' not in text
+    for hidden_section in ("journal", "metrics", "people", "hypotheses", "assessments"):
+        assert re.search(
+            rf'data-section="{hidden_section}"[^>]*\bhidden\b',
+            text,
+        )
+
+    assert 'aria-current="page"' in text
+    assert 'data-nav="vacancies" aria-current="page"' in text
+    assert 'href="#applications"' not in text
+    assert 'id="applications"' in text
+    assert 'id="vacancy-dialog"' in text
+    assert 'id="open-form"' in text
+
+
+def test_app_js_navigation_contract() -> None:
+    """Navigation logic stays centralized and hash-driven."""
+    js = WebClient(StubCore()).request("GET", "/assets/app.js")
+
+    assert js.status_code == 200
+    for fragment in (
+        "NAV_SECTIONS",
+        "resolveSectionFromHash",
+        "activateSection",
+        'addEventListener("hashchange"',
+        "NAV_DEFAULT_SECTION",
+        "NAV_LEGACY_HASH_ALIASES",
+        "initNavigation",
+    ):
+        assert fragment in js.text
+
+
+def test_styles_expose_navigation_active_state() -> None:
+    """Active nav uses more than color alone."""
+    css = WebClient(StubCore()).request("GET", "/assets/styles.css")
+
+    assert css.status_code == 200
+    assert '.app-nav__link[aria-current="page"]' in css.text
+    assert ".section-view[hidden]" in css.text
 
 
 def test_core_transport_failure_has_stable_response() -> None:

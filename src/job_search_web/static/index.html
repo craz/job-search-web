@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-primitives">
-    <script src="/assets/app.js?v=20260822-primitives" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-nav">
+    <script src="/assets/app.js?v=20260822-nav" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -25,16 +25,19 @@
       <div class="app-body">
         <nav class="app-nav" aria-label="Основные разделы">
           <ul class="app-nav__list">
-            <li><a class="app-nav__link" href="#vacancies">Вакансии</a></li>
-            <li><a class="app-nav__link" href="#applications">Журнал</a></li>
-            <li><a class="app-nav__link" href="#metrics">Метрики</a></li>
-            <li><a class="app-nav__link" href="#people">Люди</a></li>
-            <li><a class="app-nav__link" href="#hypotheses">Гипотезы</a></li>
-            <li><a class="app-nav__link" href="#assessments">Оценки</a></li>
+            <li><a class="app-nav__link" href="#vacancies" data-nav="vacancies" aria-current="page">Вакансии</a></li>
+            <li><a class="app-nav__link" href="#journal" data-nav="journal">Журнал</a></li>
+            <li><a class="app-nav__link" href="#metrics" data-nav="metrics">Метрики</a></li>
+            <li><a class="app-nav__link" href="#people" data-nav="people">Люди</a></li>
+            <li><a class="app-nav__link" href="#hypotheses" data-nav="hypotheses">Гипотезы</a></li>
+            <li><a class="app-nav__link" href="#assessments" data-nav="assessments">Оценки</a></li>
           </ul>
         </nav>
 
         <main class="app-main" id="main-content">
+          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+          <div class="section-view" id="section-vacancies" data-section="vacancies" role="region" aria-labelledby="board-title">
           <section class="toolbar" aria-labelledby="board-title">
             <div>
               <p class="section-number">01 / ВОРОНКА</p>
@@ -42,8 +45,6 @@
             </div>
             <button class="btn btn--primary" id="open-form" type="button">+ Добавить вакансию</button>
           </section>
-
-          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
           <section id="vacancies" class="vacancy-grid" aria-live="polite" aria-busy="true">
             <article class="state-card" id="loading-state">
@@ -53,6 +54,9 @@
             </article>
           </section>
 
+          </div>
+
+          <div class="section-view" id="section-journal" data-section="journal" role="region" aria-labelledby="journal-title" hidden>
           <section class="toolbar journal-toolbar" aria-labelledby="journal-title">
             <div>
               <p class="section-number">02 / ОТКЛИКИ</p>
@@ -69,6 +73,9 @@
             </article>
           </section>
 
+          </div>
+
+          <div class="section-view" id="section-metrics" data-section="metrics" role="region" aria-labelledby="metrics-title" hidden>
           <section class="toolbar metrics-toolbar" aria-labelledby="metrics-title">
             <div>
               <p class="section-number">03 / ТЕМП</p>
@@ -85,6 +92,9 @@
             </article>
           </section>
 
+          </div>
+
+          <div class="section-view" id="section-people" data-section="people" role="region" aria-labelledby="people-title" hidden>
           <section class="toolbar people-toolbar" aria-labelledby="people-title">
             <div>
               <p class="section-number">04 / КОНТАКТЫ</p>
@@ -101,6 +111,9 @@
             </article>
           </section>
 
+          </div>
+
+          <div class="section-view" id="section-hypotheses" data-section="hypotheses" role="region" aria-labelledby="hypotheses-title" hidden>
           <section class="toolbar hypotheses-toolbar" aria-labelledby="hypotheses-title">
             <div><p class="section-number">05 / ЭКСПЕРИМЕНТЫ</p>
               <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
@@ -110,6 +123,10 @@
             <article class="state-card"><span class="loader" aria-hidden="true"></span>
               <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
           </section>
+
+          </div>
+
+          <div class="section-view" id="section-assessments" data-section="assessments" role="region" aria-labelledby="assessments-title" hidden>
           <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
             <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
             <button class="btn btn--primary" id="open-assessment-form" type="button">+ Записать оценку</button>
@@ -117,6 +134,7 @@
           <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
             <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
           </section>
+          </div>
         </main>
       </div>
     </div>
