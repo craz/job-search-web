@@ -31,9 +31,15 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     )
 
     assert page.status_code == 200
-    assert "Работа — это воронка" in page.text
-    assert "/assets/app.js?v=20260820-mirrors" in page.text
-    assert "/assets/styles.css?v=20260820-mirrors" in page.text
+    assert 'class="app"' in page.text
+    assert 'class="app-header"' in page.text
+    assert 'class="app-nav"' in page.text
+    assert 'id="main-content"' in page.text
+    assert 'class="signal app-header__status"' in page.text
+    assert "Job Search" in page.text
+    assert "Работа — это воронка" not in page.text
+    assert "/assets/app.js?v=20260822-shell" in page.text
+    assert "/assets/styles.css?v=20260822-shell" in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"

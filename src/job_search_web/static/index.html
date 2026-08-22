@@ -5,108 +5,123 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260820-mirrors">
-    <script src="/assets/app.js?v=20260820-mirrors" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-shell">
+    <script src="/assets/app.js?v=20260822-shell" defer></script>
   </head>
   <body>
-    <a class="skip-link" href="#vacancies">К списку вакансий</a>
-    <header class="masthead">
-      <div>
-        <p class="eyebrow">LOCAL WORKSPACE · CORE CONNECTED</p>
-        <h1>Работа — это воронка,<br><em>а не лотерея.</em></h1>
-        <p class="lede">Сохраняйте возможности, принимайте решения и держите следующий шаг перед глазами.</p>
+    <a class="skip-link" href="#main-content">К основному содержимому</a>
+    <div class="app">
+      <header class="app-header">
+        <div class="app-header__brand">
+          <p class="app-header__title">Job Search</p>
+          <p class="app-header__subtitle">Локальная доска вакансий</p>
+        </div>
+        <div class="signal app-header__status" aria-label="Состояние Core">
+          <span class="signal-dot" aria-hidden="true"></span>
+          <span id="connection-label">Проверяем Core</span>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <nav class="app-nav" aria-label="Основные разделы">
+          <ul class="app-nav__list">
+            <li><a class="app-nav__link" href="#vacancies">Вакансии</a></li>
+            <li><a class="app-nav__link" href="#applications">Журнал</a></li>
+            <li><a class="app-nav__link" href="#metrics">Метрики</a></li>
+            <li><a class="app-nav__link" href="#people">Люди</a></li>
+            <li><a class="app-nav__link" href="#hypotheses">Гипотезы</a></li>
+            <li><a class="app-nav__link" href="#assessments">Оценки</a></li>
+          </ul>
+        </nav>
+
+        <main class="app-main" id="main-content">
+          <section class="toolbar" aria-labelledby="board-title">
+            <div>
+              <p class="section-number">01 / ВОРОНКА</p>
+              <h2 id="board-title">Вакансии <span id="vacancy-count">—</span></h2>
+            </div>
+            <button class="primary-button" id="open-form" type="button">+ Добавить вакансию</button>
+          </section>
+
+          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+          <section id="vacancies" class="vacancy-grid" aria-live="polite" aria-busy="true">
+            <article class="state-card" id="loading-state">
+              <span class="loader" aria-hidden="true"></span>
+              <h3>Загружаем воронку</h3>
+              <p>Web запрашивает данные у Core API.</p>
+            </article>
+          </section>
+
+          <section class="toolbar journal-toolbar" aria-labelledby="journal-title">
+            <div>
+              <p class="section-number">02 / ОТКЛИКИ</p>
+              <h2 id="journal-title">Журнал <span id="application-count">—</span></h2>
+            </div>
+            <p class="toolbar-note">Только локальные факты — без автоматической отправки.</p>
+          </section>
+
+          <section id="applications" class="application-list" aria-live="polite" aria-busy="true">
+            <article class="state-card">
+              <span class="loader" aria-hidden="true"></span>
+              <h3>Загружаем отклики</h3>
+              <p>Web запрашивает журнал у Core API.</p>
+            </article>
+          </section>
+
+          <section class="toolbar metrics-toolbar" aria-labelledby="metrics-title">
+            <div>
+              <p class="section-number">03 / ТЕМП</p>
+              <h2 id="metrics-title">Дневные метрики <span id="metric-count">—</span></h2>
+            </div>
+            <button class="primary-button" id="open-metric-form" type="button">+ Записать день</button>
+          </section>
+
+          <section id="metrics" class="metrics-dashboard" aria-live="polite" aria-busy="true">
+            <article class="state-card">
+              <span class="loader" aria-hidden="true"></span>
+              <h3>Загружаем показатели</h3>
+              <p>Web запрашивает историю у Core API.</p>
+            </article>
+          </section>
+
+          <section class="toolbar people-toolbar" aria-labelledby="people-title">
+            <div>
+              <p class="section-number">04 / КОНТАКТЫ</p>
+              <h2 id="people-title">Люди <span id="people-count">—</span></h2>
+            </div>
+            <button class="primary-button" id="open-person-form" type="button">+ Добавить контакт</button>
+          </section>
+
+          <section id="people" class="people-grid" aria-live="polite" aria-busy="true">
+            <article class="state-card">
+              <span class="loader" aria-hidden="true"></span>
+              <h3>Загружаем контакты</h3>
+              <p>Web запрашивает подтверждённые карточки у Core API.</p>
+            </article>
+          </section>
+
+          <section class="toolbar hypotheses-toolbar" aria-labelledby="hypotheses-title">
+            <div><p class="section-number">05 / ЭКСПЕРИМЕНТЫ</p>
+              <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
+            <button class="primary-button" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
+          </section>
+          <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
+            <article class="state-card"><span class="loader" aria-hidden="true"></span>
+              <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
+          </section>
+          <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
+            <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
+            <button class="primary-button" id="open-assessment-form" type="button">+ Записать оценку</button>
+          </section>
+          <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
+            <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
+          </section>
+        </main>
       </div>
-      <div class="signal" aria-label="Состояние сервиса">
-        <span class="signal-dot"></span>
-        <span id="connection-label">Проверяем Core</span>
-      </div>
-    </header>
+    </div>
 
-    <main>
-      <section class="toolbar" aria-labelledby="board-title">
-        <div>
-          <p class="section-number">01 / ВОРОНКА</p>
-          <h2 id="board-title">Вакансии <span id="vacancy-count">—</span></h2>
-        </div>
-        <button class="primary-button" id="open-form" type="button">+ Добавить вакансию</button>
-      </section>
-
-      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-
-      <section id="vacancies" class="vacancy-grid" aria-live="polite" aria-busy="true">
-        <article class="state-card" id="loading-state">
-          <span class="loader" aria-hidden="true"></span>
-          <h3>Загружаем воронку</h3>
-          <p>Web запрашивает данные у Core API.</p>
-        </article>
-      </section>
-
-      <section class="toolbar journal-toolbar" aria-labelledby="journal-title">
-        <div>
-          <p class="section-number">02 / ОТКЛИКИ</p>
-          <h2 id="journal-title">Журнал <span id="application-count">—</span></h2>
-        </div>
-        <p class="toolbar-note">Только локальные факты — без автоматической отправки.</p>
-      </section>
-
-      <section id="applications" class="application-list" aria-live="polite" aria-busy="true">
-        <article class="state-card">
-          <span class="loader" aria-hidden="true"></span>
-          <h3>Загружаем отклики</h3>
-          <p>Web запрашивает журнал у Core API.</p>
-        </article>
-      </section>
-
-      <section class="toolbar metrics-toolbar" aria-labelledby="metrics-title">
-        <div>
-          <p class="section-number">03 / ТЕМП</p>
-          <h2 id="metrics-title">Дневные метрики <span id="metric-count">—</span></h2>
-        </div>
-        <button class="primary-button" id="open-metric-form" type="button">+ Записать день</button>
-      </section>
-
-      <section id="metrics" class="metrics-dashboard" aria-live="polite" aria-busy="true">
-        <article class="state-card">
-          <span class="loader" aria-hidden="true"></span>
-          <h3>Загружаем показатели</h3>
-          <p>Web запрашивает историю у Core API.</p>
-        </article>
-      </section>
-
-      <section class="toolbar people-toolbar" aria-labelledby="people-title">
-        <div>
-          <p class="section-number">04 / КОНТАКТЫ</p>
-          <h2 id="people-title">Люди <span id="people-count">—</span></h2>
-        </div>
-        <button class="primary-button" id="open-person-form" type="button">+ Добавить контакт</button>
-      </section>
-
-      <section id="people" class="people-grid" aria-live="polite" aria-busy="true">
-        <article class="state-card">
-          <span class="loader" aria-hidden="true"></span>
-          <h3>Загружаем контакты</h3>
-          <p>Web запрашивает подтверждённые карточки у Core API.</p>
-        </article>
-      </section>
-
-      <section class="toolbar hypotheses-toolbar" aria-labelledby="hypotheses-title">
-        <div><p class="section-number">05 / ЭКСПЕРИМЕНТЫ</p>
-          <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
-        <button class="primary-button" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
-      </section>
-      <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
-        <article class="state-card"><span class="loader" aria-hidden="true"></span>
-          <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
-      </section>
-      <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
-        <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
-        <button class="primary-button" id="open-assessment-form" type="button">+ Записать оценку</button>
-      </section>
-      <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
-        <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
-      </section>
-    </main>
-
+    <div class="app-dialogs">
     <dialog id="vacancy-dialog" aria-labelledby="dialog-title">
       <form id="vacancy-form" method="dialog">
         <div class="dialog-head">
@@ -262,5 +277,6 @@
       <p id="assessment-form-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">
         <button class="text-button" id="cancel-assessment-form" type="button">Отмена</button><button class="primary-button" type="submit">Сохранить оценку</button></div>
     </form></dialog>
+    </div>
   </body>
 </html>
