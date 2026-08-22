@@ -40,8 +40,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-review2" in page.text
-    assert "/assets/styles.css?v=20260822-dark" in page.text
+    assert "/assets/app.js?v=20260822-states" in page.text
+    assert "/assets/styles.css?v=20260822-states" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -80,6 +80,30 @@ def test_styles_use_dark_scheme_tokens() -> None:
     assert "#f4f5f7" not in css
     assert "#ffffff" not in css
     assert "#dbeafe" not in css
+
+
+def test_styles_expose_system_state_primitives() -> None:
+    """T-UX-00.7 unified system-state classes are present in CSS and initial HTML."""
+    client = WebClient(StubCore())
+    css = client.request("GET", "/assets/styles.css").text
+    page = client.request("GET", "/")
+
+    for selector in (
+        ".state--loading",
+        ".state--empty",
+        ".state--error",
+        ".notice--success",
+        ".notice--error",
+        ".notice--info",
+        ".notice--warning",
+        ".inline-state--empty",
+        ".inline-state--error",
+    ):
+        assert selector in css
+
+    assert "state-card" not in css
+    assert 'class="state state--loading"' in page.text
+    assert 'class="notice notice--success"' in page.text
 
 
 def test_index_exposes_global_navigation() -> None:

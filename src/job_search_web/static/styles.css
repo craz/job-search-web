@@ -865,26 +865,70 @@ label.wide {
   margin: var(--space-3) 0 0;
 }
 
-/* --- System states (T-UX-00.7 scope; layout-only tweaks allowed) --- */
+/* --- System states (T-UX-00.7) --- */
 
-.state-card {
+.state {
   display: grid;
-  place-items: center;
+  gap: var(--space-3);
+  justify-items: center;
   text-align: center;
-  min-height: 12rem;
-  border: var(--border-width) dashed var(--color-border);
-  background: var(--color-surface);
-  padding: var(--space-4);
+  min-height: 10rem;
+  padding: var(--space-5) var(--space-4);
   border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
 }
 
-.state-card h3 {
-  font-size: var(--font-size-section-title);
+.state__content {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 28rem;
+}
+
+.state__title {
+  margin: 0;
+  font-size: var(--font-size-item-title);
   font-weight: var(--font-weight-semibold);
-  margin: var(--space-2) 0 var(--space-1);
+  line-height: 1.3;
 }
 
-.state-card p { color: var(--color-text-secondary); margin: 0; }
+.state__detail {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  line-height: 1.45;
+}
+
+.state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
+.state__loader {
+  margin-bottom: var(--space-1);
+}
+
+.state--loading {
+  border-style: solid;
+  background: var(--color-surface);
+}
+
+.state--empty {
+  border-style: solid;
+  background: var(--color-bg);
+}
+
+.state--error {
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
+  background: var(--color-danger-soft);
+}
+
+.state--error .state__title {
+  color: var(--color-text);
+}
 
 .loader {
   width: 1.5rem;
@@ -898,18 +942,91 @@ label.wide {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .notice {
-  border: var(--border-width) solid var(--color-success);
-  background: var(--color-success-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  border: var(--border-width) solid transparent;
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-4);
   border-radius: var(--radius-md);
-  font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-body);
+  line-height: 1.4;
 }
 
-.notice.error {
-  border-color: var(--color-danger);
+.notice__label {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notice--success {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  background: var(--color-success-soft);
+  color: var(--color-text);
+}
+
+.notice--success .notice__label { color: var(--color-success); }
+
+.notice--error {
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
   background: var(--color-danger-soft);
+  color: var(--color-text);
+}
+
+.notice--error .notice__label { color: var(--color-danger); }
+
+.notice--info {
+  border-color: color-mix(in srgb, var(--color-info) 40%, var(--color-border));
+  background: var(--color-info-soft);
+  color: var(--color-text);
+}
+
+.notice--info .notice__label { color: var(--color-info); }
+
+.notice--warning {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
+  background: var(--color-warning-soft);
+  color: var(--color-text);
+}
+
+.notice--warning .notice__label { color: var(--color-warning); }
+
+.inline-state {
+  margin: 0;
+  padding: var(--space-2) 0;
+  font-size: var(--font-size-secondary);
+  line-height: 1.45;
+}
+
+.inline-state--empty {
+  color: var(--color-text-secondary);
+}
+
+.inline-state--error {
+  color: var(--color-danger);
+}
+
+.inline-state--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.inline-state--loading .loader {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+}
+
+.signal.online {
+  color: var(--color-success);
+}
+
+.signal.offline {
+  color: var(--color-danger);
 }
 
 .application-list:not(.list-rows) {

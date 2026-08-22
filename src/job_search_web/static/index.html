@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-dark">
-    <script src="/assets/app.js?v=20260822-review2" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-states">
+    <script src="/assets/app.js?v=20260822-states" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -35,7 +35,7 @@
         </nav>
 
         <main class="app-main" id="main-content">
-          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+          <div id="notice" class="notice notice--success" role="status" aria-live="polite" hidden></div>
 
           <div class="section-view" id="section-vacancies" data-section="vacancies" role="region" aria-labelledby="board-title">
           <section class="toolbar" aria-labelledby="board-title">
@@ -46,10 +46,12 @@
           </section>
 
           <section id="vacancies" class="list-rows vacancy-list" aria-live="polite" aria-busy="true">
-            <article class="state-card" id="loading-state">
-              <span class="loader" aria-hidden="true"></span>
-              <h3>Загружаем воронку</h3>
-              <p>Web запрашивает данные у Core API.</p>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем вакансии</h3>
+                <p class="state__detail">Web запрашивает данные у Core API.</p>
+              </div>
             </article>
           </section>
 
@@ -64,10 +66,12 @@
           </section>
 
           <section id="applications" class="application-list list-rows" aria-live="polite" aria-busy="true">
-            <article class="state-card">
-              <span class="loader" aria-hidden="true"></span>
-              <h3>Загружаем отклики</h3>
-              <p>Web запрашивает журнал у Core API.</p>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем отклики</h3>
+                <p class="state__detail">Web запрашивает журнал у Core API.</p>
+              </div>
             </article>
           </section>
 
@@ -82,10 +86,12 @@
           </section>
 
           <section id="metrics" class="metrics-dashboard" aria-live="polite" aria-busy="true">
-            <article class="state-card">
-              <span class="loader" aria-hidden="true"></span>
-              <h3>Загружаем показатели</h3>
-              <p>Web запрашивает историю у Core API.</p>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем показатели</h3>
+                <p class="state__detail">Web запрашивает историю у Core API.</p>
+              </div>
             </article>
           </section>
 
@@ -100,10 +106,12 @@
           </section>
 
           <section id="people" class="list-rows people-list" aria-live="polite" aria-busy="true">
-            <article class="state-card">
-              <span class="loader" aria-hidden="true"></span>
-              <h3>Загружаем контакты</h3>
-              <p>Web запрашивает подтверждённые карточки у Core API.</p>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем контакты</h3>
+                <p class="state__detail">Web запрашивает подтверждённые карточки у Core API.</p>
+              </div>
             </article>
           </section>
 
@@ -116,8 +124,13 @@
             <button class="btn btn--primary" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
           </section>
           <section id="hypotheses" class="list-rows hypothesis-list" aria-live="polite" aria-busy="true">
-            <article class="state-card"><span class="loader" aria-hidden="true"></span>
-              <h3>Загружаем эксперименты</h3><p>Web запрашивает гипотезы у Core API.</p></article>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем эксперименты</h3>
+                <p class="state__detail">Web запрашивает гипотезы у Core API.</p>
+              </div>
+            </article>
           </section>
 
           </div>
@@ -128,7 +141,13 @@
             <button class="btn btn--primary" id="open-assessment-form" type="button">+ Записать оценку</button>
           </section>
           <section id="assessments" class="list-rows assessment-list" aria-live="polite" aria-busy="true">
-            <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем оценки</h3>
+                <p class="state__detail">Web запрашивает нормализованные результаты у Core.</p>
+              </div>
+            </article>
           </section>
           </div>
         </main>

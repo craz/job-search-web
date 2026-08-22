@@ -168,15 +168,81 @@ function escapeHtml(value) {
   return node.innerHTML;
 }
 
-function showNotice(message, isError = false) {
-  notice.textContent = message;
-  notice.classList.toggle("error", isError);
+function showNotice(message, variant = "success") {
+  const labels = {
+    success: "Успех",
+    error: "Ошибка",
+    info: "Инфо",
+    warning: "Внимание",
+  };
+  const kind = labels[variant] ? variant : variant === true ? "error" : "success";
+  notice.innerHTML = `<span class="notice__label">${escapeHtml(labels[kind] || labels.success)}</span><span class="notice__text">${escapeHtml(message)}</span>`;
+  notice.className = `notice notice--${kind}`;
   notice.hidden = false;
+  notice.setAttribute("role", kind === "error" ? "alert" : "status");
   window.setTimeout(() => { notice.hidden = true; }, 4500);
 }
 
-function stateCard(target, title, detail) {
-  target.innerHTML = `<article class="state-card"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></div></article>`;
+function renderState(target, { variant, title, detail, retryLabel, onRetry, actionButtonId, actionLabel }) {
+  const loader = variant === "loading"
+    ? `<span class="loader state__loader" aria-hidden="true"></span>`
+    : "";
+  const retry = retryLabel && onRetry
+    ? `<div class="state__actions"><button class="btn btn--secondary btn--sm" type="button" data-state-retry>${escapeHtml(retryLabel)}</button></div>`
+    : "";
+  const action = actionButtonId && actionLabel
+    ? `<div class="state__actions"><button class="btn btn--primary btn--sm" type="button" data-state-action="${escapeHtml(actionButtonId)}">${escapeHtml(actionLabel)}</button></div>`
+    : "";
+  const role = variant === "error" ? ' role="alert"' : "";
+  const busy = variant === "loading" ? ' aria-busy="true"' : "";
+  target.innerHTML = `<article class="state state--${variant}"${role}${busy}>
+    ${loader}
+    <div class="state__content">
+      <h3 class="state__title">${escapeHtml(title)}</h3>
+      ${detail ? `<p class="state__detail">${escapeHtml(detail)}</p>` : ""}
+      ${retry}
+      ${action}
+    </div>
+  </article>`;
+  target.querySelector("[data-state-retry]")?.addEventListener("click", onRetry, { once: true });
+  target.querySelector("[data-state-action]")?.addEventListener("click", () => {
+    document.querySelector(`#${actionButtonId}`)?.click();
+  });
+}
+
+function renderLoadingState(target, title, detail) {
+  renderState(target, { variant: "loading", title, detail });
+}
+
+function renderEmptyState(target, title, detail, action) {
+  renderState(target, {
+    variant: "empty",
+    title,
+    detail,
+    actionButtonId: action?.buttonId,
+    actionLabel: action?.label,
+  });
+}
+
+function renderErrorState(target, title, detail, onRetry) {
+  renderState(target, {
+    variant: "error",
+    title,
+    detail,
+    retryLabel: onRetry ? "Повторить" : null,
+    onRetry,
+  });
+}
+
+function setButtonProcessing(button, active, busyLabel, idleLabel) {
+  if (!button) return;
+  button.disabled = active;
+  button.classList.toggle("is-processing", active);
+  if (busyLabel && idleLabel) button.textContent = active ? busyLabel : idleLabel;
+}
+
+function inlineState(message, variant = "empty") {
+  return `<p class="inline-state inline-state--${variant}">${escapeHtml(message)}</p>`;
 }
 
 function renderEvidencePerson(person, report) {
@@ -220,16 +286,16 @@ function vacancyRow(item) {
   const mirrors = mirrorReport?.mirrors || [];
   const peopleHtml = people.length
     ? people.slice(0, 3).map((person) => renderEvidencePerson(person, report)).join("")
-    : `<p class="row-detail__empty">Непроверенные контакты ещё не найдены.</p>`;
+    : inlineState("Непроверенные контакты ещё не найдены.");
   const mirrorsHtml = mirrors.length
     ? mirrors.slice(0, 3).map((mirror) => renderMirrorItem(mirror, item)).join("")
-    : `<p class="row-detail__empty">Зеркала вакансии ещё не найдены.</p>`;
+    : inlineState("Зеркала вакансии ещё не найдены.");
   const researchButtons = item.company.website_url
     ? `<div class="row-detail__actions">
         <button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Обновить контакты" : "Найти контакты"}</button>
         <button class="btn btn--ghost btn--sm" data-mirrors type="button">${mirrorReport ? "Обновить зеркала" : "Найти зеркала"}</button>
       </div>`
-    : `<p class="row-detail__empty">Для поиска контактов и зеркал сначала нужен сайт компании.</p>`;
+    : inlineState("Для поиска контактов и зеркал сначала нужен сайт компании.");
   const evidenceCount = people.length + mirrors.length;
   const detailSummary = evidenceCount
     ? `Контакты и зеркала · ${evidenceCount}`
@@ -375,16 +441,22 @@ function personRow(item) {
 
 async function loadPeople() {
   peopleGrid.setAttribute("aria-busy", "true");
+  renderLoadingState(peopleGrid, "Загружаем контакты", "Web запрашивает подтверждённые карточки у Core API.");
   try {
     const response = await fetch("/api/v1/people");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить контакты");
     setSectionCount(peopleCount, payload.total);
     peopleGrid.innerHTML = payload.total ? payload.items.map(personRow).join("") : "";
-    if (!payload.total) stateCard(peopleGrid, "Контактов пока нет", "Добавьте подтверждённого человека к вакансии.");
+    if (!payload.total) {
+      renderEmptyState(peopleGrid, "Контактов пока нет", "Добавьте подтверждённого человека к вакансии.", {
+        buttonId: "open-person-form",
+        label: "+ Добавить контакт",
+      });
+    }
   } catch (error) {
     setSectionCount(peopleCount, null);
-    stateCard(peopleGrid, "Не удалось загрузить контакты", error.message);
+    renderErrorState(peopleGrid, "Не удалось загрузить контакты", error.message, loadPeople);
   } finally { peopleGrid.setAttribute("aria-busy", "false"); }
 }
 
@@ -415,14 +487,22 @@ function hypothesisRow(item) {
 
 async function loadHypotheses() {
   hypothesisGrid.setAttribute("aria-busy", "true");
+  renderLoadingState(hypothesisGrid, "Загружаем эксперименты", "Web запрашивает гипотезы у Core API.");
   try {
     const response = await fetch("/api/v1/hypotheses"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить гипотезы");
     setSectionCount(hypothesisCount, payload.total);
     hypothesisGrid.innerHTML = payload.total ? payload.items.map(hypothesisRow).join("") : "";
-    if (!payload.total) stateCard(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.");
-  } catch (error) { setSectionCount(hypothesisCount, null); stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
-  finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
+    if (!payload.total) {
+      renderEmptyState(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.", {
+        buttonId: "open-hypothesis-form",
+        label: "+ Новая гипотеза",
+      });
+    }
+  } catch (error) {
+    setSectionCount(hypothesisCount, null);
+    renderErrorState(hypothesisGrid, "Не удалось загрузить гипотезы", error.message, loadHypotheses);
+  } finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
 }
 
 function assessmentRow(item) {
@@ -455,27 +535,41 @@ function assessmentRow(item) {
 
 async function loadAssessments() {
   assessmentGrid.setAttribute("aria-busy", "true");
+  renderLoadingState(assessmentGrid, "Загружаем оценки", "Web запрашивает нормализованные результаты у Core.");
   try { const response = await fetch("/api/v1/assessments"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить оценки");
     setSectionCount(assessmentCount, payload.total);
     assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentRow).join("") : "";
-    if (!payload.total) stateCard(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.");
-  } catch (error) { setSectionCount(assessmentCount, null); stateCard(assessmentGrid, "Не удалось загрузить оценки", error.message); }
-  finally { assessmentGrid.setAttribute("aria-busy", "false"); }
+    if (!payload.total) {
+      renderEmptyState(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.", {
+        buttonId: "open-assessment-form",
+        label: "+ Записать оценку",
+      });
+    }
+  } catch (error) {
+    setSectionCount(assessmentCount, null);
+    renderErrorState(assessmentGrid, "Не удалось загрузить оценки", error.message, loadAssessments);
+  } finally { assessmentGrid.setAttribute("aria-busy", "false"); }
 }
 
 async function loadMetrics() {
   metricsDashboard.setAttribute("aria-busy", "true");
+  renderLoadingState(metricsDashboard, "Загружаем показатели", "Web запрашивает историю у Core API.");
   try {
     const response = await fetch("/api/v1/metrics");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить метрики");
     setSectionCount(metricCount, payload.total);
     metricsDashboard.innerHTML = payload.total ? metricsView(payload.items) : "";
-    if (!payload.total) stateCard(metricsDashboard, "Метрик пока нет", "Запишите первый дневной снимок.");
+    if (!payload.total) {
+      renderEmptyState(metricsDashboard, "Метрик пока нет", "Запишите первый дневной снимок.", {
+        buttonId: "open-metric-form",
+        label: "+ Записать день",
+      });
+    }
   } catch (error) {
     setSectionCount(metricCount, null);
-    stateCard(metricsDashboard, "Не удалось загрузить метрики", error.message);
+    renderErrorState(metricsDashboard, "Не удалось загрузить метрики", error.message, loadMetrics);
   } finally {
     metricsDashboard.setAttribute("aria-busy", "false");
   }
@@ -483,6 +577,7 @@ async function loadMetrics() {
 
 async function loadApplications() {
   applicationList.setAttribute("aria-busy", "true");
+  renderLoadingState(applicationList, "Загружаем отклики", "Web запрашивает журнал у Core API.");
   try {
     const response = await fetch("/api/v1/applications");
     const payload = await response.json();
@@ -492,11 +587,11 @@ async function loadApplications() {
       applicationList.innerHTML = payload.items.map(applicationRow).join("");
     } else {
       applicationList.innerHTML = "";
-      stateCard(applicationList, "Откликов пока нет", "Запишите первый факт отклика из карточки вакансии.");
+      renderEmptyState(applicationList, "Откликов пока нет", "Запишите первый факт отклика из карточки вакансии.");
     }
   } catch (error) {
     setSectionCount(applicationCount, null);
-    stateCard(applicationList, "Не удалось загрузить отклики", error.message);
+    renderErrorState(applicationList, "Не удалось загрузить отклики", error.message, loadApplications);
   } finally {
     applicationList.setAttribute("aria-busy", "false");
   }
@@ -504,6 +599,7 @@ async function loadApplications() {
 
 async function loadVacancies() {
   grid.setAttribute("aria-busy", "true");
+  renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает данные у Core API.");
   try {
     const response = await fetch("/api/v1/vacancies");
     const payload = await response.json();
@@ -529,13 +625,18 @@ async function loadVacancies() {
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyRow).join("")
       : "";
-    if (!payload.total) stateCard(grid, "Воронка пока пуста", "Добавьте первую вакансию — она сохранится в Core.");
+    if (!payload.total) {
+      renderEmptyState(grid, "Вакансий пока нет", "Добавьте первую вакансию — она сохранится в Core.", {
+        buttonId: "open-form",
+        label: "+ Добавить вакансию",
+      });
+    }
   } catch (error) {
-    count.textContent = "—";
+    setSectionCount(count, null);
     signal.classList.add("offline");
     signal.classList.remove("online");
     connectionLabel.textContent = "Core недоступен";
-    stateCard(grid, "Не удалось загрузить вакансии", error.message);
+    renderErrorState(grid, "Не удалось загрузить вакансии", error.message, loadVacancies);
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
@@ -548,7 +649,7 @@ document.querySelector("#cancel-form").addEventListener("click", () => dialog.cl
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   formError.hidden = true;
-  submitButton.disabled = true;
+  setButtonProcessing(submitButton, true, "Сохраняем…", "Сохранить");
   const values = Object.fromEntries(new FormData(form));
   const identity = crypto.randomUUID();
   values.company_external_id = `${values.source}-${values.company_name.toLowerCase().replace(/[^a-z0-9а-я]+/giu, "-")}`;
@@ -570,7 +671,7 @@ form.addEventListener("submit", async (event) => {
     formError.textContent = error.message;
     formError.hidden = false;
   } finally {
-    submitButton.disabled = false;
+    setButtonProcessing(submitButton, false, "Сохраняем…", "Сохранить");
   }
 });
 
@@ -590,7 +691,7 @@ grid.addEventListener("change", async (event) => {
     showNotice(`Статус: ${statusLabels[payload.status]}`);
     await loadVacancies();
   } catch (error) {
-    showNotice(error.message, true);
+    showNotice(error.message, "error");
     await loadVacancies();
   } finally {
     select.disabled = false;
@@ -617,7 +718,7 @@ grid.addEventListener("click", async (event) => {
       showNotice(`В Core: ${name}`);
       await Promise.all([loadVacancies(), loadPeople()]);
     } catch (error) {
-      showNotice(error.message, true);
+      showNotice(error.message, "error");
       confirmButton.disabled = false;
       confirmButton.textContent = "Подтвердить в Core";
     }
@@ -628,6 +729,7 @@ grid.addEventListener("click", async (event) => {
     const card = researchButton.closest("[data-id]");
     const vacancy = knownVacancies.find((item) => item.id === card.dataset.id);
     researchButton.disabled = true;
+    researchButton.classList.add("is-processing");
     researchButton.textContent = "Ищем…";
     try {
       const response = await fetch("/api/v1/osint/people-research", {
@@ -645,8 +747,9 @@ grid.addEventListener("click", async (event) => {
       showNotice(`Поиск завершён: ${payload.people.length} контактов`);
       await loadVacancies();
     } catch (error) {
-      showNotice(error.message, true);
+      showNotice(error.message, "error");
       researchButton.disabled = false;
+      researchButton.classList.remove("is-processing");
       researchButton.textContent = "Повторить поиск";
     }
     return;
@@ -656,6 +759,7 @@ grid.addEventListener("click", async (event) => {
     const card = mirrorButton.closest("[data-id]");
     const vacancy = knownVacancies.find((item) => item.id === card.dataset.id);
     mirrorButton.disabled = true;
+    mirrorButton.classList.add("is-processing");
     mirrorButton.textContent = "Ищем…";
     try {
       const response = await fetch("/api/v1/osint/vacancy-mirrors", {
@@ -674,8 +778,9 @@ grid.addEventListener("click", async (event) => {
       showNotice(`Зеркала: ${(payload.mirrors || []).length} найдено`);
       await loadVacancies();
     } catch (error) {
-      showNotice(error.message, true);
+      showNotice(error.message, "error");
       mirrorButton.disabled = false;
+      mirrorButton.classList.remove("is-processing");
       mirrorButton.textContent = "Повторить зеркала";
     }
     return;
@@ -697,7 +802,7 @@ document.querySelector("#cancel-application-form").addEventListener("click", () 
 applicationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   applicationFormError.hidden = true;
-  applicationSubmitButton.disabled = true;
+  setButtonProcessing(applicationSubmitButton, true, "Сохраняем…", "Записать факт");
   const values = Object.fromEntries(new FormData(applicationForm));
   const identity = crypto.randomUUID();
   values.external_id = identity;
@@ -723,7 +828,7 @@ applicationForm.addEventListener("submit", async (event) => {
     applicationFormError.textContent = error.message;
     applicationFormError.hidden = false;
   } finally {
-    applicationSubmitButton.disabled = false;
+    setButtonProcessing(applicationSubmitButton, false, "Сохраняем…", "Записать факт");
   }
 });
 
@@ -739,7 +844,7 @@ document.querySelector("#cancel-metric-form").addEventListener("click", () => me
 metricForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   metricFormError.hidden = true;
-  metricSubmitButton.disabled = true;
+  setButtonProcessing(metricSubmitButton, true, "Сохраняем…", "Сохранить снимок");
   const values = Object.fromEntries(new FormData(metricForm));
   const metricDate = values.metric_date;
   for (const field of ["views_total", "views_new", "applications", "replies", "invitations", "rejections"]) {
@@ -750,7 +855,7 @@ metricForm.addEventListener("submit", async (event) => {
   if (Object.keys(values).length === 1) {
     metricFormError.textContent = "Укажите хотя бы один показатель или заметку";
     metricFormError.hidden = false;
-    metricSubmitButton.disabled = false;
+    setButtonProcessing(metricSubmitButton, false, "Сохраняем…", "Сохранить снимок");
     return;
   }
   const identity = crypto.randomUUID();
@@ -769,7 +874,7 @@ metricForm.addEventListener("submit", async (event) => {
     metricFormError.textContent = error.message;
     metricFormError.hidden = false;
   } finally {
-    metricSubmitButton.disabled = false;
+    setButtonProcessing(metricSubmitButton, false, "Сохраняем…", "Сохранить снимок");
   }
 });
 
@@ -778,7 +883,7 @@ document.querySelector("#open-person-form").addEventListener("click", () => {
   personForm.elements.source.value = "manual";
   personForm.elements.vacancy_id.innerHTML = knownVacancies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company.name)} — ${escapeHtml(item.title)}</option>`).join("");
   personFormError.hidden = true;
-  if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию с компанией", true); return; }
+  if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию с компанией", "error"); return; }
   personDialog.showModal();
 });
 document.querySelector("#close-person-form").addEventListener("click", () => personDialog.close());
@@ -787,7 +892,7 @@ document.querySelector("#cancel-person-form").addEventListener("click", () => pe
 personForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   personFormError.hidden = true;
-  personSubmitButton.disabled = true;
+  setButtonProcessing(personSubmitButton, true, "Сохраняем…", "Сохранить контакт");
   const values = Object.fromEntries(new FormData(personForm));
   const vacancy = knownVacancies.find((item) => item.id === values.vacancy_id);
   const identity = crypto.randomUUID();
@@ -806,7 +911,9 @@ personForm.addEventListener("submit", async (event) => {
   } catch (error) {
     personFormError.textContent = error.message;
     personFormError.hidden = false;
-  } finally { personSubmitButton.disabled = false; }
+  } finally {
+    setButtonProcessing(personSubmitButton, false, "Сохраняем…", "Сохранить контакт");
+  }
 });
 
 peopleGrid.addEventListener("change", async (event) => {
@@ -821,7 +928,7 @@ peopleGrid.addEventListener("change", async (event) => {
     showNotice(`Локальный статус: ${personStatusLabels[payload.status]}`);
     await loadPeople();
   } catch (error) {
-    showNotice(error.message, true);
+    showNotice(error.message, "error");
     await loadPeople();
   } finally { select.disabled = false; }
 });
@@ -863,7 +970,7 @@ document.querySelector("#open-assessment-form").addEventListener("click", () => 
   assessmentForm.reset(); assessmentForm.elements.source.value = "manual";
   assessmentForm.elements.model.value = "manual"; assessmentForm.elements.prompt_version.value = "manual-v1";
   assessmentForm.elements.vacancy_id.innerHTML = knownVacancies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company.name)} — ${escapeHtml(item.title)}</option>`).join("");
-  assessmentFormError.hidden = true; if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию", true); return; }
+  assessmentFormError.hidden = true; if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию", "error"); return; }
   assessmentDialog.showModal();
 });
 document.querySelector("#close-assessment-form").addEventListener("click", () => assessmentDialog.close());
