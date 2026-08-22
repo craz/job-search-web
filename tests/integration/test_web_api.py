@@ -38,12 +38,35 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-shell" in page.text
-    assert "/assets/styles.css?v=20260822-shell" in page.text
+    assert "/assets/app.js?v=20260822-primitives" in page.text
+    assert "/assets/styles.css?v=20260822-primitives" in page.text
+    assert 'class="btn btn--primary"' in page.text
+    assert 'class="dialog"' in page.text
+    assert 'class="dialog__header"' in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
     assert [call[0] for call in core.calls] == ["list", "create", "update"]
+
+
+def test_styles_expose_ui_primitives() -> None:
+    """R0 primitives are present in the browser stylesheet."""
+    css = WebClient(StubCore()).request("GET", "/assets/styles.css")
+
+    assert css.status_code == 200
+    for selector in (
+        ".btn--primary",
+        ".btn--secondary",
+        ".btn--ghost",
+        ".btn--destructive",
+        ".badge--success",
+        ".list-row",
+        ".dialog__header",
+        ".field__label",
+        ".control",
+        ".surface--panel",
+    ):
+        assert selector in css.text
 
 
 def test_core_transport_failure_has_stable_response() -> None:

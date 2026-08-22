@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-shell">
-    <script src="/assets/app.js?v=20260822-shell" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-primitives">
+    <script src="/assets/app.js?v=20260822-primitives" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -40,7 +40,7 @@
               <p class="section-number">01 / ВОРОНКА</p>
               <h2 id="board-title">Вакансии <span id="vacancy-count">—</span></h2>
             </div>
-            <button class="primary-button" id="open-form" type="button">+ Добавить вакансию</button>
+            <button class="btn btn--primary" id="open-form" type="button">+ Добавить вакансию</button>
           </section>
 
           <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
@@ -61,7 +61,7 @@
             <p class="toolbar-note">Только локальные факты — без автоматической отправки.</p>
           </section>
 
-          <section id="applications" class="application-list" aria-live="polite" aria-busy="true">
+          <section id="applications" class="application-list list-rows" aria-live="polite" aria-busy="true">
             <article class="state-card">
               <span class="loader" aria-hidden="true"></span>
               <h3>Загружаем отклики</h3>
@@ -74,7 +74,7 @@
               <p class="section-number">03 / ТЕМП</p>
               <h2 id="metrics-title">Дневные метрики <span id="metric-count">—</span></h2>
             </div>
-            <button class="primary-button" id="open-metric-form" type="button">+ Записать день</button>
+            <button class="btn btn--primary" id="open-metric-form" type="button">+ Записать день</button>
           </section>
 
           <section id="metrics" class="metrics-dashboard" aria-live="polite" aria-busy="true">
@@ -90,7 +90,7 @@
               <p class="section-number">04 / КОНТАКТЫ</p>
               <h2 id="people-title">Люди <span id="people-count">—</span></h2>
             </div>
-            <button class="primary-button" id="open-person-form" type="button">+ Добавить контакт</button>
+            <button class="btn btn--primary" id="open-person-form" type="button">+ Добавить контакт</button>
           </section>
 
           <section id="people" class="people-grid" aria-live="polite" aria-busy="true">
@@ -104,7 +104,7 @@
           <section class="toolbar hypotheses-toolbar" aria-labelledby="hypotheses-title">
             <div><p class="section-number">05 / ЭКСПЕРИМЕНТЫ</p>
               <h2 id="hypotheses-title">Гипотезы <span id="hypothesis-count">—</span></h2></div>
-            <button class="primary-button" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
+            <button class="btn btn--primary" id="open-hypothesis-form" type="button">+ Новая гипотеза</button>
           </section>
           <section id="hypotheses" class="hypothesis-grid" aria-live="polite" aria-busy="true">
             <article class="state-card"><span class="loader" aria-hidden="true"></span>
@@ -112,7 +112,7 @@
           </section>
           <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
             <div><p class="section-number">06 / РЕШЕНИЯ</p><h2 id="assessments-title">Оценки <span id="assessment-count">—</span></h2></div>
-            <button class="primary-button" id="open-assessment-form" type="button">+ Записать оценку</button>
+            <button class="btn btn--primary" id="open-assessment-form" type="button">+ Записать оценку</button>
           </section>
           <section id="assessments" class="assessment-grid" aria-live="polite" aria-busy="true">
             <article class="state-card"><span class="loader" aria-hidden="true"></span><h3>Загружаем оценки</h3><p>Web запрашивает нормализованные результаты у Core.</p></article>
@@ -122,31 +122,48 @@
     </div>
 
     <div class="app-dialogs">
-    <dialog id="vacancy-dialog" aria-labelledby="dialog-title">
-      <form id="vacancy-form" method="dialog">
-        <div class="dialog-head">
+    <dialog id="vacancy-dialog" class="dialog" aria-labelledby="dialog-title">
+      <form id="vacancy-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
           <div>
             <p class="section-number">НОВАЯ ВОЗМОЖНОСТЬ</p>
             <h2 id="dialog-title">Добавить вакансию</h2>
           </div>
-          <button class="icon-button" id="close-form" type="button" aria-label="Закрыть">×</button>
+          <button class="btn btn--ghost btn--icon" id="close-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Название</span>
+              <input class="control" name="title" required maxlength="500" placeholder="Backend Engineer">
+            </label>
+            <label class="field">
+              <span class="field__label">Компания</span>
+              <input class="control" name="company_name" required maxlength="255" placeholder="Example Labs">
+            </label>
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <input class="control" name="source" required maxlength="64" value="manual">
+            </label>
+            <label class="field">
+              <span class="field__label">Ссылка</span>
+              <input class="control" name="url" required type="url" placeholder="https://example.com/vacancy">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Описание</span>
+              <textarea class="control control--textarea" name="description" rows="4" placeholder="Ключевые требования и заметки"></textarea>
+            </label>
+          </div>
+          <p id="form-error" class="field__error form-error" role="alert" hidden></p>
         </div>
-        <div class="form-grid">
-          <label>Название<input name="title" required maxlength="500" placeholder="Backend Engineer"></label>
-          <label>Компания<input name="company_name" required maxlength="255" placeholder="Example Labs"></label>
-          <label>Источник<input name="source" required maxlength="64" value="manual"></label>
-          <label>Ссылка<input name="url" required type="url" placeholder="https://example.com/vacancy"></label>
-          <label class="wide">Описание<textarea name="description" rows="4" placeholder="Ключевые требования и заметки"></textarea></label>
-        </div>
-        <p id="form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions">
-          <button class="text-button" id="cancel-form" type="button">Отмена</button>
-          <button class="primary-button" id="submit-form" type="submit">Сохранить</button>
-        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-form" type="submit">Сохранить</button>
+        </footer>
       </form>
     </dialog>
 
-    <dialog id="application-dialog" aria-labelledby="application-dialog-title">
+    <dialog id="application-dialog" class="dialog" aria-labelledby="application-dialog-title">
       <form id="application-form" method="dialog">
         <div class="dialog-head">
           <div>
@@ -154,7 +171,7 @@
             <h2 id="application-dialog-title">Записать отклик</h2>
             <p id="application-vacancy-title" class="dialog-context"></p>
           </div>
-          <button class="icon-button" id="close-application-form" type="button" aria-label="Закрыть">×</button>
+          <button class="btn btn--ghost btn--icon" id="close-application-form" type="button" aria-label="Закрыть">×</button>
         </div>
         <input name="vacancy_id" type="hidden">
         <div class="form-grid">
@@ -168,20 +185,20 @@
         <p class="safety-note">Эта форма ничего не отправляет работодателю или в HeadHunter.</p>
         <p id="application-form-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
-          <button class="text-button" id="cancel-application-form" type="button">Отмена</button>
-          <button class="primary-button" id="submit-application-form" type="submit">Записать факт</button>
+          <button class="btn btn--ghost" id="cancel-application-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-application-form" type="submit">Записать факт</button>
         </div>
       </form>
     </dialog>
 
-    <dialog id="metric-dialog" aria-labelledby="metric-dialog-title">
+    <dialog id="metric-dialog" class="dialog" aria-labelledby="metric-dialog-title">
       <form id="metric-form" method="dialog">
         <div class="dialog-head">
           <div>
             <p class="section-number">ДНЕВНОЙ СНИМОК</p>
             <h2 id="metric-dialog-title">Записать показатели</h2>
           </div>
-          <button class="icon-button" id="close-metric-form" type="button" aria-label="Закрыть">×</button>
+          <button class="btn btn--ghost btn--icon" id="close-metric-form" type="button" aria-label="Закрыть">×</button>
         </div>
         <div class="form-grid metrics-form-grid">
           <label class="wide">Дата<input name="metric_date" required type="date"></label>
@@ -196,20 +213,20 @@
         <p class="safety-note">Web сохраняет только введённый снимок и не подменяет данные HH.</p>
         <p id="metric-form-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
-          <button class="text-button" id="cancel-metric-form" type="button">Отмена</button>
-          <button class="primary-button" id="submit-metric-form" type="submit">Сохранить снимок</button>
+          <button class="btn btn--ghost" id="cancel-metric-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-metric-form" type="submit">Сохранить снимок</button>
         </div>
       </form>
     </dialog>
 
-    <dialog id="person-dialog" aria-labelledby="person-dialog-title">
+    <dialog id="person-dialog" class="dialog" aria-labelledby="person-dialog-title">
       <form id="person-form" method="dialog">
         <div class="dialog-head">
           <div>
             <p class="section-number">ПОДТВЕРЖДЁННЫЙ КОНТАКТ</p>
             <h2 id="person-dialog-title">Добавить человека</h2>
           </div>
-          <button class="icon-button" id="close-person-form" type="button" aria-label="Закрыть">×</button>
+          <button class="btn btn--ghost btn--icon" id="close-person-form" type="button" aria-label="Закрыть">×</button>
         </div>
         <div class="form-grid">
           <label class="wide">Компания / вакансия<select name="vacancy_id" required></select></label>
@@ -229,16 +246,16 @@
         <p class="safety-note">Форма не запускает OSINT и не отправляет человеку сообщения.</p>
         <p id="person-form-error" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
-          <button class="text-button" id="cancel-person-form" type="button">Отмена</button>
-          <button class="primary-button" id="submit-person-form" type="submit">Сохранить контакт</button>
+          <button class="btn btn--ghost" id="cancel-person-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-person-form" type="submit">Сохранить контакт</button>
         </div>
       </form>
     </dialog>
-    <dialog id="hypothesis-dialog" aria-labelledby="hypothesis-dialog-title">
+    <dialog id="hypothesis-dialog" class="dialog" aria-labelledby="hypothesis-dialog-title">
       <form id="hypothesis-form" method="dialog">
         <div class="dialog-head"><div><p class="section-number">ИЗМЕРИМЫЙ ЭКСПЕРИМЕНТ</p>
           <h2 id="hypothesis-dialog-title">Новая гипотеза</h2></div>
-          <button class="icon-button" id="close-hypothesis-form" type="button" aria-label="Закрыть">×</button></div>
+          <button class="btn btn--ghost btn--icon" id="close-hypothesis-form" type="button" aria-label="Закрыть">×</button></div>
         <div class="form-grid">
           <label class="wide">Гипотеза<input name="title" required maxlength="500" placeholder="Точечные отклики повышают долю ответов"></label>
           <label>Размер выборки<input name="test_size" min="1" type="number"></label>
@@ -246,24 +263,24 @@
           <label>Источник<input name="source" required maxlength="64" value="manual"></label>
           <label class="wide">Описание<textarea name="description" maxlength="4000" rows="3"></textarea></label>
         </div><p id="hypothesis-form-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="text-button" id="cancel-hypothesis-form" type="button">Отмена</button>
-          <button class="primary-button" id="submit-hypothesis-form" type="submit">Начать эксперимент</button></div>
+        <div class="dialog-actions"><button class="btn btn--ghost" id="cancel-hypothesis-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hypothesis-form" type="submit">Начать эксперимент</button></div>
       </form>
     </dialog>
-    <dialog id="hypothesis-close-dialog" aria-labelledby="hypothesis-close-title">
+    <dialog id="hypothesis-close-dialog" class="dialog" aria-labelledby="hypothesis-close-title">
       <form id="hypothesis-close-form" method="dialog"><div class="dialog-head"><div>
         <p class="section-number">НАБЛЮДАЕМЫЙ РЕЗУЛЬТАТ</p><h2 id="hypothesis-close-title">Закрыть гипотезу</h2>
         <p id="hypothesis-close-context" class="dialog-context"></p></div>
-        <button class="icon-button" id="close-hypothesis-close" type="button" aria-label="Закрыть">×</button></div>
+        <button class="btn btn--ghost btn--icon" id="close-hypothesis-close" type="button" aria-label="Закрыть">×</button></div>
         <input name="hypothesis_id" type="hidden"><div class="form-grid">
           <label class="wide">Результат<textarea name="result" required maxlength="4000" rows="4"></textarea></label></div>
         <p id="hypothesis-close-error" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions"><button class="text-button" id="cancel-hypothesis-close" type="button">Отмена</button>
-          <button class="primary-button" type="submit">Зафиксировать результат</button></div></form>
+        <div class="dialog-actions"><button class="btn btn--ghost" id="cancel-hypothesis-close" type="button">Отмена</button>
+          <button class="btn btn--primary" type="submit">Зафиксировать результат</button></div></form>
     </dialog>
-    <dialog id="assessment-dialog" aria-labelledby="assessment-dialog-title"><form id="assessment-form" method="dialog">
+    <dialog id="assessment-dialog" class="dialog" aria-labelledby="assessment-dialog-title"><form id="assessment-form" method="dialog">
       <div class="dialog-head"><div><p class="section-number">НОРМАЛИЗОВАННЫЙ РЕЗУЛЬТАТ</p><h2 id="assessment-dialog-title">Записать оценку</h2></div>
-        <button class="icon-button" id="close-assessment-form" type="button" aria-label="Закрыть">×</button></div>
+        <button class="btn btn--ghost btn--icon" id="close-assessment-form" type="button" aria-label="Закрыть">×</button></div>
       <div class="form-grid"><label class="wide">Вакансия<select name="vacancy_id" required></select></label>
         <label>Релевантность 0–100<input name="relevance_score" type="number" min="0" max="100" required></label>
         <label>Вердикт<select name="verdict" required><option value="apply">Откликаться</option><option value="maybe">Подумать</option><option value="skip">Пропустить</option></select></label>
@@ -275,7 +292,7 @@
         <label>Источник<input name="source" required maxlength="64" value="manual"></label></div>
       <p class="safety-note">Форма не запускает Ollama: она сохраняет только готовый нормализованный результат.</p>
       <p id="assessment-form-error" class="form-error" role="alert" hidden></p><div class="dialog-actions">
-        <button class="text-button" id="cancel-assessment-form" type="button">Отмена</button><button class="primary-button" type="submit">Сохранить оценку</button></div>
+        <button class="btn btn--ghost" id="cancel-assessment-form" type="button">Отмена</button><button class="btn btn--primary" type="submit">Сохранить оценку</button></div>
     </form></dialog>
     </div>
   </body>
