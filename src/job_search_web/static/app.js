@@ -34,14 +34,10 @@ const hypothesisFormError = document.querySelector("#hypothesis-form-error");
 const hypothesisCloseDialog = document.querySelector("#hypothesis-close-dialog");
 const hypothesisCloseForm = document.querySelector("#hypothesis-close-form");
 const hypothesisCloseError = document.querySelector("#hypothesis-close-error");
-const assessmentGrid = document.querySelector("#assessments");
-const assessmentCount = document.querySelector("#assessment-count");
-const assessmentDialog = document.querySelector("#assessment-dialog");
-const assessmentForm = document.querySelector("#assessment-form");
-const assessmentFormError = document.querySelector("#assessment-form-error");
 let knownVacancies = [];
 let osintReports = [];
 let mirrorReports = [];
+let assessmentsByVacancyId = new Map();
 
 const NAV_SECTIONS = [
   "vacancies",
@@ -49,10 +45,9 @@ const NAV_SECTIONS = [
   "metrics",
   "people",
   "hypotheses",
-  "assessments",
 ];
 const NAV_DEFAULT_SECTION = "vacancies";
-const NAV_LEGACY_HASH_ALIASES = { applications: "journal" };
+const NAV_LEGACY_HASH_ALIASES = { applications: "journal", assessments: "vacancies" };
 
 function resolveSectionFromHash(rawHash = window.location.hash) {
   const hash = String(rawHash || "").replace(/^#/, "");
@@ -127,6 +122,48 @@ const assessmentVerdictBadge = {
   skip: "danger",
 };
 
+const assessmentVerdictLabels = {
+  apply: "Откликаться",
+  maybe: "Подумать",
+  skip: "Пропустить",
+};
+
+function indexAssessmentsByVacancy(items) {
+  const byVacancy = new Map();
+  for (const item of items || []) {
+    const vacancyId = item.vacancy?.id;
+    if (!vacancyId) continue;
+    const current = byVacancy.get(vacancyId);
+    if (!current || String(item.assessed_at || "") > String(current.assessed_at || "")) {
+      byVacancy.set(vacancyId, item);
+    }
+  }
+  return byVacancy;
+}
+
+function assessmentVerdictLabel(verdict) {
+  return assessmentVerdictLabels[verdict] || verdict;
+}
+
+function renderVacancyAssessmentSummary(assessment) {
+  if (!assessment) return "";
+  const verdict = assessmentVerdictLabel(assessment.verdict);
+  return `<div class="vacancy-assessment-summary">
+    ${renderBadge(verdict, assessmentVerdictBadge[assessment.verdict] || "neutral")}
+    <span class="assessment-score" aria-label="Релевантность">${escapeHtml(assessment.relevance_score)}</span>
+  </div>`;
+}
+
+function renderVacancyAssessmentDetail(assessment) {
+  if (!assessment) return "";
+  return `<div class="row-detail__section vacancy-assessment-detail">
+    <p class="row-detail__label">Оценка · ${escapeHtml(assessment.model)} · ${escapeHtml(assessment.prompt_version || "—")}</p>
+    <p class="assessment-detail__reason">${escapeHtml(assessment.reason)}</p>
+    ${assessment.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(assessment.risk)}</p>` : ""}
+    <p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(assessment.action)}</p>
+  </div>`;
+}
+
 function renderBadge(label, variant = "neutral") {
   return `<span class="badge badge--${variant}"><span class="badge__dot" aria-hidden="true"></span>${escapeHtml(label)}</span>`;
 }
@@ -168,7 +205,25 @@ function escapeHtml(value) {
   return node.innerHTML;
 }
 
+let noticeDismissTimer;
+
+function clearNotice() {
+  if (noticeDismissTimer) {
+    window.clearTimeout(noticeDismissTimer);
+    noticeDismissTimer = undefined;
+  }
+  notice.hidden = true;
+  notice.innerHTML = "";
+  notice.className = "notice";
+  notice.setAttribute("role", "status");
+}
+
 function showNotice(message, variant = "success") {
+  const text = String(message ?? "").trim();
+  if (!text) {
+    clearNotice();
+    return;
+  }
   const labels = {
     success: "Успех",
     error: "Ошибка",
@@ -176,11 +231,12 @@ function showNotice(message, variant = "success") {
     warning: "Внимание",
   };
   const kind = labels[variant] ? variant : variant === true ? "error" : "success";
-  notice.innerHTML = `<span class="notice__label">${escapeHtml(labels[kind] || labels.success)}</span><span class="notice__text">${escapeHtml(message)}</span>`;
+  clearNotice();
+  notice.innerHTML = `<span class="notice__label">${escapeHtml(labels[kind] || labels.success)}</span><span class="notice__text">${escapeHtml(text)}</span>`;
   notice.className = `notice notice--${kind}`;
   notice.hidden = false;
   notice.setAttribute("role", kind === "error" ? "alert" : "status");
-  window.setTimeout(() => { notice.hidden = true; }, 4500);
+  noticeDismissTimer = window.setTimeout(clearNotice, 4500);
 }
 
 function renderState(target, { variant, title, detail, retryLabel, onRetry, actionButtonId, actionLabel }) {
@@ -297,24 +353,34 @@ function vacancyRow(item) {
       </div>`
     : inlineState("Для поиска контактов и зеркал сначала нужен сайт компании.");
   const evidenceCount = people.length + mirrors.length;
-  const detailSummary = evidenceCount
-    ? `Контакты и зеркала · ${evidenceCount}`
-    : item.company.website_url
-      ? "OSINT и зеркала"
-      : "";
+  const assessment = assessmentsByVacancyId.get(item.id);
+  const assessmentSummary = renderVacancyAssessmentSummary(assessment);
+  const assessmentDetail = renderVacancyAssessmentDetail(assessment);
+  const detailParts = [];
+  if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
+  else if (item.company.website_url) detailParts.push("OSINT и зеркала");
+  if (assessment) detailParts.push("Оценка");
+  const detailSummary = detailParts.join(" · ");
+  const detailSections = [];
+  if (item.company.website_url || evidenceCount) {
+    detailSections.push(
+      researchButtons,
+      `<div class="row-detail__section">
+        <p class="row-detail__label">Зеркала · не проверено</p>
+        ${mirrorsHtml}
+      </div>`,
+      `<div class="row-detail__section">
+        <p class="row-detail__label">Контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
+        ${peopleHtml}
+      </div>`,
+    );
+  }
+  if (assessmentDetail) detailSections.push(assessmentDetail);
   const detailBlock = detailSummary
-    ? `<details class="row-detail"${evidenceCount ? " open" : ""}>
+    ? `<details class="row-detail"${evidenceCount || assessment ? " open" : ""}>
         <summary class="row-detail__summary">${escapeHtml(detailSummary)}</summary>
         <div class="row-detail__body">
-          ${researchButtons}
-          <div class="row-detail__section">
-            <p class="row-detail__label">Зеркала · не проверено</p>
-            ${mirrorsHtml}
-          </div>
-          <div class="row-detail__section">
-            <p class="row-detail__label">Контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
-            ${peopleHtml}
-          </div>
+          ${detailSections.join("")}
         </div>
       </details>`
     : "";
@@ -331,6 +397,7 @@ function vacancyRow(item) {
         <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(excerpt(item.description))}</p>
       </div>
       <div class="list-row__trailing">
+        ${assessmentSummary}
         <div class="list-row__actions">
           <a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
           <label class="list-row__control"><span class="sr-only">Статус</span><select class="control control--select" data-status>${options}</select></label>
@@ -505,53 +572,6 @@ async function loadHypotheses() {
   } finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
 }
 
-function assessmentRow(item) {
-  const verdictLabels = { apply: "Откликаться", maybe: "Подумать", skip: "Пропустить" };
-  const verdict = verdictLabels[item.verdict] || item.verdict;
-  const detail = `<div class="row-detail__body row-detail__body--plain">
-      <p class="assessment-detail__reason">${escapeHtml(item.reason)}</p>
-      ${item.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(item.risk)}</p>` : ""}
-      <p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(item.action)}</p>
-    </div>`;
-  return `<article class="list-row-group">
-    <details class="assessment-details">
-      <summary class="list-row">
-        <div class="list-row__primary">
-          <div class="list-row__identity">
-            <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
-          </div>
-          <p class="list-row__meta">${escapeHtml(item.model)} · ${escapeHtml(item.prompt_version || "—")}</p>
-        </div>
-        <div class="list-row__trailing">
-          ${renderBadge(verdict, assessmentVerdictBadge[item.verdict] || "neutral")}
-          <span class="assessment-score" aria-label="Релевантность">${escapeHtml(item.relevance_score)}</span>
-          <span class="assessment-details__toggle">Подробнее</span>
-        </div>
-      </summary>
-      ${detail}
-    </details>
-  </article>`;
-}
-
-async function loadAssessments() {
-  assessmentGrid.setAttribute("aria-busy", "true");
-  renderLoadingState(assessmentGrid, "Загружаем оценки", "Web запрашивает нормализованные результаты у Core.");
-  try { const response = await fetch("/api/v1/assessments"); const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || "Не удалось получить оценки");
-    setSectionCount(assessmentCount, payload.total);
-    assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentRow).join("") : "";
-    if (!payload.total) {
-      renderEmptyState(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.", {
-        buttonId: "open-assessment-form",
-        label: "+ Записать оценку",
-      });
-    }
-  } catch (error) {
-    setSectionCount(assessmentCount, null);
-    renderErrorState(assessmentGrid, "Не удалось загрузить оценки", error.message, loadAssessments);
-  } finally { assessmentGrid.setAttribute("aria-busy", "false"); }
-}
-
 async function loadMetrics() {
   metricsDashboard.setAttribute("aria-busy", "true");
   renderLoadingState(metricsDashboard, "Загружаем показатели", "Web запрашивает историю у Core API.");
@@ -610,17 +630,25 @@ async function loadVacancies() {
     connectionLabel.textContent = "Core доступен";
     knownVacancies = payload.items;
     try {
-      const [osintResponse, mirrorResponse] = await Promise.all([
+      const [osintResponse, mirrorResponse, assessmentsResponse] = await Promise.all([
         fetch("/api/v1/osint/people-proposals"),
         fetch("/api/v1/osint/vacancy-mirrors"),
+        fetch("/api/v1/assessments"),
       ]);
       const osintPayload = await osintResponse.json();
       const mirrorPayload = await mirrorResponse.json();
       osintReports = osintResponse.ok ? osintPayload.items : [];
       mirrorReports = mirrorResponse.ok ? mirrorPayload.items : [];
+      if (assessmentsResponse.ok) {
+        const assessmentsPayload = await assessmentsResponse.json();
+        assessmentsByVacancyId = indexAssessmentsByVacancy(assessmentsPayload.items);
+      } else {
+        assessmentsByVacancyId = new Map();
+      }
     } catch (_error) {
       osintReports = [];
       mirrorReports = [];
+      assessmentsByVacancyId = new Map();
     }
     grid.innerHTML = payload.total
       ? payload.items.map(vacancyRow).join("")
@@ -636,6 +664,7 @@ async function loadVacancies() {
     signal.classList.add("offline");
     signal.classList.remove("online");
     connectionLabel.textContent = "Core недоступен";
+    assessmentsByVacancyId = new Map();
     renderErrorState(grid, "Не удалось загрузить вакансии", error.message, loadVacancies);
   } finally {
     grid.setAttribute("aria-busy", "false");
@@ -966,30 +995,11 @@ hypothesisCloseForm.addEventListener("submit", async (event) => {
   } catch (error) { hypothesisCloseError.textContent = error.message; hypothesisCloseError.hidden = false; }
 });
 
-document.querySelector("#open-assessment-form").addEventListener("click", () => {
-  assessmentForm.reset(); assessmentForm.elements.source.value = "manual";
-  assessmentForm.elements.model.value = "manual"; assessmentForm.elements.prompt_version.value = "manual-v1";
-  assessmentForm.elements.vacancy_id.innerHTML = knownVacancies.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.company.name)} — ${escapeHtml(item.title)}</option>`).join("");
-  assessmentFormError.hidden = true; if (!knownVacancies.length) { showNotice("Сначала добавьте вакансию", "error"); return; }
-  assessmentDialog.showModal();
-});
-document.querySelector("#close-assessment-form").addEventListener("click", () => assessmentDialog.close());
-document.querySelector("#cancel-assessment-form").addEventListener("click", () => assessmentDialog.close());
-assessmentForm.addEventListener("submit", async (event) => {
-  event.preventDefault(); assessmentFormError.hidden = true; const values = Object.fromEntries(new FormData(assessmentForm));
-  const identity = crypto.randomUUID(); values.external_id = identity; values.relevance_score = Number(values.relevance_score);
-  values.assessed_at = new Date().toISOString(); if (!values.risk) delete values.risk;
-  try { const response = await fetch("/api/v1/assessments", {method: "POST", headers: {"Content-Type": "application/json", "Idempotency-Key": identity}, body: JSON.stringify(values)});
-    const payload = await response.json(); if (!response.ok) throw new Error(payload.message || "Оценка не сохранена");
-    assessmentDialog.close(); showNotice("Нормализованная оценка сохранена"); await loadAssessments();
-  } catch (error) { assessmentFormError.textContent = error.message; assessmentFormError.hidden = false; }
-});
-
+clearNotice();
 initNavigation();
 loadVacancies();
 loadApplications();
 loadMetrics();
 loadPeople();
 loadHypotheses();
-loadAssessments();
 startLiveReload();

@@ -40,8 +40,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-states" in page.text
-    assert "/assets/styles.css?v=20260822-states" in page.text
+    assert "/assets/app.js?v=20260822-ia5" in page.text
+    assert "/assets/styles.css?v=20260822-ia5" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -103,11 +103,12 @@ def test_styles_expose_system_state_primitives() -> None:
 
     assert "state-card" not in css
     assert 'class="state state--loading"' in page.text
-    assert 'class="notice notice--success"' in page.text
+    assert 'id="notice" class="notice"' in page.text
+    assert 'id="notice" class="notice" role="status" aria-live="polite" hidden' in page.text
 
 
 def test_index_exposes_global_navigation() -> None:
-    """R0 navigation: six sections, default Vacancies, one visible view."""
+    """R0 navigation: five sections, default Vacancies, one visible view."""
     page = WebClient(StubCore()).request("GET", "/")
     text = page.text
 
@@ -118,16 +119,19 @@ def test_index_exposes_global_navigation() -> None:
         ("metrics", "#metrics", "Метрики"),
         ("people", "#people", "Люди"),
         ("hypotheses", "#hypotheses", "Гипотезы"),
-        ("assessments", "#assessments", "Оценки"),
     ):
         assert f'data-nav="{section_id}"' in text
         assert f'href="{hash_target}"' in text
         assert label in text
 
+    assert 'data-nav="assessments"' not in text
+    assert 'href="#assessments"' not in text
+    assert 'data-section="assessments"' not in text
+
     assert 'data-section="vacancies"' in text
     assert 'id="section-vacancies" data-section="vacancies" role="region"' in text
     assert 'id="section-vacancies" data-section="vacancies" role="region" hidden' not in text
-    for hidden_section in ("journal", "metrics", "people", "hypotheses", "assessments"):
+    for hidden_section in ("journal", "metrics", "people", "hypotheses"):
         assert re.search(
             rf'data-section="{hidden_section}"[^>]*\bhidden\b',
             text,
@@ -154,8 +158,40 @@ def test_app_js_navigation_contract() -> None:
         "NAV_DEFAULT_SECTION",
         "NAV_LEGACY_HASH_ALIASES",
         "initNavigation",
+        'assessments: "vacancies"',
     ):
         assert fragment in js.text
+
+
+def test_app_js_embeds_assessments_in_vacancy_context() -> None:
+    """Assessments load with vacancies and render in row context, not as a section."""
+    js = WebClient(StubCore()).request("GET", "/assets/app.js").text
+
+    for fragment in (
+        "assessmentsByVacancyId",
+        'fetch("/api/v1/assessments")',
+        "vacancy-assessment-summary",
+        "renderVacancyAssessmentSummary",
+        "renderVacancyAssessmentDetail",
+    ):
+        assert fragment in js
+    assert "loadAssessments" not in js
+    assert '  "assessments",' not in js
+
+
+def test_app_js_notice_contract() -> None:
+    """Notice stays hidden until a non-empty message is shown."""
+    js = WebClient(StubCore()).request("GET", "/assets/app.js").text
+
+    for fragment in (
+        "function clearNotice",
+        "function showNotice",
+        "notice.hidden = true",
+        'notice.innerHTML = ""',
+        "if (!text)",
+        "clearNotice();",
+    ):
+        assert fragment in js
 
 
 def test_styles_expose_navigation_active_state() -> None:
@@ -175,7 +211,7 @@ def test_index_exposes_migrated_screen_shell() -> None:
     assert 'id="vacancies" class="list-rows vacancy-list"' in text
     assert 'id="people" class="list-rows people-list"' in text
     assert 'id="hypotheses" class="list-rows hypothesis-list"' in text
-    assert 'id="assessments" class="list-rows assessment-list"' in text
+    assert 'id="assessments"' not in text
     assert "vacancy-grid" not in text
     assert "person-card" not in text
     assert "hypothesis-card" not in text
@@ -184,9 +220,9 @@ def test_index_exposes_migrated_screen_shell() -> None:
     assert 'id="metric-form" class="dialog__form"' in text
     assert 'id="person-form" class="dialog__form"' in text
     assert 'id="hypothesis-form" class="dialog__form"' in text
-    assert 'id="assessment-form" class="dialog__form"' in text
-    assert text.count('class="dialog__body"') >= 6
-    assert text.count('class="dialog__actions"') >= 6
+    assert 'id="assessment-form"' not in text
+    assert text.count('class="dialog__body"') >= 5
+    assert text.count('class="dialog__actions"') >= 5
 
 
 def test_app_js_uses_list_first_renderers() -> None:
@@ -197,14 +233,20 @@ def test_app_js_uses_list_first_renderers() -> None:
         "function vacancyRow",
         "function personRow",
         "function hypothesisRow",
-        "function assessmentRow",
         "function applicationRow",
+        "renderVacancyAssessmentSummary",
         "list-row-group",
         "row-detail",
         "metric-cell",
     ):
         assert fragment in js
-    for legacy in ("vacancy-card", "person-card", "hypothesis-card", "assessment-card"):
+    for legacy in (
+        "vacancy-card",
+        "person-card",
+        "hypothesis-card",
+        "assessment-card",
+        "function assessmentRow",
+    ):
         assert legacy not in js
 
 

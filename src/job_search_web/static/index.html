@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-states">
-    <script src="/assets/app.js?v=20260822-states" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260822-ia5">
+    <script src="/assets/app.js?v=20260822-ia5" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -30,12 +30,11 @@
             <li><a class="app-nav__link" href="#metrics" data-nav="metrics">Метрики</a></li>
             <li><a class="app-nav__link" href="#people" data-nav="people">Люди</a></li>
             <li><a class="app-nav__link" href="#hypotheses" data-nav="hypotheses">Гипотезы</a></li>
-            <li><a class="app-nav__link" href="#assessments" data-nav="assessments">Оценки</a></li>
           </ul>
         </nav>
 
         <main class="app-main" id="main-content">
-          <div id="notice" class="notice notice--success" role="status" aria-live="polite" hidden></div>
+          <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
           <div class="section-view" id="section-vacancies" data-section="vacancies" role="region" aria-labelledby="board-title">
           <section class="toolbar" aria-labelledby="board-title">
@@ -133,22 +132,6 @@
             </article>
           </section>
 
-          </div>
-
-          <div class="section-view" id="section-assessments" data-section="assessments" role="region" aria-labelledby="assessments-title" hidden>
-          <section class="toolbar assessments-toolbar" aria-labelledby="assessments-title">
-            <div><h2 id="assessments-title">Оценки <span class="section-count" id="assessment-count">—</span></h2></div>
-            <button class="btn btn--primary" id="open-assessment-form" type="button">+ Записать оценку</button>
-          </section>
-          <section id="assessments" class="list-rows assessment-list" aria-live="polite" aria-busy="true">
-            <article class="state state--loading" aria-busy="true">
-              <span class="loader state__loader" aria-hidden="true"></span>
-              <div class="state__content">
-                <h3 class="state__title">Загружаем оценки</h3>
-                <p class="state__detail">Web запрашивает нормализованные результаты у Core.</p>
-              </div>
-            </article>
-          </section>
           </div>
         </main>
       </div>
@@ -419,67 +402,6 @@
         <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-hypothesis-close" type="button">Отмена</button>
           <button class="btn btn--primary" type="submit">Зафиксировать результат</button>
-        </footer>
-      </form>
-    </dialog>
-    <dialog id="assessment-dialog" class="dialog" aria-labelledby="assessment-dialog-title">
-      <form id="assessment-form" class="dialog__form" method="dialog">
-        <header class="dialog__header">
-          <div>
-            <p class="section-number">НОРМАЛИЗОВАННЫЙ РЕЗУЛЬТАТ</p>
-            <h2 id="assessment-dialog-title">Записать оценку</h2>
-          </div>
-          <button class="btn btn--ghost btn--icon" id="close-assessment-form" type="button" aria-label="Закрыть">×</button>
-        </header>
-        <div class="dialog__body">
-          <div class="form-grid">
-            <label class="field wide">
-              <span class="field__label">Вакансия</span>
-              <select class="control control--select" name="vacancy_id" required></select>
-            </label>
-            <label class="field">
-              <span class="field__label">Релевантность 0–100</span>
-              <input class="control" name="relevance_score" type="number" min="0" max="100" required>
-            </label>
-            <label class="field">
-              <span class="field__label">Вердикт</span>
-              <select class="control control--select" name="verdict" required>
-                <option value="apply">Откликаться</option>
-                <option value="maybe">Подумать</option>
-                <option value="skip">Пропустить</option>
-              </select>
-            </label>
-            <label class="field wide">
-              <span class="field__label">Причина</span>
-              <textarea class="control control--textarea" name="reason" required maxlength="4000" rows="3"></textarea>
-            </label>
-            <label class="field wide">
-              <span class="field__label">Риск</span>
-              <textarea class="control control--textarea" name="risk" maxlength="4000" rows="2"></textarea>
-            </label>
-            <label class="field wide">
-              <span class="field__label">Действие</span>
-              <input class="control" name="action" required maxlength="1000">
-            </label>
-            <label class="field">
-              <span class="field__label">Модель</span>
-              <input class="control" name="model" required maxlength="255" value="manual">
-            </label>
-            <label class="field">
-              <span class="field__label">Версия prompt</span>
-              <input class="control" name="prompt_version" required maxlength="255" value="manual-v1">
-            </label>
-            <label class="field">
-              <span class="field__label">Источник</span>
-              <input class="control" name="source" required maxlength="64" value="manual">
-            </label>
-          </div>
-          <p class="safety-note">Форма не запускает Ollama: она сохраняет только готовый нормализованный результат.</p>
-          <p id="assessment-form-error" class="field__error form-error" role="alert" hidden></p>
-        </div>
-        <footer class="dialog__actions">
-          <button class="btn btn--ghost" id="cancel-assessment-form" type="button">Отмена</button>
-          <button class="btn btn--primary" type="submit">Сохранить оценку</button>
         </footer>
       </form>
     </dialog>
