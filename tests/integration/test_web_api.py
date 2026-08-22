@@ -41,7 +41,7 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
     assert "/assets/app.js?v=20260822-review2" in page.text
-    assert "/assets/styles.css?v=20260822-review2" in page.text
+    assert "/assets/styles.css?v=20260822-layout" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text

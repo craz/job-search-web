@@ -52,7 +52,7 @@
   --shadow-overlay: 0 8px 24px rgb(20 24 32 / 12%);
   --control-height: 36px;
   --header-height: 52px;
-  --nav-width: 220px;
+  --nav-width: 10.5rem;
   --content-max-width: 1280px;
 
   /* Legacy aliases — entity components migrate in T-UX-00.5+ */
@@ -163,7 +163,7 @@ button { cursor: pointer; }
 
 .app-nav {
   flex: 0 0 var(--nav-width);
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-4) var(--space-2) var(--space-4) var(--space-3);
   background: var(--color-surface);
   border-right: var(--border-width) solid var(--color-border);
 }
@@ -178,7 +178,7 @@ button { cursor: pointer; }
 
 .app-nav__link {
   display: block;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   font-size: var(--font-size-body);
@@ -201,8 +201,8 @@ button { cursor: pointer; }
 .app-main {
   flex: 1;
   min-width: 0;
+  width: 100%;
   padding: var(--space-4) var(--space-5) var(--space-6);
-  max-width: var(--content-max-width);
 }
 
 /* Core connection indicator (header) */
@@ -912,6 +912,7 @@ label.wide {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
   gap: var(--space-4);
+  max-width: var(--content-max-width);
 }
 
 .metric-latest.surface--panel,
@@ -1035,7 +1036,6 @@ label.wide {
 
   .app-main {
     padding: var(--space-4);
-    max-width: none;
   }
 }
 
