@@ -131,6 +131,10 @@ function renderBadge(label, variant = "neutral") {
   return `<span class="badge badge--${variant}"><span class="badge__dot" aria-hidden="true"></span>${escapeHtml(label)}</span>`;
 }
 
+function setSectionCount(element, total) {
+  element.textContent = total == null ? "—" : String(total);
+}
+
 function excerpt(text, maxLength = 120) {
   const value = String(text || "").trim();
   if (!value) return "Описание пока не добавлено.";
@@ -251,15 +255,14 @@ function vacancyRow(item) {
   return `<article class="list-row-group" data-id="${escapeHtml(item.id)}">
     <div class="list-row">
       <div class="list-row__primary">
-        <div class="list-row__head">
+        <div class="list-row__identity">
           <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
           <div class="list-row__badges">
-            ${renderBadge(item.source, "neutral")}
             ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
+            ${renderBadge(item.source, "neutral")}
           </div>
         </div>
-        <p class="list-row__secondary">${escapeHtml(item.company.name)}</p>
-        <p class="list-row__excerpt">${escapeHtml(excerpt(item.description))}</p>
+        <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(excerpt(item.description))}</p>
       </div>
       <div class="list-row__trailing">
         <div class="list-row__actions">
@@ -278,13 +281,23 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function formatJournalDate(value) {
+  if (!value) return { day: "—", time: "" };
+  const date = new Date(value);
+  return {
+    day: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(date).replace(/\.$/, ""),
+    time: new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date),
+  };
+}
+
 function applicationRow(item) {
-  return `<article class="list-row">
+  const when = formatJournalDate(item.applied_at);
+  return `<article class="list-row list-row--with-leading">
     <div class="list-row__leading">
-      <time datetime="${escapeHtml(item.applied_at || "")}">${escapeHtml(formatDate(item.applied_at))}</time>
+      <time datetime="${escapeHtml(item.applied_at || "")}"><span class="journal-date__day">${escapeHtml(when.day)}</span><span class="journal-date__time">${escapeHtml(when.time)}</span></time>
     </div>
     <div class="list-row__primary">
-      <div class="list-row__head">
+      <div class="list-row__identity">
         <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
         ${renderBadge(item.source, "neutral")}
       </div>
@@ -329,7 +342,7 @@ function metricsView(items) {
     </article>`;
   }).join("");
   return `<div class="surface surface--panel metric-latest">
-      <div class="metric-latest-head"><div><p class="section-number">ПОСЛЕДНИЙ СНИМОК</p><h3>${escapeHtml(latest.metric_date)}</h3></div><span>${escapeHtml(latest.notes || "Без заметки")}</span></div>
+      <div class="metric-latest-head"><div><p class="panel-eyebrow">Последний снимок</p><h3>${escapeHtml(latest.metric_date)}</h3></div><span>${escapeHtml(latest.notes || "Без заметки")}</span></div>
       <div class="metric-summary-grid">${summary}</div>
     </div>
     <div class="surface surface--panel metric-history"><h3 class="metric-panel__title">Отклики по дням</h3>${history}</div>`;
@@ -341,15 +354,14 @@ function personRow(item) {
   const roleLabel = personRoleLabels[item.role] || item.role;
   return `<article class="list-row" data-person-id="${escapeHtml(item.id)}">
     <div class="list-row__primary">
-      <div class="list-row__head">
+      <div class="list-row__identity">
         <h3 class="list-row__title">${escapeHtml(item.full_name)}</h3>
         <div class="list-row__badges">
           ${renderBadge(roleLabel, "neutral")}
           ${renderBadge(personStatusLabels[item.status] || item.status, personStatusBadge[item.status] || "neutral")}
         </div>
       </div>
-      <p class="list-row__secondary">${escapeHtml(item.company.name)}</p>
-      <p class="list-row__meta">${escapeHtml(item.title || item.vacancy?.title || "Должность не указана")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</p>
+      <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(item.title || item.vacancy?.title || "Должность не указана")}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</p>
     </div>
     <div class="list-row__trailing">
       <div class="list-row__actions">
@@ -367,11 +379,11 @@ async function loadPeople() {
     const response = await fetch("/api/v1/people");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить контакты");
-    peopleCount.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(peopleCount, payload.total);
     peopleGrid.innerHTML = payload.total ? payload.items.map(personRow).join("") : "";
     if (!payload.total) stateCard(peopleGrid, "Контактов пока нет", "Добавьте подтверждённого человека к вакансии.");
   } catch (error) {
-    peopleCount.textContent = "—";
+    setSectionCount(peopleCount, null);
     stateCard(peopleGrid, "Не удалось загрузить контакты", error.message);
   } finally { peopleGrid.setAttribute("aria-busy", "false"); }
 }
@@ -380,23 +392,20 @@ function hypothesisRow(item) {
   const detail = [item.test_size ? `выборка ${item.test_size}` : null, item.metric].filter(Boolean).join(" · ");
   const isActive = item.status === "active";
   const statusLabel = isActive ? "Активна" : "Завершена";
-  const body = item.result
-    ? `<p class="list-row__secondary">${escapeHtml(item.result)}</p>`
-    : `<p class="list-row__secondary">${escapeHtml(item.description || "Описание не добавлено.")}</p>`;
+  const secondary = [detail || "Метрика не указана", item.result || item.description].filter(Boolean).join(" · ");
   const action = isActive
     ? `<button class="btn btn--ghost btn--sm" data-close-hypothesis type="button">Зафиксировать результат</button>`
     : "";
   return `<article class="list-row" data-hypothesis-id="${escapeHtml(item.id)}">
     <div class="list-row__primary">
-      <div class="list-row__head">
+      <div class="list-row__identity">
         <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
         <div class="list-row__badges">
           ${renderBadge(statusLabel, hypothesisStatusBadge[item.status] || "neutral")}
           ${renderBadge(item.source, "neutral")}
         </div>
       </div>
-      <p class="list-row__meta">${escapeHtml(detail || "Метрика не указана")}</p>
-      ${body}
+      <p class="list-row__secondary">${escapeHtml(secondary)}</p>
     </div>
     <div class="list-row__trailing">
       <div class="list-row__actions">${action}</div>
@@ -409,10 +418,10 @@ async function loadHypotheses() {
   try {
     const response = await fetch("/api/v1/hypotheses"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить гипотезы");
-    hypothesisCount.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(hypothesisCount, payload.total);
     hypothesisGrid.innerHTML = payload.total ? payload.items.map(hypothesisRow).join("") : "";
     if (!payload.total) stateCard(hypothesisGrid, "Гипотез пока нет", "Сформулируйте первый измеримый эксперимент.");
-  } catch (error) { hypothesisCount.textContent = "—"; stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
+  } catch (error) { setSectionCount(hypothesisCount, null); stateCard(hypothesisGrid, "Не удалось загрузить гипотезы", error.message); }
   finally { hypothesisGrid.setAttribute("aria-busy", "false"); }
 }
 
@@ -425,20 +434,20 @@ function assessmentRow(item) {
       <p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(item.action)}</p>
     </div>`;
   return `<article class="list-row-group">
-    <div class="list-row">
-      <div class="list-row__primary">
-        <div class="list-row__head">
-          <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
-          <div class="list-row__badges">${renderBadge(verdict, assessmentVerdictBadge[item.verdict] || "neutral")}</div>
+    <details class="assessment-details">
+      <summary class="list-row">
+        <div class="list-row__primary">
+          <div class="list-row__identity">
+            <h3 class="list-row__title">${escapeHtml(item.vacancy.title)}</h3>
+          </div>
+          <p class="list-row__meta">${escapeHtml(item.model)} · ${escapeHtml(item.prompt_version || "—")}</p>
         </div>
-        <p class="list-row__meta">${escapeHtml(item.model)} · ${escapeHtml(item.prompt_version || "—")}</p>
-      </div>
-      <div class="list-row__trailing">
-        <span class="assessment-score" aria-label="Релевантность">${escapeHtml(item.relevance_score)}</span>
-      </div>
-    </div>
-    <details class="row-detail">
-      <summary class="row-detail__summary">Подробнее</summary>
+        <div class="list-row__trailing">
+          ${renderBadge(verdict, assessmentVerdictBadge[item.verdict] || "neutral")}
+          <span class="assessment-score" aria-label="Релевантность">${escapeHtml(item.relevance_score)}</span>
+          <span class="assessment-details__toggle">Подробнее</span>
+        </div>
+      </summary>
       ${detail}
     </details>
   </article>`;
@@ -448,10 +457,10 @@ async function loadAssessments() {
   assessmentGrid.setAttribute("aria-busy", "true");
   try { const response = await fetch("/api/v1/assessments"); const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить оценки");
-    assessmentCount.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(assessmentCount, payload.total);
     assessmentGrid.innerHTML = payload.total ? payload.items.map(assessmentRow).join("") : "";
     if (!payload.total) stateCard(assessmentGrid, "Оценок пока нет", "Сохраните первый нормализованный результат.");
-  } catch (error) { assessmentCount.textContent = "—"; stateCard(assessmentGrid, "Не удалось загрузить оценки", error.message); }
+  } catch (error) { setSectionCount(assessmentCount, null); stateCard(assessmentGrid, "Не удалось загрузить оценки", error.message); }
   finally { assessmentGrid.setAttribute("aria-busy", "false"); }
 }
 
@@ -461,11 +470,11 @@ async function loadMetrics() {
     const response = await fetch("/api/v1/metrics");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить метрики");
-    metricCount.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(metricCount, payload.total);
     metricsDashboard.innerHTML = payload.total ? metricsView(payload.items) : "";
     if (!payload.total) stateCard(metricsDashboard, "Метрик пока нет", "Запишите первый дневной снимок.");
   } catch (error) {
-    metricCount.textContent = "—";
+    setSectionCount(metricCount, null);
     stateCard(metricsDashboard, "Не удалось загрузить метрики", error.message);
   } finally {
     metricsDashboard.setAttribute("aria-busy", "false");
@@ -478,7 +487,7 @@ async function loadApplications() {
     const response = await fetch("/api/v1/applications");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить отклики");
-    applicationCount.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(applicationCount, payload.total);
     if (payload.total) {
       applicationList.innerHTML = payload.items.map(applicationRow).join("");
     } else {
@@ -486,7 +495,7 @@ async function loadApplications() {
       stateCard(applicationList, "Откликов пока нет", "Запишите первый факт отклика из карточки вакансии.");
     }
   } catch (error) {
-    applicationCount.textContent = "—";
+    setSectionCount(applicationCount, null);
     stateCard(applicationList, "Не удалось загрузить отклики", error.message);
   } finally {
     applicationList.setAttribute("aria-busy", "false");
@@ -499,7 +508,7 @@ async function loadVacancies() {
     const response = await fetch("/api/v1/vacancies");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить вакансии");
-    count.textContent = String(payload.total).padStart(2, "0");
+    setSectionCount(count, payload.total);
     signal.classList.add("online");
     signal.classList.remove("offline");
     connectionLabel.textContent = "Core доступен";

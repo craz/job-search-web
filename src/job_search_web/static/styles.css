@@ -261,11 +261,20 @@ button { cursor: pointer; }
   letter-spacing: -0.01em;
 }
 
-.app-main h2 span {
+.section-count {
   color: var(--color-text-secondary);
-  font-size: 0.85em;
+  font-size: 0.8em;
   font-weight: var(--font-weight-medium);
-  vertical-align: baseline;
+  margin-left: var(--space-2);
+}
+
+.panel-eyebrow {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2);
 }
 
 .toolbar-note {
@@ -497,11 +506,15 @@ button { cursor: pointer; }
 
 .list-row {
   display: grid;
-  grid-template-columns: minmax(7rem, 0.35fr) minmax(0, 1.6fr) minmax(8rem, 0.55fr);
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3) var(--space-4);
   align-items: center;
   padding: var(--space-3) var(--space-4);
   min-height: 44px;
+}
+
+.list-row--with-leading {
+  grid-template-columns: minmax(4.25rem, 5.25rem) minmax(0, 1fr) auto;
 }
 
 .list-row + .list-row {
@@ -513,13 +526,22 @@ button { cursor: pointer; }
 }
 
 .list-row__title {
-  margin: var(--space-1) 0;
+  margin: 0;
   font-size: var(--font-size-item-title);
   font-weight: var(--font-weight-semibold);
   line-height: 1.25;
+  min-width: 0;
 }
 
-.list-row__primary { min-width: 0; }
+.list-row__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.list-row__primary { min-width: 0; display: grid; gap: var(--space-1); }
 
 .list-row__secondary,
 .list-row__meta {
@@ -529,15 +551,25 @@ button { cursor: pointer; }
 }
 
 .list-row__leading time {
+  display: grid;
+  gap: 0;
+  line-height: 1.2;
   font-size: var(--font-size-metadata);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
 
+.journal-date__time {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
 .list-row__trailing {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
-  justify-items: end;
   text-align: right;
 }
 
@@ -556,10 +588,10 @@ button { cursor: pointer; }
 }
 
 .list-row__badges {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  justify-content: flex-end;
+  align-items: center;
 }
 
 .list-row__excerpt {
@@ -583,7 +615,8 @@ button { cursor: pointer; }
   border-top: var(--border-width) solid var(--color-border);
 }
 
-.list-row-group .list-row:hover {
+.list-row-group .list-row:hover,
+.list-row-group .assessment-details > summary.list-row:hover {
   background: var(--color-surface-hover);
 }
 
@@ -697,6 +730,37 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-semibold);
   line-height: 1;
   color: var(--color-accent);
+  flex: 0 0 auto;
+}
+
+.assessment-details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.assessment-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.assessment-details__toggle {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.assessment-details__toggle::after {
+  content: " ▾";
+}
+
+.assessment-details[open] .assessment-details__toggle::after {
+  content: " ▴";
+}
+
+.assessment-details .row-detail__body {
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-bg);
+  padding: var(--space-3) var(--space-4);
 }
 
 .assessment-detail__reason {
@@ -991,10 +1055,10 @@ label.wide {
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .field.wide,
   label.wide { grid-column: auto; }
-  .list-row { grid-template-columns: 1fr; }
-  .list-row__trailing { justify-items: start; text-align: left; }
-  .list-row__head { flex-direction: column; align-items: stretch; }
-  .list-row__badges { justify-content: flex-start; }
+  .list-row,
+  .list-row--with-leading { grid-template-columns: 1fr; }
+  .list-row__trailing { justify-content: flex-start; text-align: left; }
+  .list-row__identity { align-items: flex-start; }
   .list-row__actions { justify-content: flex-start; }
   .metrics-dashboard { grid-template-columns: 1fr; }
   .metric-latest-head { display: grid; }
