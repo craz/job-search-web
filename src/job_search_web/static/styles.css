@@ -1,27 +1,31 @@
 /* Job Search Web — design tokens (T-UX-00.3) + legacy components */
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Semantic colors */
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-surface-hover: #eef0f3;
-  --color-text: #141820;
-  --color-text-secondary: #5c6574;
-  --color-border: #d8dde5;
-  --color-accent: #2563eb;
-  --color-accent-soft: #dbeafe;
-  --color-success: #15803d;
-  --color-success-soft: #dcfce7;
-  --color-warning: #b45309;
-  --color-warning-soft: #fef3c7;
-  --color-danger: #b91c1c;
-  --color-danger-soft: #fee2e2;
-  --color-info: #0369a1;
-  --color-info-soft: #e0f2fe;
-  --color-muted: #e8ebf0;
-  --color-on-accent: #ffffff;
+  /* Semantic colors — R0 primary dark scheme */
+  --color-bg: #0f1115;
+  --color-surface: #151922;
+  --color-surface-hover: #1b2130;
+  --color-nav-bg: #12151c;
+  --color-text: #e6e8ec;
+  --color-text-secondary: #98a2b3;
+  --color-border: #2a303b;
+  --color-border-strong: #363d4a;
+  --color-accent: #5b8cff;
+  --color-accent-soft: #1c2c4d;
+  --color-accent-hover: #4a78e6;
+  --color-success: #46b77a;
+  --color-success-soft: #163627;
+  --color-warning: #d6a84b;
+  --color-warning-soft: #3a2d16;
+  --color-danger: #e16b70;
+  --color-danger-soft: #3b1c21;
+  --color-danger-hover: #c85a5f;
+  --color-info: #62a5e8;
+  --color-info-soft: #172d43;
+  --color-muted: #252b35;
+  --color-on-accent: #f4f7ff;
 
   /* Spacing scale */
   --space-1: 4px;
@@ -49,7 +53,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --focus-ring-color: var(--color-accent);
-  --shadow-overlay: 0 8px 24px rgb(20 24 32 / 12%);
+  --shadow-overlay: 0 16px 40px rgb(0 0 0 / 45%);
   --control-height: 36px;
   --header-height: 52px;
   --nav-width: 10.5rem;
@@ -91,6 +95,10 @@ body {
   min-height: 100vh;
 }
 
+html {
+  scrollbar-color: var(--color-muted) var(--color-bg);
+}
+
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 
@@ -98,7 +106,7 @@ button { cursor: pointer; }
   position: fixed;
   top: -4rem;
   left: var(--space-4);
-  background: var(--color-text);
+  background: var(--color-accent);
   color: var(--color-on-accent);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
@@ -128,7 +136,7 @@ button { cursor: pointer; }
   gap: var(--space-4);
   min-height: var(--header-height);
   padding: 0 var(--space-5);
-  background: var(--color-surface);
+  background: var(--color-nav-bg);
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
@@ -164,7 +172,7 @@ button { cursor: pointer; }
 .app-nav {
   flex: 0 0 var(--nav-width);
   padding: var(--space-4) var(--space-2) var(--space-4) var(--space-3);
-  background: var(--color-surface);
+  background: var(--color-nav-bg);
   border-right: var(--border-width) solid var(--color-border);
 }
 
@@ -193,7 +201,7 @@ button { cursor: pointer; }
 
 .app-nav__link[aria-current="page"] {
   color: var(--color-text);
-  background: var(--color-accent-soft);
+  background: var(--color-surface-hover);
   font-weight: var(--font-weight-semibold);
   box-shadow: inset 3px 0 0 var(--color-accent);
 }
@@ -329,8 +337,8 @@ button { cursor: pointer; }
 }
 
 .btn--primary:hover:not(:disabled) {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+  border-color: var(--color-accent-hover);
+  background: var(--color-accent-hover);
 }
 
 .btn--secondary {
@@ -341,7 +349,7 @@ button { cursor: pointer; }
 
 .btn--secondary:hover:not(:disabled) {
   background: var(--color-surface-hover);
-  border-color: #c4cad4;
+  border-color: var(--color-border-strong);
 }
 
 .btn--ghost {
@@ -362,8 +370,8 @@ button { cursor: pointer; }
 }
 
 .btn--destructive:hover:not(:disabled) {
-  border-color: #991b1b;
-  background: #991b1b;
+  border-color: var(--color-danger-hover);
+  background: var(--color-danger-hover);
 }
 
 .btn:disabled,
@@ -412,7 +420,7 @@ button { cursor: pointer; }
 }
 
 .control:hover:not(:disabled) {
-  border-color: #c4cad4;
+  border-color: var(--color-border-strong);
 }
 
 .control:disabled {
@@ -795,7 +803,7 @@ button { cursor: pointer; }
 }
 
 .dialog::backdrop {
-  background: rgb(20 24 32 / 45%);
+  background: rgb(0 0 0 / 62%);
 }
 
 .dialog__form {

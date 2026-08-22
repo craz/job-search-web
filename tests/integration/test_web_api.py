@@ -41,7 +41,7 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
     assert "/assets/app.js?v=20260822-review2" in page.text
-    assert "/assets/styles.css?v=20260822-layout" in page.text
+    assert "/assets/styles.css?v=20260822-dark" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -69,6 +69,17 @@ def test_styles_expose_ui_primitives() -> None:
         ".surface--panel",
     ):
         assert selector in css.text
+
+
+def test_styles_use_dark_scheme_tokens() -> None:
+    """R0 primary scheme is dark; legacy light palette hex values must not remain."""
+    css = WebClient(StubCore()).request("GET", "/assets/styles.css").text
+
+    assert "color-scheme: dark" in css
+    assert "--color-bg: #0f1115" in css
+    assert "#f4f5f7" not in css
+    assert "#ffffff" not in css
+    assert "#dbeafe" not in css
 
 
 def test_index_exposes_global_navigation() -> None:
