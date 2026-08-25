@@ -365,11 +365,18 @@ class StubOsint:
 
 
 class StubHh:
-    """In-memory HH connection gateway for Web tests."""
+    """In-memory HH connection/account gateway for Web tests."""
 
-    def __init__(self, *, status: str = "connected", unavailable: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        status: str = "connected",
+        unavailable: bool = False,
+        profile_status: str = "available",
+    ) -> None:
         self.unavailable = unavailable
         self.status = status
+        self.profile_status = profile_status
         self.calls: list[tuple[str, Any]] = []
 
     def _payload(self) -> dict[str, Any]:
@@ -391,6 +398,27 @@ class StubHh:
             "checked_at": "2026-08-25T12:00:00Z",
         }
 
+    def _account_payload(self) -> dict[str, Any]:
+        if self.profile_status != "available":
+            return {
+                "status": self.profile_status,
+                "account": None,
+                "connection_status": self.status,
+                "code": self.profile_status,
+                "checked_at": "2026-08-25T12:00:00Z",
+            }
+        return {
+            "status": "available",
+            "account": {
+                "external_id": "hh-fixture-42",
+                "display_name": "Pat Tester",
+                "email": "pat@example.test",
+            },
+            "connection_status": self.status,
+            "code": "ready",
+            "checked_at": "2026-08-25T12:00:00Z",
+        }
+
     def connection_status(self) -> tuple[int, Any]:
         if self.unavailable:
             from job_search_web.hh_client import HhUnavailableError
@@ -398,6 +426,14 @@ class StubHh:
             raise HhUnavailableError
         self.calls.append(("connection", None))
         return 200, self._payload()
+
+    def account_status(self) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("account", None))
+        return 200, self._account_payload()
 
     def open_login(self) -> tuple[int, Any]:
         if self.unavailable:

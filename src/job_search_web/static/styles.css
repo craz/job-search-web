@@ -291,6 +291,16 @@ button { cursor: pointer; }
   color: var(--color-text);
 }
 
+.hh-connection__account {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-secondary);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .btn--compact {
   padding: 0.15rem 0.55rem;
   min-height: 1.6rem;

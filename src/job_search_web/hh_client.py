@@ -14,13 +14,15 @@ class HhUnavailableError(Exception):
 class HhGateway(Protocol):
     def connection_status(self) -> tuple[int, Any]: ...
 
+    def account_status(self) -> tuple[int, Any]: ...
+
     def open_login(self) -> tuple[int, Any]: ...
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]: ...
 
 
 class HhClient:
-    """Bounded HTTP client for HH connection status; never touches HH volumes."""
+    """Bounded HTTP client for HH connection/account; never touches HH volumes."""
 
     def __init__(self, base_url: str, timeout_seconds: float = 10.0) -> None:
         self.base_url = base_url.rstrip("/")
@@ -37,6 +39,9 @@ class HhClient:
 
     def connection_status(self) -> tuple[int, Any]:
         return self._request("GET", "/api/v1/connection")
+
+    def account_status(self) -> tuple[int, Any]:
+        return self._request("GET", "/api/v1/account")
 
     def open_login(self) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/connection/open-login", json={})

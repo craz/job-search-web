@@ -9,6 +9,7 @@ const signal = document.querySelector("#core-connection");
 const connectionLabel = document.querySelector("#connection-label");
 const hhConnection = document.querySelector("#hh-connection");
 const hhConnectionLabel = document.querySelector("#hh-connection-label");
+const hhAccountLabel = document.querySelector("#hh-account-label");
 const hhConnectionAction = document.querySelector("#hh-connection-action");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
@@ -1013,6 +1014,25 @@ const HH_ACTION_LABELS = {
   reconnect: "Переподключить",
 };
 
+function clearHhAccountLabel() {
+  hhAccountLabel.hidden = true;
+  hhAccountLabel.textContent = "";
+  hhAccountLabel.removeAttribute("title");
+}
+
+function renderHhAccount(payload) {
+  clearHhAccountLabel();
+  if (!payload || payload.status !== "available" || !payload.account) return;
+  const account = payload.account;
+  const label = account.display_name || account.email || "";
+  if (!label) return;
+  hhAccountLabel.hidden = false;
+  hhAccountLabel.textContent = label;
+  if (account.email && account.display_name) {
+    hhAccountLabel.title = account.email;
+  }
+}
+
 function renderHhConnection(payload) {
   const status = payload.status || "unavailable";
   hhConnection.dataset.status = status;
@@ -1022,18 +1042,33 @@ function renderHhConnection(payload) {
     hhConnectionAction.hidden = true;
     hhConnectionAction.dataset.action = "";
     hhConnectionAction.dataset.novncUrl = "";
-    return;
+  } else {
+    hhConnectionAction.hidden = false;
+    hhConnectionAction.textContent = HH_ACTION_LABELS[actionCode];
+    hhConnectionAction.dataset.action = actionCode;
+    hhConnectionAction.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
   }
-  hhConnectionAction.hidden = false;
-  hhConnectionAction.textContent = HH_ACTION_LABELS[actionCode];
-  hhConnectionAction.dataset.action = actionCode;
-  hhConnectionAction.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
+}
+
+async function loadHhAccount() {
+  clearHhAccountLabel();
+  try {
+    const response = await fetch("/api/v1/hh/account");
+    const payload = await response.json();
+    if (!response.ok && payload.status !== "unavailable" && payload.status !== "not_authorized") {
+      return;
+    }
+    renderHhAccount(payload);
+  } catch (_error) {
+    clearHhAccountLabel();
+  }
 }
 
 async function loadHhConnection() {
   hhConnection.dataset.status = "unknown";
   hhConnectionLabel.textContent = "Проверяем";
   hhConnectionAction.hidden = true;
+  clearHhAccountLabel();
   try {
     const response = await fetch("/api/v1/hh/connection");
     const payload = await response.json();
@@ -1041,6 +1076,9 @@ async function loadHhConnection() {
       throw new Error(payload.message || "Не удалось получить статус HH");
     }
     renderHhConnection(payload.status ? payload : { status: "unavailable", action: { code: "none" } });
+    if (payload.status === "connected") {
+      await loadHhAccount();
+    }
   } catch (error) {
     renderHhConnection({ status: "unavailable", action: { code: "none" } });
   }

@@ -42,9 +42,10 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Работа — это воронка" not in page.text
     assert 'id="hh-connection"' in page.text
     assert 'id="hh-connection-label"' in page.text
+    assert 'id="hh-account-label"' in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260825-r11" in page.text
-    assert "/assets/styles.css?v=20260825-r11" in page.text
+    assert "/assets/app.js?v=20260825-r12" in page.text
+    assert "/assets/styles.css?v=20260825-r12" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -462,3 +463,19 @@ def test_hh_unavailable_is_explicit() -> None:
     payload = response.json()
     assert payload["code"] == "hh_unavailable"
     assert payload["status"] == "unavailable"
+
+
+def test_hh_account_status_is_proxied() -> None:
+    """Web exposes normalized HH account without resume claims or secrets."""
+    hh = StubHh(status="connected")
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("GET", "/api/v1/hh/account")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "available"
+    assert payload["account"]["external_id"] == "hh-fixture-42"
+    assert payload["account"]["display_name"] == "Pat Tester"
+    assert "access_token" not in response.text
+    assert "0 resumes" not in response.text.lower()
+    assert "resumes_count" not in response.text
+    assert hh.calls == [("account", None)]

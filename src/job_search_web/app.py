@@ -100,6 +100,22 @@ def create_app(
                 },
             )
 
+    @application.get("/api/v1/hh/account")
+    def get_hh_account() -> JSONResponse:
+        """Return normalized HH account/profile without raw /me or secrets."""
+        try:
+            return proxy_response(*hh_gateway.account_status())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH account API is unavailable",
+                    "status": "unavailable",
+                    "account": None,
+                },
+            )
+
     @application.post("/api/v1/hh/connection/open-login")
     def post_hh_open_login() -> JSONResponse:
         """Trigger existing HH noVNC login flow; never bypasses CAPTCHA."""
