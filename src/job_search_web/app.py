@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
+from job_search_web.hh_client import HhClient, HhGateway, HhUnavailableError
 from job_search_web.osint_client import OsintClient, OsintGateway, OsintUnavailableError
 from job_search_web.schemas import (
     ApplicationCreate,
@@ -52,12 +53,14 @@ def proxy_response(status_code: int, payload: Any) -> JSONResponse:
 def create_app(
     core: CoreGateway | None = None,
     osint: OsintGateway | None = None,
+    hh: HhGateway | None = None,
     *,
     live_reload: bool | None = None,
 ) -> FastAPI:
-    """Build an isolated Web app around an injectable Core HTTP gateway."""
+    """Build an isolated Web app around injectable Core/OSINT/HH HTTP gateways."""
     gateway = core or CoreClient(os.getenv("CORE_API_URL", "http://127.0.0.1:8000"))
     osint_gateway = osint or OsintClient(os.getenv("OSINT_API_URL", "http://127.0.0.1:8081"))
+    hh_gateway = hh or HhClient(os.getenv("HH_API_URL", "http://127.0.0.1:8092"))
     live_reload_enabled = (
         os.getenv("WEB_LIVE_RELOAD", "0") == "1" if live_reload is None else live_reload
     )
@@ -81,6 +84,43 @@ def create_app(
     def liveness() -> dict[str, str]:
         """Report Web process liveness without hiding Core state."""
         return {"status": "ok", "component": "job-search-web"}
+
+    @application.get("/api/v1/hh/connection")
+    def get_hh_connection() -> JSONResponse:
+        """Return product-facing HH connection status without secrets."""
+        try:
+            return proxy_response(*hh_gateway.connection_status())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH connection API is unavailable",
+                    "status": "unavailable",
+                },
+            )
+
+    @application.post("/api/v1/hh/connection/open-login")
+    def post_hh_open_login() -> JSONResponse:
+        """Trigger existing HH noVNC login flow; never bypasses CAPTCHA."""
+        try:
+            return proxy_response(*hh_gateway.open_login())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
+
+    @application.post("/api/v1/hh/connection/confirm")
+    def post_hh_confirm() -> JSONResponse:
+        """Record explicit operator confirmation after interactive HH login."""
+        try:
+            return proxy_response(*hh_gateway.confirm_login(confirmed=True))
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
 
     @application.get("/dev/revision", include_in_schema=False)
     def dev_revision() -> dict[str, str | bool]:

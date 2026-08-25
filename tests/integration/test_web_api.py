@@ -2,7 +2,7 @@
 
 import re
 
-from tests.support import StubCore, WebClient
+from tests.support import StubCore, StubHh, WebClient
 
 
 def test_index_and_vacancy_flow_use_core_gateway() -> None:
@@ -40,8 +40,11 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'class="signal app-header__status"' in page.text
     assert "Job Search" in page.text
     assert "Работа — это воронка" not in page.text
-    assert "/assets/app.js?v=20260822-ia5" in page.text
-    assert "/assets/styles.css?v=20260822-ia5" in page.text
+    assert 'id="hh-connection"' in page.text
+    assert 'id="hh-connection-label"' in page.text
+    assert "HeadHunter" in page.text
+    assert "/assets/app.js?v=20260825-r11" in page.text
+    assert "/assets/styles.css?v=20260825-r11" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -435,3 +438,27 @@ def test_assessment_flow_creates_and_lists_only_through_core() -> None:
     listing = client.request("GET", "/api/v1/assessments")
     assert created.status_code == 201 and listing.json()["total"] == 1
     assert [call[0] for call in core.calls] == ["assessment-create", "assessment-list"]
+
+
+def test_hh_connection_status_is_proxied() -> None:
+    """Web exposes HH connection status without inventing resume or profile data."""
+    hh = StubHh(status="not_authorized")
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("GET", "/api/v1/hh/connection")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "not_authorized"
+    assert payload["action"]["code"] == "open_login"
+    assert "access_token" not in response.text
+    assert "0 resumes" not in response.text.lower()
+    assert hh.calls == [("connection", None)]
+
+
+def test_hh_unavailable_is_explicit() -> None:
+    """HH transport failure is unavailable, not unauthorized."""
+    client = WebClient(StubCore(), hh=StubHh(unavailable=True))
+    response = client.request("GET", "/api/v1/hh/connection")
+    assert response.status_code == 503
+    payload = response.json()
+    assert payload["code"] == "hh_unavailable"
+    assert payload["status"] == "unavailable"

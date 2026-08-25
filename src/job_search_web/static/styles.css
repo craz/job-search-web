@@ -214,6 +214,14 @@ button { cursor: pointer; }
 }
 
 /* Core connection indicator (header) */
+.app-header__signals {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .signal {
   display: flex;
   align-items: center;
@@ -239,6 +247,54 @@ button { cursor: pointer; }
 .signal.offline .signal-dot {
   background: var(--color-danger);
   border-color: var(--color-danger);
+}
+
+#hh-connection[data-status="connected"] .signal-dot {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+#hh-connection[data-status="not_authorized"],
+#hh-connection[data-status="expired"],
+#hh-connection[data-status="action_required"] {
+  color: var(--color-text);
+}
+
+#hh-connection[data-status="not_authorized"] .signal-dot,
+#hh-connection[data-status="expired"] .signal-dot,
+#hh-connection[data-status="action_required"] .signal-dot {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+#hh-connection[data-status="unavailable"] .signal-dot {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.hh-connection__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  line-height: 1.2;
+}
+
+.hh-connection__service {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+#hh-connection-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.btn--compact {
+  padding: 0.15rem 0.55rem;
+  min-height: 1.6rem;
+  font-size: var(--font-size-metadata);
 }
 
 /* --- Section chrome (foundation typography) --- */

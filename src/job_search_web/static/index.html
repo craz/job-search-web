@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260822-ia5">
-    <script src="/assets/app.js?v=20260822-ia5" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260825-r11">
+    <script src="/assets/app.js?v=20260825-r11" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -16,9 +16,19 @@
           <p class="app-header__title">Job Search</p>
           <p class="app-header__subtitle">Локальная доска вакансий</p>
         </div>
-        <div class="signal app-header__status" aria-label="Состояние Core">
-          <span class="signal-dot" aria-hidden="true"></span>
-          <span id="connection-label">Проверяем Core</span>
+        <div class="app-header__signals">
+          <div class="signal app-header__status" id="hh-connection" data-status="unknown" aria-label="Состояние HeadHunter">
+            <span class="signal-dot" aria-hidden="true"></span>
+            <span class="hh-connection__text">
+              <span class="hh-connection__service">HeadHunter</span>
+              <span id="hh-connection-label">Проверяем</span>
+            </span>
+            <button class="btn btn--ghost btn--compact" id="hh-connection-action" type="button" hidden></button>
+          </div>
+          <div class="signal app-header__status" id="core-connection" aria-label="Состояние Core">
+            <span class="signal-dot" aria-hidden="true"></span>
+            <span id="connection-label">Проверяем Core</span>
+          </div>
         </div>
       </header>
 

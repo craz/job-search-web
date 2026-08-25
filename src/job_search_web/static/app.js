@@ -5,8 +5,11 @@ const dialog = document.querySelector("#vacancy-dialog");
 const form = document.querySelector("#vacancy-form");
 const formError = document.querySelector("#form-error");
 const submitButton = document.querySelector("#submit-form");
-const signal = document.querySelector(".signal");
+const signal = document.querySelector("#core-connection");
 const connectionLabel = document.querySelector("#connection-label");
+const hhConnection = document.querySelector("#hh-connection");
+const hhConnectionLabel = document.querySelector("#hh-connection-label");
+const hhConnectionAction = document.querySelector("#hh-connection-action");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
 const applicationDialog = document.querySelector("#application-dialog");
@@ -995,8 +998,86 @@ hypothesisCloseForm.addEventListener("submit", async (event) => {
   } catch (error) { hypothesisCloseError.textContent = error.message; hypothesisCloseError.hidden = false; }
 });
 
+const HH_STATUS_LABELS = {
+  connected: "Подключено",
+  not_authorized: "Нужна авторизация",
+  expired: "Сессия истекла",
+  action_required: "Требуется действие",
+  unavailable: "Недоступно",
+};
+
+const HH_ACTION_LABELS = {
+  open_login: "Открыть вход",
+  confirm_login: "Подтвердить вход",
+  acquire_token: "Получить токен",
+  reconnect: "Переподключить",
+};
+
+function renderHhConnection(payload) {
+  const status = payload.status || "unavailable";
+  hhConnection.dataset.status = status;
+  hhConnectionLabel.textContent = HH_STATUS_LABELS[status] || status;
+  const actionCode = payload.action && payload.action.code ? payload.action.code : "none";
+  if (actionCode === "none" || !HH_ACTION_LABELS[actionCode]) {
+    hhConnectionAction.hidden = true;
+    hhConnectionAction.dataset.action = "";
+    hhConnectionAction.dataset.novncUrl = "";
+    return;
+  }
+  hhConnectionAction.hidden = false;
+  hhConnectionAction.textContent = HH_ACTION_LABELS[actionCode];
+  hhConnectionAction.dataset.action = actionCode;
+  hhConnectionAction.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
+}
+
+async function loadHhConnection() {
+  hhConnection.dataset.status = "unknown";
+  hhConnectionLabel.textContent = "Проверяем";
+  hhConnectionAction.hidden = true;
+  try {
+    const response = await fetch("/api/v1/hh/connection");
+    const payload = await response.json();
+    if (!response.ok && payload.status !== "unavailable") {
+      throw new Error(payload.message || "Не удалось получить статус HH");
+    }
+    renderHhConnection(payload.status ? payload : { status: "unavailable", action: { code: "none" } });
+  } catch (error) {
+    renderHhConnection({ status: "unavailable", action: { code: "none" } });
+  }
+}
+
+hhConnectionAction.addEventListener("click", async () => {
+  const action = hhConnectionAction.dataset.action;
+  const novncUrl = hhConnectionAction.dataset.novncUrl;
+  hhConnectionAction.disabled = true;
+  try {
+    if (action === "open_login" || action === "reconnect") {
+      const response = await fetch("/api/v1/hh/connection/open-login", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось открыть вход");
+      if (novncUrl) window.open(novncUrl, "_blank", "noopener");
+      else if (payload.novnc_url) window.open(payload.novnc_url, "_blank", "noopener");
+      showNotice("Откройте noVNC, войдите в HH, затем подтвердите вход");
+    } else if (action === "confirm_login") {
+      const response = await fetch("/api/v1/hh/connection/confirm", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.code || "Подтверждение не принято");
+      showNotice("Вход подтверждён");
+    } else if (action === "acquire_token") {
+      showNotice("Получите OAuth-токен через CLI: job-search-hh auth oauth-acquire");
+    }
+    await loadHhConnection();
+  } catch (error) {
+    showNotice(error.message || "Действие HH не выполнено");
+    await loadHhConnection();
+  } finally {
+    hhConnectionAction.disabled = false;
+  }
+});
+
 clearNotice();
 initNavigation();
+loadHhConnection();
 loadVacancies();
 loadApplications();
 loadMetrics();

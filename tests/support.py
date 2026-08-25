@@ -364,14 +364,77 @@ class StubOsint:
         return 200, self.mirrors[0]
 
 
+class StubHh:
+    """In-memory HH connection gateway for Web tests."""
+
+    def __init__(self, *, status: str = "connected", unavailable: bool = False) -> None:
+        self.unavailable = unavailable
+        self.status = status
+        self.calls: list[tuple[str, Any]] = []
+
+    def _payload(self) -> dict[str, Any]:
+        actions = {
+            "connected": {"code": "none"},
+            "not_authorized": {"code": "open_login", "novnc_url": "http://127.0.0.1:6080/"},
+            "expired": {"code": "reconnect", "novnc_url": "http://127.0.0.1:6080/"},
+            "action_required": {"code": "confirm_login", "novnc_url": "http://127.0.0.1:6080/"},
+            "unavailable": {"code": "none"},
+        }
+        return {
+            "status": self.status,
+            "authenticated": self.status == "connected",
+            "login_ready": self.status in {"connected", "action_required", "expired"},
+            "expired": self.status == "expired",
+            "expires_at": None,
+            "action": actions.get(self.status, {"code": "none"}),
+            "code": self.status,
+            "checked_at": "2026-08-25T12:00:00Z",
+        }
+
+    def connection_status(self) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("connection", None))
+        return 200, self._payload()
+
+    def open_login(self) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("open-login", None))
+        self.status = "action_required"
+        return 200, {
+            "browser_started": True,
+            "novnc_url": "http://127.0.0.1:6080/",
+            "connection": self._payload(),
+        }
+
+    def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("confirm", confirmed))
+        self.status = "connected" if confirmed else self.status
+        return 200, {"auth_session": "present", "connection": self._payload()}
+
+
 class WebClient:
     """Synchronous facade around HTTPX's maintained ASGI transport."""
 
     def __init__(
-        self, core: StubCore, *, osint: StubOsint | None = None, live_reload: bool = False
+        self,
+        core: StubCore,
+        *,
+        osint: StubOsint | None = None,
+        hh: StubHh | None = None,
+        live_reload: bool = False,
     ) -> None:
         """Bind requests to one Web app and synthetic Core gateway."""
-        self.app = create_app(core, osint or StubOsint(), live_reload=live_reload)
+        self.app = create_app(core, osint or StubOsint(), hh or StubHh(), live_reload=live_reload)
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Send one request without opening a network socket."""
