@@ -1073,6 +1073,8 @@ async function loadHhAccount() {
   }
 }
 
+let hhResumesRenderToken = 0;
+
 function setHhResumesActions({ open = false, confirm = false, novncUrl = "" } = {}) {
   if (!hhResumesActions) return;
   const showAny = Boolean(open || confirm);
@@ -1099,6 +1101,7 @@ function clearHhResumes() {
 
 function renderHhResumes(payload) {
   if (!hhResumes) return;
+  hhResumesRenderToken += 1;
   clearHhResumes();
   hhResumes.hidden = false;
   const status = payload && payload.status ? payload.status : "unavailable";
@@ -1108,6 +1111,7 @@ function renderHhResumes(payload) {
 
   if (status === "available") {
     const items = Array.isArray(payload.items) ? payload.items : [];
+    setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     if (!items.length) {
       hhResumesStatus.textContent = "Пока нет резюме в аккаунте";
       return;
@@ -1123,6 +1127,7 @@ function renderHhResumes(payload) {
   }
 
   if (status === "permission_blocked") {
+    setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent = "HeadHunter не дал доступ к списку резюме.";
     return;
   }
@@ -1136,6 +1141,7 @@ function renderHhResumes(payload) {
     code === "browser_session_not_logged_in" ||
     code === "browser_login_required"
   ) {
+    hhResumesList.innerHTML = "";
     const waitingConfirm = actionCode === "confirm_login" || code === "profile_locked";
     if (waitingConfirm) {
       hhResumesStatus.textContent =
@@ -1149,6 +1155,7 @@ function renderHhResumes(payload) {
     return;
   }
 
+  setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
   hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
 }
 
@@ -1192,6 +1199,7 @@ async function runHhLoginAction(action, novncUrl, button, { deferWindowOpen = fa
       // Keep the click gesture: open a tab immediately, then point it at noVNC
       // after the HH login browser is started. Async window.open() is blocked.
       const knownUrl = novncUrl || "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
+      const tokenAtStart = hhResumesRenderToken;
       let loginWindow = null;
       if (!deferWindowOpen) {
         loginWindow = window.open("about:blank", "job-search-hh-login");
@@ -1206,8 +1214,11 @@ async function runHhLoginAction(action, novncUrl, button, { deferWindowOpen = fa
       if (loginWindow && !loginWindow.closed) {
         loginWindow.location.href = url;
       }
+      // A newer server render (e.g. after confirm) already owns the strip.
+      if (tokenAtStart !== hhResumesRenderToken) return;
       if (hhResumes) {
         hhResumes.hidden = false;
+        hhResumesList.innerHTML = "";
         const opened = Boolean(loginWindow && !loginWindow.closed) || deferWindowOpen;
         if (!opened) {
           hhResumesStatus.textContent =
