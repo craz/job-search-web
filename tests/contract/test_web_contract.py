@@ -29,6 +29,7 @@ def test_openapi_publishes_vacancy_facade() -> None:
     assert "get" in paths["/api/v1/hh/connection"]
     assert "get" in paths["/api/v1/hh/account"]
     assert "get" in paths["/api/v1/hh/resumes"]
+    assert "put" in paths["/api/v1/hh/resumes/active"]
     assert "post" in paths["/api/v1/hh/connection/open-login"]
     assert "post" in paths["/api/v1/hh/connection/confirm"]
 

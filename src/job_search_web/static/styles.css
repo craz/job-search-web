@@ -379,6 +379,28 @@ button { cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.hh-resumes__list li:hover,
+.hh-resumes__list li:focus-visible {
+  border-color: var(--color-text-secondary);
+  outline: none;
+}
+
+.hh-resumes__list li.is-active {
+  border-color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-text);
+}
+
+.hh-resumes__list li.is-active::before {
+  content: "✓ ";
+  font-weight: var(--font-weight-semibold);
+}
+
+#hh-resumes-clear[hidden] {
+  display: none !important;
 }
 
 .hh-resumes__actions {

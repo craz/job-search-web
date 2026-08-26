@@ -17,6 +17,7 @@ const hhResumesList = document.querySelector("#hh-resumes-list");
 const hhResumesActions = document.querySelector("#hh-resumes-actions");
 const hhResumesOpen = document.querySelector("#hh-resumes-open");
 const hhResumesConfirm = document.querySelector("#hh-resumes-confirm");
+const hhResumesClear = document.querySelector("#hh-resumes-clear");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
 const applicationDialog = document.querySelector("#application-dialog");
@@ -1115,6 +1116,7 @@ function clearHhResumes() {
   hhResumes.hidden = true;
   hhResumesStatus.textContent = "";
   hhResumesList.innerHTML = "";
+  if (hhResumesClear) hhResumesClear.hidden = true;
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
 }
 
@@ -1127,24 +1129,58 @@ function renderHhResumes(payload) {
   const actionCode = payload && payload.action && payload.action.code ? payload.action.code : "none";
   const novncUrl = payload && payload.action ? payload.action.novnc_url || "" : "";
   const code = payload && payload.code ? String(payload.code) : "";
+  const selection = payload && payload.selection ? payload.selection : null;
+  const selectionStatus = selection && selection.status ? String(selection.status) : "";
 
   if (status === "available") {
     stopHhResumesPoll();
     const items = Array.isArray(payload.items) ? payload.items : [];
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     if (!items.length) {
-      hhResumesStatus.textContent = "Пока нет резюме в аккаунте";
+      hhResumesStatus.textContent =
+        selectionStatus === "stale"
+          ? "Пока нет резюме в аккаунте. Ранее выбранное резюме больше недоступно — выберите снова, когда список появится."
+          : "Пока нет резюме в аккаунте";
+      if (hhResumesClear) hhResumesClear.hidden = selectionStatus !== "stale" && selectionStatus !== "active";
       return true;
     }
-    hhResumesStatus.textContent = "";
+    if (selectionStatus === "stale") {
+      hhResumesStatus.textContent =
+        "Ранее выбранное резюме больше недоступно. Выберите актуальное резюме.";
+    } else if (selectionStatus === "none") {
+      hhResumesStatus.textContent = "Выберите активное резюме для текущего поиска.";
+    } else {
+      hhResumesStatus.textContent = "";
+    }
     for (const item of items) {
-      if (!item || !item.title) continue;
+      if (!item || !item.title || !item.external_id) continue;
       const li = document.createElement("li");
       li.textContent = item.title;
+      li.dataset.externalId = String(item.external_id);
+      li.setAttribute("role", "option");
+      li.tabIndex = 0;
+      const isActive = Boolean(item.active);
+      li.classList.toggle("is-active", isActive);
+      li.setAttribute("aria-selected", isActive ? "true" : "false");
+      li.title = isActive ? "Активное резюме" : "Сделать активным";
+      li.addEventListener("click", () => {
+        void selectHhActiveResume(String(item.external_id));
+      });
+      li.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          void selectHhActiveResume(String(item.external_id));
+        }
+      });
       hhResumesList.appendChild(li);
+    }
+    if (hhResumesClear) {
+      hhResumesClear.hidden = !(selectionStatus === "active" || selectionStatus === "stale");
     }
     return true;
   }
+
+  if (hhResumesClear) hhResumesClear.hidden = true;
 
   if (status === "permission_blocked") {
     stopHhResumesPoll();
@@ -1188,6 +1224,48 @@ function renderHhResumes(payload) {
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
   hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
   return false;
+}
+
+async function selectHhActiveResume(externalId) {
+  try {
+    const response = await fetch("/api/v1/hh/resumes/active", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ external_id: externalId }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      const message =
+        (payload && (payload.message || payload.code)) || "Не удалось выбрать резюме";
+      showNotice(message);
+      if (payload && payload.resumes) renderHhResumes(payload.resumes);
+      else await loadHhResumes();
+      return;
+    }
+    renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+    showNotice("Активное резюме обновлено.");
+  } catch (_error) {
+    showNotice("Не удалось выбрать резюме");
+  }
+}
+
+async function clearHhActiveResume() {
+  try {
+    const response = await fetch("/api/v1/hh/resumes/active", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ external_id: null }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      showNotice((payload && (payload.message || payload.code)) || "Не удалось сбросить выбор");
+      return;
+    }
+    renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+    showNotice("Выбор резюме сброшен.");
+  } catch (_error) {
+    showNotice("Не удалось сбросить выбор резюме");
+  }
 }
 
 async function loadHhResumes({ quiet = false } = {}) {
@@ -1309,6 +1387,11 @@ if (hhResumesOpen) {
 if (hhResumesConfirm) {
   hhResumesConfirm.addEventListener("click", async () => {
     await runHhLoginAction("confirm_login", hhResumesConfirm.dataset.novncUrl, hhResumesConfirm);
+  });
+}
+if (hhResumesClear) {
+  hhResumesClear.addEventListener("click", () => {
+    void clearHhActiveResume();
   });
 }
 

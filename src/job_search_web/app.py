@@ -132,6 +132,39 @@ def create_app(
                 },
             )
 
+    @application.put("/api/v1/hh/resumes/active")
+    def put_hh_active_resume(payload: dict[str, Any]) -> JSONResponse:
+        """Set or clear active HH resume selection (R1.4); never invents Core linkage."""
+        if "external_id" not in payload:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "code": "invalid_request",
+                    "message": "external_id is required (string or null)",
+                },
+            )
+        external_id = payload.get("external_id")
+        if external_id is not None and not isinstance(external_id, str):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "code": "invalid_request",
+                    "message": "external_id must be a string or null",
+                },
+            )
+        try:
+            return proxy_response(*hh_gateway.set_active_resume(external_id=external_id))
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH resumes API is unavailable",
+                    "status": "unavailable",
+                    "items": [],
+                },
+            )
+
     @application.post("/api/v1/hh/connection/open-login")
     def post_hh_open_login() -> JSONResponse:
         """Trigger existing HH noVNC login flow; never bypasses CAPTCHA."""

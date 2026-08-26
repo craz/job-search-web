@@ -377,6 +377,7 @@ class StubHh:
         self.unavailable = unavailable
         self.status = status
         self.profile_status = profile_status
+        self.active_external_id: str | None = None
         self.calls: list[tuple[str, Any]] = []
 
     def _payload(self) -> dict[str, Any]:
@@ -448,17 +449,80 @@ class StubHh:
                 "code": "browser_login_required",
                 "transport": "browser_readonly",
                 "checked_at": "2026-08-25T12:00:00Z",
+                "selection": {
+                    "status": "unavailable",
+                    "external_id": self.active_external_id,
+                    "available": False,
+                },
+                "active_resume": None,
             }
         return 200, {
             "status": "available",
             "items": [
-                {"external_id": "resume-fixture-1", "title": "Fixture Product Manager"},
-                {"external_id": "resume-fixture-2", "title": "Fixture Engineer"},
+                {
+                    "external_id": "resume-fixture-1",
+                    "title": "Fixture Product Manager",
+                    "active": self.active_external_id == "resume-fixture-1",
+                },
+                {
+                    "external_id": "resume-fixture-2",
+                    "title": "Fixture Engineer",
+                    "active": self.active_external_id == "resume-fixture-2",
+                },
             ],
             "code": "ready",
             "transport": "browser_readonly",
             "checked_at": "2026-08-25T12:00:00Z",
+            "selection": self._selection_payload(),
+            "active_resume": self._active_resume_payload(),
         }
+
+    def _selection_payload(self) -> dict[str, Any]:
+        if self.active_external_id is None:
+            return {"status": "none", "external_id": None, "available": True}
+        if self.active_external_id in {"resume-fixture-1", "resume-fixture-2"}:
+            return {
+                "status": "active",
+                "external_id": self.active_external_id,
+                "available": True,
+            }
+        return {
+            "status": "stale",
+            "external_id": self.active_external_id,
+            "available": True,
+            "action": {"code": "reselect"},
+        }
+
+    def _active_resume_payload(self) -> dict[str, str] | None:
+        titles = {
+            "resume-fixture-1": "Fixture Product Manager",
+            "resume-fixture-2": "Fixture Engineer",
+        }
+        if self.active_external_id not in titles:
+            return None
+        return {
+            "external_id": self.active_external_id,
+            "title": titles[self.active_external_id],
+        }
+
+    def set_active_resume(self, *, external_id: str | None) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("resumes-active", external_id))
+        if external_id is not None and external_id not in {
+            "resume-fixture-1",
+            "resume-fixture-2",
+        }:
+            return 409, {
+                "ok": False,
+                "code": "invalid_resume_id",
+                "message": "external_id is not in the current resume list",
+                "resumes": self.resumes_list()[1],
+            }
+        self.active_external_id = external_id
+        return 200, self.resumes_list()[1]
 
     def open_login(self) -> tuple[int, Any]:
         if self.unavailable:

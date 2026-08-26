@@ -50,8 +50,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — показать резюме" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260826-r13k" in page.text
-    assert "/assets/styles.css?v=20260826-r13k" in page.text
+    assert "/assets/app.js?v=20260826-r14a" in page.text
+    assert "/assets/styles.css?v=20260826-r14a" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -498,5 +498,50 @@ def test_hh_resumes_list_is_proxied() -> None:
     assert payload["transport"] == "browser_readonly"
     assert len(payload["items"]) == 2
     assert payload["items"][0]["external_id"] == "resume-fixture-1"
+    assert payload["selection"]["status"] == "none"
+    assert payload["active_resume"] is None
     assert "access_token" not in response.text
     assert hh.calls == [("resumes", None)]
+
+
+def test_hh_active_resume_can_be_selected_and_cleared() -> None:
+    """Web proxies active resume selection without Core linkage or secrets."""
+    hh = StubHh(status="connected")
+    client = WebClient(StubCore(), hh=hh)
+
+    selected = client.request(
+        "PUT",
+        "/api/v1/hh/resumes/active",
+        json={"external_id": "resume-fixture-2"},
+    )
+    assert selected.status_code == 200
+    body = selected.json()
+    assert body["selection"]["status"] == "active"
+    assert body["active_resume"]["external_id"] == "resume-fixture-2"
+    assert body["items"][1]["active"] is True
+    assert body["items"][0]["active"] is False
+
+    cleared = client.request(
+        "PUT",
+        "/api/v1/hh/resumes/active",
+        json={"external_id": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["selection"]["status"] == "none"
+    assert cleared.json()["active_resume"] is None
+
+    invalid = client.request(
+        "PUT",
+        "/api/v1/hh/resumes/active",
+        json={"external_id": "not-a-real-resume"},
+    )
+    assert invalid.status_code == 409
+    assert invalid.json()["code"] == "invalid_resume_id"
+    assert "access_token" not in invalid.text
+
+
+def test_hh_resumes_markup_exposes_clear_control() -> None:
+    client = WebClient(StubCore())
+    page = client.request("GET", "/")
+    assert 'id="hh-resumes-clear"' in page.text
+    assert "Сбросить выбор" in page.text

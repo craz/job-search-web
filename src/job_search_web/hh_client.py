@@ -18,6 +18,8 @@ class HhGateway(Protocol):
 
     def resumes_list(self) -> tuple[int, Any]: ...
 
+    def set_active_resume(self, *, external_id: str | None) -> tuple[int, Any]: ...
+
     def open_login(self) -> tuple[int, Any]: ...
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]: ...
@@ -53,6 +55,14 @@ class HhClient:
     def resumes_list(self) -> tuple[int, Any]:
         # Browser RO navigation can exceed the default short proxy timeout.
         return self._request("GET", "/api/v1/resumes", timeout=max(self.timeout_seconds, 60.0))
+
+    def set_active_resume(self, *, external_id: str | None) -> tuple[int, Any]:
+        return self._request(
+            "PUT",
+            "/api/v1/resumes/active",
+            json={"external_id": external_id},
+            timeout=max(self.timeout_seconds, 60.0),
+        )
 
     def open_login(self) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/connection/open-login", json={})
