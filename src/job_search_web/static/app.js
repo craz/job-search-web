@@ -1013,6 +1013,8 @@ const HH_STATUS_LABELS = {
   expired: "Сессия истекла",
   action_required: "Требуется действие",
   unavailable: "Недоступно",
+  available: "Доступно",
+  permission_blocked: "Ограничение HH",
 };
 
 const HH_ACTION_LABELS = {
@@ -1022,6 +1024,19 @@ const HH_ACTION_LABELS = {
   reconnect: "Войти снова",
 };
 
+const HH_RECOVERY_ACCOUNT_LABELS = {
+  reauth: "Аккаунт: нужна повторная авторизация",
+  captcha_or_action_required: "Аккаунт: требуется действие на стороне HH",
+  external_limitation: "Аккаунт: доступ ограничен HeadHunter",
+  network_failure: "Аккаунт: временно недоступен",
+};
+
+function recoveryKind(payload) {
+  return payload && payload.recovery && payload.recovery.kind
+    ? String(payload.recovery.kind)
+    : "none";
+}
+
 function clearHhAccountLabel() {
   hhAccountLabel.hidden = true;
   hhAccountLabel.textContent = "";
@@ -1030,15 +1045,33 @@ function clearHhAccountLabel() {
 
 function renderHhAccount(payload) {
   clearHhAccountLabel();
-  if (!payload || payload.status !== "available" || !payload.account) return;
-  const account = payload.account;
-  const label = account.display_name || account.email || "";
-  if (!label) return;
-  hhAccountLabel.hidden = false;
-  hhAccountLabel.textContent = label;
-  if (account.email && account.display_name) {
-    hhAccountLabel.title = account.email;
+  if (!payload) return;
+  if (payload.status === "available" && payload.account) {
+    const account = payload.account;
+    const label = account.display_name || account.email || "";
+    if (!label) return;
+    hhAccountLabel.hidden = false;
+    hhAccountLabel.textContent = label;
+    if (account.email && account.display_name) {
+      hhAccountLabel.title = account.email;
+    }
+    return;
   }
+  const kind = recoveryKind(payload);
+  const fallback =
+    payload.status === "permission_blocked"
+      ? HH_RECOVERY_ACCOUNT_LABELS.external_limitation
+      : payload.status === "expired" || payload.status === "not_authorized"
+        ? HH_RECOVERY_ACCOUNT_LABELS.reauth
+        : payload.status === "action_required"
+          ? HH_RECOVERY_ACCOUNT_LABELS.captcha_or_action_required
+          : payload.status === "unavailable"
+            ? HH_RECOVERY_ACCOUNT_LABELS.network_failure
+            : "";
+  const text = HH_RECOVERY_ACCOUNT_LABELS[kind] || fallback;
+  if (!text) return;
+  hhAccountLabel.hidden = false;
+  hhAccountLabel.textContent = text;
 }
 
 function renderHhConnection(payload) {
@@ -1047,18 +1080,23 @@ function renderHhConnection(payload) {
   hhConnectionLabel.textContent = HH_STATUS_LABELS[status] || status;
   const actionCode = payload.action && payload.action.code ? payload.action.code : "none";
   // Login / confirm for resumes lives in the «Резюме HH» strip — do not duplicate
-  // the same CTA in the header.
-  const headerOwned = actionCode === "acquire_token";
-  if (!headerOwned || !HH_ACTION_LABELS[actionCode]) {
+  // the same CTA in the header. Token acquire + reconnect stay in the header.
+  let headerAction = "none";
+  if (actionCode === "acquire_token") {
+    headerAction = "acquire_token";
+  } else if (actionCode === "reconnect" || status === "expired") {
+    headerAction = "reconnect";
+  }
+  if (!HH_ACTION_LABELS[headerAction]) {
     hhConnectionAction.hidden = true;
     hhConnectionAction.dataset.action = "";
     hhConnectionAction.dataset.novncUrl = "";
-  } else {
-    hhConnectionAction.hidden = false;
-    hhConnectionAction.textContent = HH_ACTION_LABELS[actionCode];
-    hhConnectionAction.dataset.action = actionCode;
-    hhConnectionAction.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
+    return;
   }
+  hhConnectionAction.hidden = false;
+  hhConnectionAction.textContent = HH_ACTION_LABELS[headerAction];
+  hhConnectionAction.dataset.action = headerAction;
+  hhConnectionAction.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
 }
 
 async function loadHhAccount() {
@@ -1066,10 +1104,7 @@ async function loadHhAccount() {
   try {
     const response = await fetch("/api/v1/hh/account");
     const payload = await response.json();
-    if (!response.ok && payload.status !== "unavailable" && payload.status !== "not_authorized") {
-      return;
-    }
-    renderHhAccount(payload);
+    renderHhAccount(payload.status ? payload : { status: "unavailable" });
   } catch (_error) {
     clearHhAccountLabel();
   }
@@ -1180,6 +1215,7 @@ function renderHhResumes(payload) {
   const actionCode = payload && payload.action && payload.action.code ? payload.action.code : "none";
   const novncUrl = payload && payload.action ? payload.action.novnc_url || "" : "";
   const code = payload && payload.code ? String(payload.code) : "";
+  const kind = recoveryKind(payload);
   const selection = payload && payload.selection ? payload.selection : null;
   const selectionStatus = selection && selection.status ? String(selection.status) : "";
 
@@ -1234,10 +1270,28 @@ function renderHhResumes(payload) {
 
   if (hhResumesClear) hhResumesClear.hidden = true;
 
-  if (status === "permission_blocked") {
+  if (status === "permission_blocked" || kind === "external_limitation") {
     stopHhResumesPoll();
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
-    hhResumesStatus.textContent = "HeadHunter не дал доступ к списку резюме.";
+    hhResumesStatus.textContent =
+      "HeadHunter ограничил доступ к списку резюме (внешнее ограничение). Это не пустой список.";
+    return false;
+  }
+
+  if (kind === "captcha_or_action_required" || code === "browser_captcha_or_action_required") {
+    stopHhResumesPoll();
+    hhResumesList.innerHTML = "";
+    hhResumesStatus.textContent =
+      "HeadHunter требует проверку (CAPTCHA или доп. действие). Пройдите её во вкладке входа — обход не поддерживается.";
+    setHhResumesActions({ open: true, confirm: true, novncUrl });
+    return false;
+  }
+
+  if (kind === "network_failure" || code === "browser_resume_read_failed") {
+    stopHhResumesPoll();
+    setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
+    hhResumesStatus.textContent =
+      "Не удалось получить список резюме (сеть или временный сбой). Повторите позже вручную — автоповтор не крутится.";
     return false;
   }
 
@@ -1252,9 +1306,12 @@ function renderHhResumes(payload) {
 
   if (
     status === "not_authorized" ||
+    status === "expired" ||
     status === "action_required" ||
+    kind === "reauth" ||
     actionCode === "open_login" ||
     actionCode === "confirm_login" ||
+    actionCode === "reconnect" ||
     code === "browser_session_not_logged_in" ||
     code === "browser_login_required"
   ) {
@@ -1267,8 +1324,10 @@ function renderHhResumes(payload) {
       if (!hhResumesPollTimer) startHhResumesPoll({ attempts: 20, intervalMs: 2500 });
       return false;
     }
-    hhResumesStatus.textContent =
-      "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
+    const expiredHint = status === "expired" || kind === "reauth";
+    hhResumesStatus.textContent = expiredHint
+      ? "Сессия HeadHunter истекла или нужна повторная авторизация. Войдите снова."
+      : "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
     setHhResumesActions({ open: true, confirm: false, novncUrl });
     return false;
   }
@@ -1358,7 +1417,13 @@ async function loadHhConnection() {
       throw new Error(payload.message || "Не удалось получить статус HH");
     }
     renderHhConnection(payload.status ? payload : { status: "unavailable", action: { code: "none" } });
-    if (payload.status === "connected") {
+    // Account surface shows distinct recovery even when connection is not "connected".
+    if (
+      payload.status === "connected" ||
+      payload.status === "expired" ||
+      payload.status === "action_required" ||
+      payload.status === "not_authorized"
+    ) {
       await loadHhAccount();
     }
     await loadHhResumes();
