@@ -352,8 +352,16 @@ button { cursor: pointer; }
 }
 
 .hh-resumes__status:empty,
-.hh-resumes__list:empty {
+.hh-resumes__list:empty,
+.hh-resumes__linkage[hidden] {
   display: none;
+}
+
+.hh-resumes__linkage {
+  margin: 0;
+  font-size: var(--font-size-metadata);
+  line-height: 1.35;
+  color: var(--color-text-secondary);
 }
 
 .hh-resumes__list {

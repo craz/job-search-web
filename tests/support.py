@@ -142,6 +142,9 @@ class StubCore:
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
         self.assessment_items: list[dict[str, Any]] = []
+        self.candidate_profile: dict[str, Any] | None = None
+        self.profile_version: dict[str, Any] | None = None
+        self.hh_resume_link: dict[str, Any] | None = None
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -270,6 +273,16 @@ class StubCore:
         created.update({k: v for k, v in payload.items() if k != "vacancy_id"})
         self.assessment_items.insert(0, created)
         return 201, created
+
+    def get_candidate_context(self) -> tuple[int, Any]:
+        """Return synthetic CandidateProfile linkage for Web tests."""
+        self._guard()
+        self.calls.append(("candidate-context", None))
+        return 200, {
+            "candidate_profile": self.candidate_profile,
+            "profile_version": self.profile_version,
+            "hh_resume_link": self.hh_resume_link,
+        }
 
 
 class StubOsint:
@@ -522,7 +535,29 @@ class StubHh:
                 "resumes": self.resumes_list()[1],
             }
         self.active_external_id = external_id
-        return 200, self.resumes_list()[1]
+        payload = self.resumes_list()[1]
+        payload["core_linkage"] = {
+            "ok": True,
+            "code": "synced",
+            "candidate_context": {
+                "candidate_profile": {"id": "00000000-0000-0000-0000-000000000099"},
+                "profile_version": {
+                    "id": "00000000-0000-0000-0000-000000000098",
+                    "label": "r1-default",
+                },
+                "hh_resume_link": {
+                    "source": "hh",
+                    "external_resume_id": external_id,
+                    "status": "active" if external_id else "cleared",
+                    "title": (
+                        "Fixture Engineer"
+                        if external_id == "resume-fixture-2"
+                        else ("Fixture Product Manager" if external_id else None)
+                    ),
+                },
+            },
+        }
+        return 200, payload
 
     def open_login(self) -> tuple[int, Any]:
         if self.unavailable:

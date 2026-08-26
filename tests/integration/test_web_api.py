@@ -50,8 +50,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — показать резюме" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260826-r14a" in page.text
-    assert "/assets/styles.css?v=20260826-r14a" in page.text
+    assert "/assets/app.js?v=20260826-r15a" in page.text
+    assert "/assets/styles.css?v=20260826-r15a" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -545,3 +545,30 @@ def test_hh_resumes_markup_exposes_clear_control() -> None:
     page = client.request("GET", "/")
     assert 'id="hh-resumes-clear"' in page.text
     assert "Сбросить выбор" in page.text
+    assert 'id="hh-resumes-linkage"' in page.text
+
+
+def test_candidate_context_is_proxied_from_core() -> None:
+    core = StubCore()
+    core.candidate_profile = {
+        "id": "00000000-0000-0000-0000-000000000099",
+        "created_at": "2026-08-26T12:00:00Z",
+    }
+    core.profile_version = {
+        "id": "00000000-0000-0000-0000-000000000098",
+        "label": "r1-default",
+        "created_at": "2026-08-26T12:00:00Z",
+    }
+    core.hh_resume_link = {
+        "source": "hh",
+        "external_resume_id": "resume-fixture-1",
+        "title": "Fixture Product Manager",
+        "status": "active",
+        "selected_at": "2026-08-26T12:00:00Z",
+        "updated_at": "2026-08-26T12:00:00Z",
+    }
+    client = WebClient(core)
+    response = client.request("GET", "/api/v1/candidate-context")
+    assert response.status_code == 200
+    assert response.json()["hh_resume_link"]["status"] == "active"
+    assert ("candidate-context", None) in core.calls

@@ -13,6 +13,7 @@ const hhAccountLabel = document.querySelector("#hh-account-label");
 const hhConnectionAction = document.querySelector("#hh-connection-action");
 const hhResumes = document.querySelector("#hh-resumes");
 const hhResumesStatus = document.querySelector("#hh-resumes-status");
+const hhResumesLinkage = document.querySelector("#hh-resumes-linkage");
 const hhResumesList = document.querySelector("#hh-resumes-list");
 const hhResumesActions = document.querySelector("#hh-resumes-actions");
 const hhResumesOpen = document.querySelector("#hh-resumes-open");
@@ -1115,9 +1116,59 @@ function clearHhResumes() {
   if (!hhResumes) return;
   hhResumes.hidden = true;
   hhResumesStatus.textContent = "";
+  if (hhResumesLinkage) {
+    hhResumesLinkage.textContent = "";
+    hhResumesLinkage.hidden = true;
+  }
   hhResumesList.innerHTML = "";
   if (hhResumesClear) hhResumesClear.hidden = true;
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
+}
+
+function renderHhResumeLinkage(payload) {
+  if (!hhResumesLinkage) return;
+  const link = payload && payload.hh_resume_link ? payload.hh_resume_link : null;
+  if (!link || !link.status) {
+    hhResumesLinkage.textContent = "";
+    hhResumesLinkage.hidden = true;
+    return;
+  }
+  if (link.status === "active" && link.title) {
+    hhResumesLinkage.textContent = `Локальная связь: активна — ${link.title}`;
+    hhResumesLinkage.hidden = false;
+    return;
+  }
+  if (link.status === "active") {
+    hhResumesLinkage.textContent = "Локальная связь: активна";
+    hhResumesLinkage.hidden = false;
+    return;
+  }
+  if (link.status === "stale") {
+    hhResumesLinkage.textContent = "Локальная связь: устарела — выберите резюме снова";
+    hhResumesLinkage.hidden = false;
+    return;
+  }
+  if (link.status === "cleared") {
+    hhResumesLinkage.textContent = "Локальная связь: нет активного резюме";
+    hhResumesLinkage.hidden = false;
+    return;
+  }
+  hhResumesLinkage.hidden = true;
+}
+
+async function loadHhResumeLinkage() {
+  if (!hhResumesLinkage) return;
+  try {
+    const response = await fetch("/api/v1/candidate-context");
+    const payload = await response.json();
+    if (!response.ok) {
+      hhResumesLinkage.hidden = true;
+      return;
+    }
+    renderHhResumeLinkage(payload);
+  } catch (_error) {
+    if (hhResumesLinkage) hhResumesLinkage.hidden = true;
+  }
 }
 
 function renderHhResumes(payload) {
@@ -1177,6 +1228,7 @@ function renderHhResumes(payload) {
     if (hhResumesClear) {
       hhResumesClear.hidden = !(selectionStatus === "active" || selectionStatus === "stale");
     }
+    void loadHhResumeLinkage();
     return true;
   }
 
@@ -1243,6 +1295,11 @@ async function selectHhActiveResume(externalId) {
       return;
     }
     renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+    if (payload.core_linkage && payload.core_linkage.candidate_context) {
+      renderHhResumeLinkage(payload.core_linkage.candidate_context);
+    } else {
+      await loadHhResumeLinkage();
+    }
     showNotice("Активное резюме обновлено.");
   } catch (_error) {
     showNotice("Не удалось выбрать резюме");
@@ -1262,6 +1319,11 @@ async function clearHhActiveResume() {
       return;
     }
     renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+    if (payload.core_linkage && payload.core_linkage.candidate_context) {
+      renderHhResumeLinkage(payload.core_linkage.candidate_context);
+    } else {
+      await loadHhResumeLinkage();
+    }
     showNotice("Выбор резюме сброшен.");
   } catch (_error) {
     showNotice("Не удалось сбросить выбор резюме");

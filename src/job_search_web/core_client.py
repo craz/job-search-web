@@ -58,6 +58,8 @@ class CoreGateway(Protocol):
 
     def create_assessment(self, payload: dict[str, Any], key: str) -> tuple[int, Any]: ...
 
+    def get_candidate_context(self) -> tuple[int, Any]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -172,3 +174,7 @@ class CoreClient:
             json=payload,
             headers={"Idempotency-Key": key},
         )
+
+    def get_candidate_context(self) -> tuple[int, Any]:
+        """Return CandidateProfile / ProfileVersion / HH resume link from Core."""
+        return self._request("GET", "/api/v1/candidate-context")

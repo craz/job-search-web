@@ -165,6 +165,23 @@ def create_app(
                 },
             )
 
+    @application.get("/api/v1/candidate-context")
+    def get_candidate_context() -> JSONResponse:
+        """Return Core CandidateProfile / ProfileVersion / HH resume link (R1.5)."""
+        try:
+            return proxy_response(*gateway.get_candidate_context())
+        except CoreUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "core_unavailable",
+                    "message": "Core candidate-context API is unavailable",
+                    "candidate_profile": None,
+                    "profile_version": None,
+                    "hh_resume_link": None,
+                },
+            )
+
     @application.post("/api/v1/hh/connection/open-login")
     def post_hh_open_login() -> JSONResponse:
         """Trigger existing HH noVNC login flow; never bypasses CAPTCHA."""
