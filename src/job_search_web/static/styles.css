@@ -366,6 +366,11 @@ button { cursor: pointer; }
   gap: 0.45rem;
 }
 
+.hh-resumes__actions[hidden],
+.hh-resumes__actions [hidden] {
+  display: none !important;
+}
+
 .btn--compact {
   padding: 0.15rem 0.55rem;
   min-height: 1.6rem;
