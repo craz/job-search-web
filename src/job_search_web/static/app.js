@@ -1074,6 +1074,25 @@ async function loadHhAccount() {
 }
 
 let hhResumesRenderToken = 0;
+let hhResumesPollTimer = 0;
+
+function stopHhResumesPoll() {
+  if (hhResumesPollTimer) {
+    window.clearInterval(hhResumesPollTimer);
+    hhResumesPollTimer = 0;
+  }
+}
+
+function startHhResumesPoll({ attempts = 15, intervalMs = 2000 } = {}) {
+  stopHhResumesPoll();
+  let left = attempts;
+  hhResumesPollTimer = window.setInterval(() => {
+    left -= 1;
+    void loadHhResumes({ quiet: true }).then((ok) => {
+      if (ok || left <= 0) stopHhResumesPoll();
+    });
+  }, intervalMs);
+}
 
 function setHhResumesActions({ open = false, confirm = false, novncUrl = "" } = {}) {
   if (!hhResumesActions) return;
@@ -1110,11 +1129,12 @@ function renderHhResumes(payload) {
   const code = payload && payload.code ? String(payload.code) : "";
 
   if (status === "available") {
+    stopHhResumesPoll();
     const items = Array.isArray(payload.items) ? payload.items : [];
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     if (!items.length) {
       hhResumesStatus.textContent = "Пока нет резюме в аккаунте";
-      return;
+      return true;
     }
     hhResumesStatus.textContent = "";
     for (const item of items) {
@@ -1123,13 +1143,23 @@ function renderHhResumes(payload) {
       li.textContent = item.title;
       hhResumesList.appendChild(li);
     }
-    return;
+    return true;
   }
 
   if (status === "permission_blocked") {
+    stopHhResumesPoll();
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent = "HeadHunter не дал доступ к списку резюме.";
-    return;
+    return false;
+  }
+
+  // Profile briefly locked by the login browser — not a fresh login request.
+  if (code === "profile_locked") {
+    hhResumesList.innerHTML = "";
+    hhResumesStatus.textContent = "Список резюме обновляется… Подождите пару секунд.";
+    setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
+    if (!hhResumesPollTimer) startHhResumesPoll({ attempts: 10, intervalMs: 1500 });
+    return false;
   }
 
   if (
@@ -1137,40 +1167,45 @@ function renderHhResumes(payload) {
     status === "action_required" ||
     actionCode === "open_login" ||
     actionCode === "confirm_login" ||
-    code === "profile_locked" ||
     code === "browser_session_not_logged_in" ||
     code === "browser_login_required"
   ) {
     hhResumesList.innerHTML = "";
-    const waitingConfirm = actionCode === "confirm_login" || code === "profile_locked";
+    const waitingConfirm = actionCode === "confirm_login";
     if (waitingConfirm) {
       hhResumesStatus.textContent =
-        "Нужен вход в HeadHunter. Если окно входа не видно — нажмите «Войти в HeadHunter». После входа нажмите «Я вошёл — показать резюме».";
+        "Войдите в HeadHunter во вкладке входа. Список обновится сам — или нажмите «Я вошёл — показать резюме».";
       setHhResumesActions({ open: true, confirm: true, novncUrl });
-      return;
+      if (!hhResumesPollTimer) startHhResumesPoll({ attempts: 20, intervalMs: 2500 });
+      return false;
     }
     hhResumesStatus.textContent =
       "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
     setHhResumesActions({ open: true, confirm: false, novncUrl });
-    return;
+    return false;
   }
 
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
   hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
+  return false;
 }
 
-async function loadHhResumes() {
-  clearHhResumes();
+async function loadHhResumes({ quiet = false } = {}) {
+  if (!quiet) clearHhResumes();
   try {
     const response = await fetch("/api/v1/hh/resumes");
     const payload = await response.json();
-    renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+    return Boolean(
+      renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] })
+    );
   } catch (_error) {
-    renderHhResumes({ status: "unavailable", items: [] });
+    if (!quiet) renderHhResumes({ status: "unavailable", items: [] });
+    return false;
   }
 }
 
 async function loadHhConnection() {
+  stopHhResumesPoll();
   hhConnection.dataset.status = "unknown";
   hhConnectionLabel.textContent = "Проверяем";
   hhConnectionAction.hidden = true;
@@ -1227,10 +1262,11 @@ async function runHhLoginAction(action, novncUrl, button, { deferWindowOpen = fa
           showNotice("Нажмите «Войти в HeadHunter» ещё раз, чтобы открыть окно входа.");
         } else {
           hhResumesStatus.textContent =
-            "Войдите в HeadHunter во вкладке входа. Затем вернитесь сюда и нажмите «Я вошёл — показать резюме».";
+            "Войдите в HeadHunter во вкладке входа. Список обновится сам, когда вход сохранится.";
           setHhResumesActions({ open: true, confirm: true, novncUrl: url });
-          showNotice("Войдите в HeadHunter во вкладке входа, затем нажмите «Я вошёл — показать резюме».");
+          showNotice("Войдите в HeadHunter во вкладке входа — список резюме обновится автоматически.");
         }
+        startHhResumesPoll({ attempts: 24, intervalMs: 2500 });
       }
       return;
     }
