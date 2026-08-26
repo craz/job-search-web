@@ -1044,7 +1044,10 @@ function renderHhConnection(payload) {
   hhConnection.dataset.status = status;
   hhConnectionLabel.textContent = HH_STATUS_LABELS[status] || status;
   const actionCode = payload.action && payload.action.code ? payload.action.code : "none";
-  if (actionCode === "none" || !HH_ACTION_LABELS[actionCode]) {
+  // Login / confirm for resumes lives in the «Резюме HH» strip — do not duplicate
+  // the same CTA in the header.
+  const headerOwned = actionCode === "acquire_token";
+  if (!headerOwned || !HH_ACTION_LABELS[actionCode]) {
     hhConnectionAction.hidden = true;
     hhConnectionAction.dataset.action = "";
     hhConnectionAction.dataset.novncUrl = "";
