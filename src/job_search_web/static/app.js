@@ -1074,13 +1074,15 @@ function setHhResumesActions({ open = false, confirm = false, novncUrl = "" } = 
   if (!hhResumesActions) return;
   const showAny = Boolean(open || confirm);
   hhResumesActions.hidden = !showAny;
+  const url = novncUrl || "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
   if (hhResumesOpen) {
     hhResumesOpen.hidden = !open;
-    hhResumesOpen.dataset.novncUrl = novncUrl || "";
+    hhResumesOpen.dataset.novncUrl = url;
+    hhResumesOpen.setAttribute("href", url);
   }
   if (hhResumesConfirm) {
     hhResumesConfirm.hidden = !confirm;
-    hhResumesConfirm.dataset.novncUrl = novncUrl || "";
+    hhResumesConfirm.dataset.novncUrl = url;
   }
 }
 
@@ -1180,25 +1182,38 @@ async function loadHhConnection() {
   }
 }
 
-async function runHhLoginAction(action, novncUrl, button) {
-  if (button) button.disabled = true;
+async function runHhLoginAction(action, novncUrl, button, { deferWindowOpen = false } = {}) {
+  if (button && "disabled" in button) button.disabled = true;
   try {
     if (action === "open_login" || action === "reconnect") {
+      // Keep the click gesture: open a tab immediately, then point it at noVNC
+      // after the HH login browser is started. Async window.open() is blocked.
+      const knownUrl = novncUrl || "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
+      let loginWindow = null;
+      if (!deferWindowOpen) {
+        loginWindow = window.open("about:blank", "job-search-hh-login");
+      }
       const response = await fetch("/api/v1/hh/connection/open-login", { method: "POST" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось открыть вход");
-      const url = novncUrl || payload.novnc_url || "http://127.0.0.1:6080/";
-      const opened = window.open(url, "_blank", "noopener");
+      if (!response.ok) {
+        if (loginWindow && !loginWindow.closed) loginWindow.close();
+        throw new Error(payload.message || payload.code || "Не удалось открыть вход");
+      }
+      const url = payload.novnc_url || knownUrl;
+      if (loginWindow && !loginWindow.closed) {
+        loginWindow.location.href = url;
+      }
       if (hhResumes) {
         hhResumes.hidden = false;
+        const opened = Boolean(loginWindow && !loginWindow.closed) || deferWindowOpen;
         if (!opened) {
           hhResumesStatus.textContent =
-            "Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для Job Search и снова нажмите «Войти в HeadHunter».";
+            "Вкладка входа не открылась автоматически. Нажмите ещё раз «Войти в HeadHunter» — это ссылка на окно входа.";
           setHhResumesActions({ open: true, confirm: true, novncUrl: url });
-          showNotice("Разрешите всплывающие окна, затем снова нажмите «Войти в HeadHunter».");
+          showNotice("Нажмите «Войти в HeadHunter» ещё раз, чтобы открыть окно входа.");
         } else {
           hhResumesStatus.textContent =
-            "Откройте вкладку входа HeadHunter, войдите в аккаунт, затем вернитесь сюда и нажмите «Я вошёл — показать резюме».";
+            "Войдите в HeadHunter во вкладке входа. Затем вернитесь сюда и нажмите «Я вошёл — показать резюме».";
           setHhResumesActions({ open: true, confirm: true, novncUrl: url });
           showNotice("Войдите в HeadHunter во вкладке входа, затем нажмите «Я вошёл — показать резюме».");
         }
@@ -1221,7 +1236,7 @@ async function runHhLoginAction(action, novncUrl, button) {
     showNotice(error.message || "Действие HeadHunter не выполнено");
     await loadHhConnection();
   } finally {
-    if (button) button.disabled = false;
+    if (button && "disabled" in button) button.disabled = false;
   }
 }
 
@@ -1234,8 +1249,11 @@ hhConnectionAction.addEventListener("click", async () => {
 });
 
 if (hhResumesOpen) {
-  hhResumesOpen.addEventListener("click", async () => {
-    await runHhLoginAction("open_login", hhResumesOpen.dataset.novncUrl, hhResumesOpen);
+  // Real <a target=_blank>: browser opens the tab from the user gesture.
+  // We still start the HH login session in parallel (do not preventDefault).
+  hhResumesOpen.addEventListener("click", () => {
+    const url = hhResumesOpen.getAttribute("href") || hhResumesOpen.dataset.novncUrl || "";
+    void runHhLoginAction("open_login", url, hhResumesOpen, { deferWindowOpen: true });
   });
 }
 if (hhResumesConfirm) {
