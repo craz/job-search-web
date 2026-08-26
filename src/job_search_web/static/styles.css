@@ -348,6 +348,10 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-medium);
 }
 
+.hh-resumes #hh-resumes-action {
+  margin-left: auto;
+}
+
 .btn--compact {
   padding: 0.15rem 0.55rem;
   min-height: 1.6rem;

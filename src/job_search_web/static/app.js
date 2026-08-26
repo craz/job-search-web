@@ -14,6 +14,7 @@ const hhConnectionAction = document.querySelector("#hh-connection-action");
 const hhResumes = document.querySelector("#hh-resumes");
 const hhResumesStatus = document.querySelector("#hh-resumes-status");
 const hhResumesList = document.querySelector("#hh-resumes-list");
+const hhResumesAction = document.querySelector("#hh-resumes-action");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
 const applicationDialog = document.querySelector("#application-dialog");
@@ -1011,10 +1012,10 @@ const HH_STATUS_LABELS = {
 };
 
 const HH_ACTION_LABELS = {
-  open_login: "Открыть вход",
-  confirm_login: "Подтвердить вход",
+  open_login: "Войти в HeadHunter",
+  confirm_login: "Я вошёл — показать резюме",
   acquire_token: "Получить токен",
-  reconnect: "Переподключить",
+  reconnect: "Войти снова",
 };
 
 function clearHhAccountLabel() {
@@ -1067,11 +1068,26 @@ async function loadHhAccount() {
   }
 }
 
+function setHhResumesAction(actionCode, novncUrl) {
+  if (!hhResumesAction) return;
+  if (!actionCode || actionCode === "none" || !HH_ACTION_LABELS[actionCode]) {
+    hhResumesAction.hidden = true;
+    hhResumesAction.dataset.action = "";
+    hhResumesAction.dataset.novncUrl = "";
+    return;
+  }
+  hhResumesAction.hidden = false;
+  hhResumesAction.textContent = HH_ACTION_LABELS[actionCode];
+  hhResumesAction.dataset.action = actionCode;
+  hhResumesAction.dataset.novncUrl = novncUrl || "";
+}
+
 function clearHhResumes() {
   if (!hhResumes) return;
   hhResumes.hidden = true;
   hhResumesStatus.textContent = "";
   hhResumesList.innerHTML = "";
+  setHhResumesAction("none", "");
 }
 
 function renderHhResumes(payload) {
@@ -1079,31 +1095,49 @@ function renderHhResumes(payload) {
   clearHhResumes();
   hhResumes.hidden = false;
   const status = payload && payload.status ? payload.status : "unavailable";
+  const actionCode = payload && payload.action && payload.action.code ? payload.action.code : "none";
+  const novncUrl = payload && payload.action ? payload.action.novnc_url || "" : "";
+
   if (status === "available") {
     const items = Array.isArray(payload.items) ? payload.items : [];
     if (!items.length) {
-      hhResumesStatus.textContent = "Список пуст";
+      hhResumesStatus.textContent = "Пока нет резюме в аккаунте";
       return;
     }
-    hhResumesStatus.textContent = `${items.length}`;
+    hhResumesStatus.textContent = "";
     for (const item of items) {
       if (!item || !item.title) continue;
       const li = document.createElement("li");
       li.textContent = item.title;
-      if (item.external_id) li.title = item.external_id;
       hhResumesList.appendChild(li);
     }
     return;
   }
+
   if (status === "not_authorized" || status === "action_required") {
-    hhResumesStatus.textContent = "Нужен вход в браузерной сессии HH";
+    hhResumesStatus.textContent =
+      "Чтобы показать ваши резюме, войдите в HeadHunter через кнопку ниже.";
+    setHhResumesAction(actionCode === "none" ? "open_login" : actionCode, novncUrl);
     return;
   }
   if (status === "permission_blocked") {
-    hhResumesStatus.textContent = "Доступ к списку резюме ограничен";
+    hhResumesStatus.textContent = "HeadHunter не дал доступ к списку резюме.";
     return;
   }
-  hhResumesStatus.textContent = "Список резюме недоступен";
+  const code = payload && payload.code ? String(payload.code) : "";
+  if (code === "profile_locked" || actionCode === "confirm_login") {
+    hhResumesStatus.textContent =
+      "Сейчас открыто окно входа HeadHunter. Завершите вход там, затем нажмите кнопку ниже.";
+    setHhResumesAction("confirm_login", novncUrl);
+    return;
+  }
+  if (actionCode === "open_login") {
+    hhResumesStatus.textContent =
+      "Чтобы показать ваши резюме, войдите в HeadHunter через кнопку ниже.";
+    setHhResumesAction("open_login", novncUrl);
+    return;
+  }
+  hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
 }
 
 async function loadHhResumes() {
@@ -1139,34 +1173,63 @@ async function loadHhConnection() {
   }
 }
 
-hhConnectionAction.addEventListener("click", async () => {
-  const action = hhConnectionAction.dataset.action;
-  const novncUrl = hhConnectionAction.dataset.novncUrl;
-  hhConnectionAction.disabled = true;
+async function runHhLoginAction(action, novncUrl, button) {
+  if (button) button.disabled = true;
   try {
     if (action === "open_login" || action === "reconnect") {
       const response = await fetch("/api/v1/hh/connection/open-login", { method: "POST" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось открыть вход");
-      if (novncUrl) window.open(novncUrl, "_blank", "noopener");
-      else if (payload.novnc_url) window.open(payload.novnc_url, "_blank", "noopener");
-      showNotice("Откройте noVNC, войдите в HH, затем подтвердите вход");
-    } else if (action === "confirm_login") {
+      const url = novncUrl || payload.novnc_url || "http://127.0.0.1:6080/";
+      window.open(url, "_blank", "noopener");
+      showNotice(
+        "Открылось окно входа HeadHunter. Войдите в свой аккаунт там, затем нажмите «Я вошёл — показать резюме»."
+      );
+      if (hhResumes) {
+        hhResumes.hidden = false;
+        hhResumesStatus.textContent =
+          "Войдите в HeadHunter в открывшемся окне. Когда увидите свой аккаунт — вернитесь сюда.";
+        setHhResumesAction("confirm_login", url);
+      }
+      return;
+    }
+    if (action === "confirm_login") {
       const response = await fetch("/api/v1/hh/connection/confirm", { method: "POST" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || payload.code || "Подтверждение не принято");
-      showNotice("Вход подтверждён");
-    } else if (action === "acquire_token") {
-      showNotice("Получите OAuth-токен через CLI: job-search-hh auth oauth-acquire");
+      if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось подтвердить вход");
+      showNotice("Вход сохранён. Обновляем список резюме…");
+      await loadHhConnection();
+      return;
+    }
+    if (action === "acquire_token") {
+      showNotice("Для этого шага нужна помощь разработчика (OAuth-токен).");
     }
     await loadHhConnection();
   } catch (error) {
-    showNotice(error.message || "Действие HH не выполнено");
+    showNotice(error.message || "Действие HeadHunter не выполнено");
     await loadHhConnection();
   } finally {
-    hhConnectionAction.disabled = false;
+    if (button) button.disabled = false;
   }
+}
+
+hhConnectionAction.addEventListener("click", async () => {
+  await runHhLoginAction(
+    hhConnectionAction.dataset.action,
+    hhConnectionAction.dataset.novncUrl,
+    hhConnectionAction
+  );
 });
+
+if (hhResumesAction) {
+  hhResumesAction.addEventListener("click", async () => {
+    await runHhLoginAction(
+      hhResumesAction.dataset.action,
+      hhResumesAction.dataset.novncUrl,
+      hhResumesAction
+    );
+  });
+}
 
 clearNotice();
 initNavigation();
