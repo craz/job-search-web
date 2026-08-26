@@ -11,6 +11,9 @@ const hhConnection = document.querySelector("#hh-connection");
 const hhConnectionLabel = document.querySelector("#hh-connection-label");
 const hhAccountLabel = document.querySelector("#hh-account-label");
 const hhConnectionAction = document.querySelector("#hh-connection-action");
+const hhResumes = document.querySelector("#hh-resumes");
+const hhResumesStatus = document.querySelector("#hh-resumes-status");
+const hhResumesList = document.querySelector("#hh-resumes-list");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
 const applicationDialog = document.querySelector("#application-dialog");
@@ -1064,11 +1067,62 @@ async function loadHhAccount() {
   }
 }
 
+function clearHhResumes() {
+  if (!hhResumes) return;
+  hhResumes.hidden = true;
+  hhResumesStatus.textContent = "";
+  hhResumesList.innerHTML = "";
+}
+
+function renderHhResumes(payload) {
+  if (!hhResumes) return;
+  clearHhResumes();
+  hhResumes.hidden = false;
+  const status = payload && payload.status ? payload.status : "unavailable";
+  if (status === "available") {
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    if (!items.length) {
+      hhResumesStatus.textContent = "Список пуст";
+      return;
+    }
+    hhResumesStatus.textContent = `${items.length}`;
+    for (const item of items) {
+      if (!item || !item.title) continue;
+      const li = document.createElement("li");
+      li.textContent = item.title;
+      if (item.external_id) li.title = item.external_id;
+      hhResumesList.appendChild(li);
+    }
+    return;
+  }
+  if (status === "not_authorized" || status === "action_required") {
+    hhResumesStatus.textContent = "Нужен вход в браузерной сессии HH";
+    return;
+  }
+  if (status === "permission_blocked") {
+    hhResumesStatus.textContent = "Доступ к списку резюме ограничен";
+    return;
+  }
+  hhResumesStatus.textContent = "Список резюме недоступен";
+}
+
+async function loadHhResumes() {
+  clearHhResumes();
+  try {
+    const response = await fetch("/api/v1/hh/resumes");
+    const payload = await response.json();
+    renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
+  } catch (_error) {
+    renderHhResumes({ status: "unavailable", items: [] });
+  }
+}
+
 async function loadHhConnection() {
   hhConnection.dataset.status = "unknown";
   hhConnectionLabel.textContent = "Проверяем";
   hhConnectionAction.hidden = true;
   clearHhAccountLabel();
+  clearHhResumes();
   try {
     const response = await fetch("/api/v1/hh/connection");
     const payload = await response.json();
@@ -1079,6 +1133,7 @@ async function loadHhConnection() {
     if (payload.status === "connected") {
       await loadHhAccount();
     }
+    await loadHhResumes();
   } catch (error) {
     renderHhConnection({ status: "unavailable", action: { code: "none" } });
   }

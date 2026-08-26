@@ -43,9 +43,10 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'id="hh-connection"' in page.text
     assert 'id="hh-connection-label"' in page.text
     assert 'id="hh-account-label"' in page.text
+    assert 'id="hh-resumes"' in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260826-r12a" in page.text
-    assert "/assets/styles.css?v=20260826-r12a" in page.text
+    assert "/assets/app.js?v=20260826-r13" in page.text
+    assert "/assets/styles.css?v=20260826-r13" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -479,3 +480,18 @@ def test_hh_account_status_is_proxied() -> None:
     assert "0 resumes" not in response.text.lower()
     assert "resumes_count" not in response.text
     assert hh.calls == [("account", None)]
+
+
+def test_hh_resumes_list_is_proxied() -> None:
+    """Web exposes normalized resume summaries without secrets or empty-auth lies."""
+    hh = StubHh(status="connected")
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("GET", "/api/v1/hh/resumes")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "available"
+    assert payload["transport"] == "browser_readonly"
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["external_id"] == "resume-fixture-1"
+    assert "access_token" not in response.text
+    assert hh.calls == [("resumes", None)]

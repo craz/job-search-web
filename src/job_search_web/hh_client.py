@@ -16,6 +16,8 @@ class HhGateway(Protocol):
 
     def account_status(self) -> tuple[int, Any]: ...
 
+    def resumes_list(self) -> tuple[int, Any]: ...
+
     def open_login(self) -> tuple[int, Any]: ...
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]: ...
@@ -28,10 +30,15 @@ class HhClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> tuple[int, Any]:
+    def _request(
+        self, method: str, path: str, *, timeout: float | None = None, **kwargs: Any
+    ) -> tuple[int, Any]:
         try:
             response = httpx.request(
-                method, f"{self.base_url}{path}", timeout=self.timeout_seconds, **kwargs
+                method,
+                f"{self.base_url}{path}",
+                timeout=timeout if timeout is not None else self.timeout_seconds,
+                **kwargs,
             )
             return response.status_code, response.json()
         except (httpx.RequestError, ValueError) as error:
@@ -42,6 +49,10 @@ class HhClient:
 
     def account_status(self) -> tuple[int, Any]:
         return self._request("GET", "/api/v1/account")
+
+    def resumes_list(self) -> tuple[int, Any]:
+        # Browser RO navigation can exceed the default short proxy timeout.
+        return self._request("GET", "/api/v1/resumes", timeout=max(self.timeout_seconds, 60.0))
 
     def open_login(self) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/connection/open-login", json={})

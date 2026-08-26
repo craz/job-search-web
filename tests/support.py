@@ -435,6 +435,31 @@ class StubHh:
         self.calls.append(("account", None))
         return 200, self._account_payload()
 
+    def resumes_list(self) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("resumes", None))
+        if self.profile_status != "available" and self.status != "connected":
+            return 200, {
+                "status": "not_authorized",
+                "items": [],
+                "code": "browser_login_required",
+                "transport": "browser_readonly",
+                "checked_at": "2026-08-25T12:00:00Z",
+            }
+        return 200, {
+            "status": "available",
+            "items": [
+                {"external_id": "resume-fixture-1", "title": "Fixture Product Manager"},
+                {"external_id": "resume-fixture-2", "title": "Fixture Engineer"},
+            ],
+            "code": "ready",
+            "transport": "browser_readonly",
+            "checked_at": "2026-08-25T12:00:00Z",
+        }
+
     def open_login(self) -> tuple[int, Any]:
         if self.unavailable:
             from job_search_web.hh_client import HhUnavailableError

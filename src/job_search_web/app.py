@@ -116,6 +116,22 @@ def create_app(
                 },
             )
 
+    @application.get("/api/v1/hh/resumes")
+    def get_hh_resumes() -> JSONResponse:
+        """Return normalized own-resume list (browser RO); never empty-success on auth fail."""
+        try:
+            return proxy_response(*hh_gateway.resumes_list())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH resumes API is unavailable",
+                    "status": "unavailable",
+                    "items": [],
+                },
+            )
+
     @application.post("/api/v1/hh/connection/open-login")
     def post_hh_open_login() -> JSONResponse:
         """Trigger existing HH noVNC login flow; never bypasses CAPTCHA."""

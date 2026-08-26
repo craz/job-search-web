@@ -309,6 +309,45 @@ button { cursor: pointer; }
   color: var(--color-text-secondary);
 }
 
+.hh-resumes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+  padding: 0.45rem var(--space-5);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-metadata);
+}
+
+.hh-resumes__label {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hh-resumes__status {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.hh-resumes__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hh-resumes__list li {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
 .btn--compact {
   padding: 0.15rem 0.55rem;
   min-height: 1.6rem;
