@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260826-r13b">
-    <script src="/assets/app.js?v=20260826-r13b" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260826-r13c">
+    <script src="/assets/app.js?v=20260826-r13c" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -35,9 +35,18 @@
 
       <div id="hh-resumes" class="hh-resumes" hidden>
         <p class="hh-resumes__label">Резюме HH</p>
-        <p id="hh-resumes-status" class="hh-resumes__status"></p>
-        <ul id="hh-resumes-list" class="hh-resumes__list"></ul>
-        <button class="btn btn--ghost btn--compact" id="hh-resumes-action" type="button" hidden></button>
+        <div class="hh-resumes__content">
+          <p id="hh-resumes-status" class="hh-resumes__status"></p>
+          <ul id="hh-resumes-list" class="hh-resumes__list"></ul>
+          <div id="hh-resumes-actions" class="hh-resumes__actions" hidden>
+            <button class="btn btn--secondary btn--compact" id="hh-resumes-open" type="button" hidden>
+              Войти в HeadHunter
+            </button>
+            <button class="btn btn--primary btn--compact" id="hh-resumes-confirm" type="button" hidden>
+              Я вошёл — показать резюме
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="app-body">

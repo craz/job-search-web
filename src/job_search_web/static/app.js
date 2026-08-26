@@ -14,7 +14,9 @@ const hhConnectionAction = document.querySelector("#hh-connection-action");
 const hhResumes = document.querySelector("#hh-resumes");
 const hhResumesStatus = document.querySelector("#hh-resumes-status");
 const hhResumesList = document.querySelector("#hh-resumes-list");
-const hhResumesAction = document.querySelector("#hh-resumes-action");
+const hhResumesActions = document.querySelector("#hh-resumes-actions");
+const hhResumesOpen = document.querySelector("#hh-resumes-open");
+const hhResumesConfirm = document.querySelector("#hh-resumes-confirm");
 const applicationList = document.querySelector("#applications");
 const applicationCount = document.querySelector("#application-count");
 const applicationDialog = document.querySelector("#application-dialog");
@@ -1068,18 +1070,18 @@ async function loadHhAccount() {
   }
 }
 
-function setHhResumesAction(actionCode, novncUrl) {
-  if (!hhResumesAction) return;
-  if (!actionCode || actionCode === "none" || !HH_ACTION_LABELS[actionCode]) {
-    hhResumesAction.hidden = true;
-    hhResumesAction.dataset.action = "";
-    hhResumesAction.dataset.novncUrl = "";
-    return;
+function setHhResumesActions({ open = false, confirm = false, novncUrl = "" } = {}) {
+  if (!hhResumesActions) return;
+  const showAny = Boolean(open || confirm);
+  hhResumesActions.hidden = !showAny;
+  if (hhResumesOpen) {
+    hhResumesOpen.hidden = !open;
+    hhResumesOpen.dataset.novncUrl = novncUrl || "";
   }
-  hhResumesAction.hidden = false;
-  hhResumesAction.textContent = HH_ACTION_LABELS[actionCode];
-  hhResumesAction.dataset.action = actionCode;
-  hhResumesAction.dataset.novncUrl = novncUrl || "";
+  if (hhResumesConfirm) {
+    hhResumesConfirm.hidden = !confirm;
+    hhResumesConfirm.dataset.novncUrl = novncUrl || "";
+  }
 }
 
 function clearHhResumes() {
@@ -1087,7 +1089,7 @@ function clearHhResumes() {
   hhResumes.hidden = true;
   hhResumesStatus.textContent = "";
   hhResumesList.innerHTML = "";
-  setHhResumesAction("none", "");
+  setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
 }
 
 function renderHhResumes(payload) {
@@ -1097,6 +1099,7 @@ function renderHhResumes(payload) {
   const status = payload && payload.status ? payload.status : "unavailable";
   const actionCode = payload && payload.action && payload.action.code ? payload.action.code : "none";
   const novncUrl = payload && payload.action ? payload.action.novnc_url || "" : "";
+  const code = payload && payload.code ? String(payload.code) : "";
 
   if (status === "available") {
     const items = Array.isArray(payload.items) ? payload.items : [];
@@ -1114,29 +1117,33 @@ function renderHhResumes(payload) {
     return;
   }
 
-  if (status === "not_authorized" || status === "action_required") {
-    hhResumesStatus.textContent =
-      "Чтобы показать ваши резюме, войдите в HeadHunter через кнопку ниже.";
-    setHhResumesAction(actionCode === "none" ? "open_login" : actionCode, novncUrl);
-    return;
-  }
   if (status === "permission_blocked") {
     hhResumesStatus.textContent = "HeadHunter не дал доступ к списку резюме.";
     return;
   }
-  const code = payload && payload.code ? String(payload.code) : "";
-  if (code === "profile_locked" || actionCode === "confirm_login") {
+
+  if (
+    status === "not_authorized" ||
+    status === "action_required" ||
+    actionCode === "open_login" ||
+    actionCode === "confirm_login" ||
+    code === "profile_locked" ||
+    code === "browser_session_not_logged_in" ||
+    code === "browser_login_required"
+  ) {
+    const waitingConfirm = actionCode === "confirm_login" || code === "profile_locked";
+    if (waitingConfirm) {
+      hhResumesStatus.textContent =
+        "Нужен вход в HeadHunter. Если окно входа не видно — нажмите «Войти в HeadHunter». После входа нажмите «Я вошёл — показать резюме».";
+      setHhResumesActions({ open: true, confirm: true, novncUrl });
+      return;
+    }
     hhResumesStatus.textContent =
-      "Сейчас открыто окно входа HeadHunter. Завершите вход там, затем нажмите кнопку ниже.";
-    setHhResumesAction("confirm_login", novncUrl);
+      "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
+    setHhResumesActions({ open: true, confirm: false, novncUrl });
     return;
   }
-  if (actionCode === "open_login") {
-    hhResumesStatus.textContent =
-      "Чтобы показать ваши резюме, войдите в HeadHunter через кнопку ниже.";
-    setHhResumesAction("open_login", novncUrl);
-    return;
-  }
+
   hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
 }
 
@@ -1181,15 +1188,20 @@ async function runHhLoginAction(action, novncUrl, button) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось открыть вход");
       const url = novncUrl || payload.novnc_url || "http://127.0.0.1:6080/";
-      window.open(url, "_blank", "noopener");
-      showNotice(
-        "Открылось окно входа HeadHunter. Войдите в свой аккаунт там, затем нажмите «Я вошёл — показать резюме»."
-      );
+      const opened = window.open(url, "_blank", "noopener");
       if (hhResumes) {
         hhResumes.hidden = false;
-        hhResumesStatus.textContent =
-          "Войдите в HeadHunter в открывшемся окне. Когда увидите свой аккаунт — вернитесь сюда.";
-        setHhResumesAction("confirm_login", url);
+        if (!opened) {
+          hhResumesStatus.textContent =
+            "Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для Job Search и снова нажмите «Войти в HeadHunter».";
+          setHhResumesActions({ open: true, confirm: true, novncUrl: url });
+          showNotice("Разрешите всплывающие окна, затем снова нажмите «Войти в HeadHunter».");
+        } else {
+          hhResumesStatus.textContent =
+            "Откройте вкладку входа HeadHunter, войдите в аккаунт, затем вернитесь сюда и нажмите «Я вошёл — показать резюме».";
+          setHhResumesActions({ open: true, confirm: true, novncUrl: url });
+          showNotice("Войдите в HeadHunter во вкладке входа, затем нажмите «Я вошёл — показать резюме».");
+        }
       }
       return;
     }
@@ -1221,13 +1233,14 @@ hhConnectionAction.addEventListener("click", async () => {
   );
 });
 
-if (hhResumesAction) {
-  hhResumesAction.addEventListener("click", async () => {
-    await runHhLoginAction(
-      hhResumesAction.dataset.action,
-      hhResumesAction.dataset.novncUrl,
-      hhResumesAction
-    );
+if (hhResumesOpen) {
+  hhResumesOpen.addEventListener("click", async () => {
+    await runHhLoginAction("open_login", hhResumesOpen.dataset.novncUrl, hhResumesOpen);
+  });
+}
+if (hhResumesConfirm) {
+  hhResumesConfirm.addEventListener("click", async () => {
+    await runHhLoginAction("confirm_login", hhResumesConfirm.dataset.novncUrl, hhResumesConfirm);
   });
 }
 

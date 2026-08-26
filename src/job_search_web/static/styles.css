@@ -312,9 +312,9 @@ button { cursor: pointer; }
 .hh-resumes {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 1rem;
-  padding: 0.45rem var(--space-5);
+  align-items: flex-start;
+  gap: 0.5rem 1rem;
+  padding: 0.55rem var(--space-5);
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
@@ -323,15 +323,27 @@ button { cursor: pointer; }
 
 .hh-resumes__label {
   margin: 0;
+  padding-top: 0.2rem;
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.hh-resumes__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  flex: 1 1 16rem;
+  min-width: 0;
 }
 
 .hh-resumes__status {
   margin: 0;
   color: var(--color-text-secondary);
+  max-width: 52rem;
 }
 
 .hh-resumes__list {
@@ -348,8 +360,10 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-medium);
 }
 
-.hh-resumes #hh-resumes-action {
-  margin-left: auto;
+.hh-resumes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .btn--compact {
