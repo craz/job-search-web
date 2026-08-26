@@ -44,8 +44,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'id="hh-connection-label"' in page.text
     assert 'id="hh-account-label"' in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260825-r12" in page.text
-    assert "/assets/styles.css?v=20260825-r12" in page.text
+    assert "/assets/app.js?v=20260826-r12a" in page.text
+    assert "/assets/styles.css?v=20260826-r12a" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
