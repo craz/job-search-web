@@ -21,6 +21,9 @@ def vacancy(status: str = "new") -> dict[str, Any]:
         "url": "https://example.com/vacancies/42",
         "description": "Synthetic Web fixture.",
         "status": status,
+        "first_seen_at": "2026-08-18T10:00:00Z",
+        "last_seen_at": "2026-08-18T10:00:00Z",
+        "source_published_at": None,
         "created_at": "2026-08-18T10:00:00Z",
         "updated_at": "2026-08-18T10:00:00Z",
         "company": {

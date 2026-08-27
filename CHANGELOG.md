@@ -3,9 +3,8 @@
 ## Unreleased
 
 - R2.2.5 corrected: primary «Подходящие вакансии» via
-  `POST /api/v1/hh/vacancies/suitable` (resume_suitable); source_total vs
-  processed wording; deferred «Свой поиск»; local «Фильтр списка»; no giant
-  salary checkbox / no primary SearchProfile form.
+  `POST /api/v1/hh/vacancies/suitable`; «Получена» from `first_seen_at`;
+  default sort newest-first; deferred «Свой поиск»; local list filter.
 - Add a Core-backed normalized Assessments dashboard and manual contract form.
 - Add a Core-backed Hypotheses dashboard with experiment creation and result capture.
 - Add a Core-backed confirmed People dashboard with local contact statuses and no

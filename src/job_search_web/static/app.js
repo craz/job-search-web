@@ -410,6 +410,7 @@ function vacancyRow(item) {
           </div>
         </div>
         <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(excerpt(item.description))}</p>
+        <p class="list-row__meta">Получена: ${escapeHtml(formatFirstSeen(item.first_seen_at))}</p>
       </div>
       <div class="list-row__trailing">
         ${assessmentSummary}
@@ -427,6 +428,21 @@ function vacancyRow(item) {
 function formatDate(value) {
   if (!value) return "Дата не указана";
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatFirstSeen(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date);
+  if (sameDay) return `сегодня, ${time}`;
+  const dayMonth = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(date);
+  return `${dayMonth}, ${time}`;
 }
 
 function formatJournalDate(value) {
@@ -636,6 +652,7 @@ async function loadApplications() {
 
 let vacancySearchRunning = false;
 let vacancyListFilter = { text: "", status: "" };
+let vacancyListSort = "first_seen_desc";
 
 const SEARCH_RECOVERY = {
   browser_login_required: "Нужно войти в HeadHunter",
@@ -732,10 +749,24 @@ function vacancyPassesFilter(item) {
   return blob.includes(text);
 }
 
+function compareVacanciesByFirstSeen(a, b, ascending) {
+  const ta = Date.parse(a.first_seen_at || a.created_at || "");
+  const tb = Date.parse(b.first_seen_at || b.created_at || "");
+  const safeA = Number.isNaN(ta) ? 0 : ta;
+  const safeB = Number.isNaN(tb) ? 0 : tb;
+  return ascending ? safeA - safeB : safeB - safeA;
+}
+
+function sortVacancyItems(items) {
+  const ascending = vacancyListSort === "first_seen_asc";
+  return [...items].sort((a, b) => compareVacanciesByFirstSeen(a, b, ascending));
+}
+
 function renderVacancyList(items) {
   const filtered = items.filter(vacancyPassesFilter);
+  const sorted = sortVacancyItems(filtered);
   setSectionCount(count, items.length);
-  grid.innerHTML = filtered.length ? filtered.map(vacancyRow).join("") : "";
+  grid.innerHTML = sorted.length ? sorted.map(vacancyRow).join("") : "";
   if (!items.length) {
     renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
       buttonId: "suitable-run",
@@ -897,15 +928,18 @@ function initVacancySearchTabs() {
 function initVacancyListFilter() {
   const text = document.querySelector("#vacancy-filter-text");
   const status = document.querySelector("#vacancy-filter-status");
+  const sort = document.querySelector("#vacancy-list-sort");
   const apply = () => {
     vacancyListFilter = {
       text: text?.value || "",
       status: status?.value || "",
     };
+    vacancyListSort = sort?.value || "first_seen_desc";
     if (knownVacancies?.length) renderVacancyList(knownVacancies);
   };
   text?.addEventListener("input", apply);
   status?.addEventListener("change", apply);
+  sort?.addEventListener("change", apply);
 }
 
 function initVacancySearch() {

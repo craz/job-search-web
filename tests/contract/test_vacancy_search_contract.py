@@ -41,6 +41,7 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
 
 def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     js = (STATIC / "app.js").read_text(encoding="utf-8")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert "/api/v1/hh/vacancies/suitable" in js
     assert "Проверяем подходящие вакансии" in js
     assert "Проверено:" in js
@@ -48,6 +49,11 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "Уже в базе:" in js
     assert "HH предлагает" in js
     assert "vacancyPassesFilter" in js
+    assert "formatFirstSeen" in js
+    assert "Получена:" in js
+    assert "first_seen_desc" in js
+    assert "vacancy-list-sort" in html
+    assert "Опубликовано" not in js
     assert "resume_search_page_mismatch" in js
     assert "Нужно войти в HeadHunter" in js
     assert "HeadHunter требует действие в браузере" in js
