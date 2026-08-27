@@ -146,6 +146,8 @@ class StubCore:
         self.profile_version: dict[str, Any] | None = None
         self.hh_resume_link: dict[str, Any] | None = None
         self.resume_content: dict[str, Any] | None = None
+        self.search_profiles: list[dict[str, Any]] = []
+        self.search_runs: list[dict[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -286,6 +288,68 @@ class StubCore:
             "resume_content": self.resume_content,
         }
 
+    def list_search_profiles(self) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-profile-list", None))
+        return 200, {
+            "items": list(self.search_profiles),
+            "total": len(self.search_profiles),
+        }
+
+    def create_search_profile(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-profile-create", payload))
+        created = {
+            "id": "00000000-0000-0000-0000-000000000080",
+            "label": payload.get("label") or "Основной поиск",
+            "text": payload["text"],
+            "area_id": payload.get("area_id"),
+            "salary": payload.get("salary"),
+            "experience": payload.get("experience"),
+            "employment": payload.get("employment"),
+            "schedule": payload.get("schedule"),
+            "search_field": payload.get("search_field"),
+            "only_with_salary": payload.get("only_with_salary"),
+            "created_at": "2026-08-27T12:00:00Z",
+            "updated_at": "2026-08-27T12:00:00Z",
+        }
+        self.search_profiles.insert(0, created)
+        return 201, created
+
+    def get_search_profile(self, profile_id: str) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-profile-get", profile_id))
+        for item in self.search_profiles:
+            if item["id"] == profile_id:
+                return 200, item
+        return 404, {"code": "search_profile_not_found", "message": "SearchProfile not found"}
+
+    def update_search_profile(self, profile_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-profile-update", (profile_id, payload)))
+        for index, item in enumerate(self.search_profiles):
+            if item["id"] == profile_id:
+                updated = {**item, **payload, "updated_at": "2026-08-27T12:30:00Z"}
+                self.search_profiles[index] = updated
+                return 200, updated
+        return 404, {"code": "search_profile_not_found", "message": "SearchProfile not found"}
+
+    def list_search_runs(self, *, search_profile_id: str | None = None) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-run-list", search_profile_id))
+        items = list(self.search_runs)
+        if search_profile_id:
+            items = [r for r in items if r.get("search_profile_id") == search_profile_id]
+        return 200, {"items": items, "total": len(items)}
+
+    def get_search_run(self, run_id: str) -> tuple[int, Any]:
+        self._guard()
+        self.calls.append(("search-run-get", run_id))
+        for item in self.search_runs:
+            if item["id"] == run_id:
+                return 200, item
+        return 404, {"code": "search_run_not_found", "message": "SearchRun not found"}
+
 
 class StubOsint:
     """In-memory normalized research gateway without provider or storage access."""
@@ -393,6 +457,7 @@ class StubHh:
         self.status = status
         self.profile_status = profile_status
         self.active_external_id: str | None = None
+        self.search_result: tuple[int, Any] | None = None
         self.calls: list[tuple[str, Any]] = []
 
     def _payload(self) -> dict[str, Any]:
@@ -674,6 +739,44 @@ class StubHh:
         self.calls.append(("confirm", confirmed))
         self.status = "connected" if confirmed else self.status
         return 200, {"auth_session": "present", "connection": self._payload()}
+
+    def search_vacancies(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("vacancies-search", payload))
+        if getattr(self, "search_result", None) is not None:
+            status_code, body = self.search_result
+            return status_code, body
+        run = {
+            "id": "00000000-0000-0000-0000-000000000081",
+            "search_profile_id": payload["search_profile_id"],
+            "status": "success",
+            "found_count": 2,
+            "created_count": 1,
+            "updated_count": 0,
+            "unchanged_count": 1,
+            "error_count": 0,
+            "error_code": None,
+            "started_at": "2026-08-27T12:00:00Z",
+            "finished_at": "2026-08-27T12:02:00Z",
+            "criteria_snapshot": {"text": "python", "area_id": "1"},
+            "execution_snapshot": {
+                "order": "publication_time",
+                "max_pages": 1,
+                "transport": "browser",
+            },
+        }
+        return 200, {
+            "ok": True,
+            "status": "success",
+            "code": "ready",
+            "search_profile_id": payload["search_profile_id"],
+            "search_run": run,
+            "items": [],
+            "hh_writes": False,
+        }
 
 
 class WebClient:

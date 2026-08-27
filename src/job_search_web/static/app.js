@@ -634,7 +634,10 @@ async function loadApplications() {
 
 async function loadVacancies() {
   grid.setAttribute("aria-busy", "true");
-  renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает данные у Core API.");
+  // Keep existing rows visible while a search is running; otherwise show loading.
+  if (!vacancySearchRunning) {
+    renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает данные у Core API.");
+  }
   try {
     const response = await fetch("/api/v1/vacancies");
     const payload = await response.json();
@@ -684,6 +687,300 @@ async function loadVacancies() {
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
+}
+
+/* --- Vacancy search (R2.2.5) --- */
+
+let activeSearchProfileId = null;
+let vacancySearchRunning = false;
+let lastSearchRunSummary = null;
+
+const SEARCH_RECOVERY = {
+  browser_login_required: "Нужно войти в HeadHunter",
+  browser_session_not_logged_in: "Нужно войти в HeadHunter",
+  not_authorized: "Нужно войти в HeadHunter",
+  browser_captcha_or_action_required: "HeadHunter требует действие в браузере",
+  action_required: "HeadHunter требует действие в браузере",
+  profile_locked: "Профиль браузера HeadHunter сейчас занят",
+  transport_unavailable: "HeadHunter сейчас недоступен",
+  browser_vacancy_read_failed: "HeadHunter сейчас недоступен",
+  search_page_failed: "Не удалось получить результаты поиска",
+  page_parse_failed: "Не удалось разобрать страницу поиска",
+  vacancy_detail_failed: "Не удалось открыть часть вакансий",
+  core_ingest_failed: "Не удалось сохранить часть вакансий",
+  partial_pagination: "Поиск завершён не полностью",
+  hh_unavailable: "HeadHunter сейчас недоступен",
+};
+
+function searchFormEls() {
+  return {
+    form: document.querySelector("#vacancy-search-form"),
+    submit: document.querySelector("#vacancy-search-submit"),
+    status: document.querySelector("#vacancy-search-status"),
+    last: document.querySelector("#vacancy-search-last"),
+    lastBody: document.querySelector("#vacancy-search-last-body"),
+    text: document.querySelector("#search-text"),
+    area: document.querySelector("#search-area"),
+    salaryFrom: document.querySelector("#search-salary-from"),
+    onlySalary: document.querySelector("#search-only-salary"),
+    experience: document.querySelector("#search-experience"),
+    employment: document.querySelector("#search-employment"),
+    schedule: document.querySelector("#search-schedule"),
+    searchField: document.querySelector("#search-field"),
+    maxPages: document.querySelector("#search-max-pages"),
+  };
+}
+
+function setSearchStatus(message, { running = false, error = false } = {}) {
+  const { status } = searchFormEls();
+  if (!status) return;
+  status.textContent = message || "";
+  status.classList.toggle("is-running", Boolean(running));
+  status.classList.toggle("is-error", Boolean(error));
+}
+
+function setSearchRunning(running) {
+  vacancySearchRunning = running;
+  const { submit, form } = searchFormEls();
+  if (submit) {
+    submit.disabled = running;
+    submit.textContent = running ? "Ищем…" : "Найти вакансии";
+  }
+  if (form) {
+    form.querySelectorAll("input, select, button").forEach((el) => {
+      if (el.id === "vacancy-search-submit") return;
+      el.disabled = running;
+    });
+  }
+}
+
+function criteriaPayloadFromForm() {
+  const els = searchFormEls();
+  const text = (els.text?.value || "").trim();
+  const area = (els.area?.value || "").trim() || null;
+  const salaryRaw = (els.salaryFrom?.value || "").trim();
+  const salaryFrom = salaryRaw === "" ? null : Number(salaryRaw);
+  const payload = {
+    label: "Основной поиск",
+    text: text || "python",
+    area_id: area,
+    experience: (els.experience?.value || "").trim() || null,
+    employment: (els.employment?.value || "").trim() || null,
+    schedule: (els.schedule?.value || "").trim() || null,
+    search_field: (els.searchField?.value || "").trim() || null,
+    only_with_salary: Boolean(els.onlySalary?.checked) || null,
+    salary: null,
+  };
+  if (salaryFrom !== null && Number.isFinite(salaryFrom)) {
+    payload.salary = { from: salaryFrom, currency: "RUR" };
+  }
+  return payload;
+}
+
+function fillSearchFormFromProfile(profile) {
+  const els = searchFormEls();
+  if (!els.form || !profile) return;
+  els.text.value = profile.text || "";
+  els.area.value = profile.area_id || "";
+  const salary = profile.salary && typeof profile.salary === "object" ? profile.salary : null;
+  els.salaryFrom.value = salary && salary.from != null ? String(salary.from) : "";
+  els.onlySalary.checked = Boolean(profile.only_with_salary);
+  els.experience.value = profile.experience || "";
+  els.employment.value = profile.employment || "";
+  els.schedule.value = profile.schedule || "";
+  els.searchField.value = profile.search_field || "";
+}
+
+function humanRecovery(code) {
+  if (!code) return "";
+  return SEARCH_RECOVERY[code] || "Поиск завершился с ошибкой";
+}
+
+function renderSearchRunSummary(run, { acquisitionCode } = {}) {
+  const els = searchFormEls();
+  if (!els.last || !els.lastBody || !run) return;
+  lastSearchRunSummary = run;
+  const when = formatDate(run.finished_at || run.started_at);
+  const status = String(run.status || "");
+  const found = Number(run.found_count || 0);
+  const created = Number(run.created_count || 0);
+  const updated = Number(run.updated_count || 0);
+  const unchanged = Number(run.unchanged_count || 0);
+  const errors = Number(run.error_count || 0);
+  const recovery = humanRecovery(run.error_code || acquisitionCode);
+  let headline = "";
+  if (status === "running") {
+    headline = "Ищем вакансии…";
+  } else if (status === "success" && found === 0) {
+    headline = "По вашему запросу результатов нет";
+  } else if (status === "success") {
+    headline = "Поиск завершён";
+  } else if (status === "partial") {
+    headline = "Поиск завершён не полностью";
+  } else if (status === "failed") {
+    headline = recovery || "Поиск не удался";
+  } else {
+    headline = "Последний поиск";
+  }
+  const counts =
+    status === "failed" && found === 0
+      ? ""
+      : `Найдено: ${found}. Новых: ${created}. Обновлено: ${updated}. Уже были: ${unchanged}${
+          errors ? `. Ошибок: ${errors}` : ""
+        }.`;
+  const extra =
+    status === "partial" && recovery
+      ? recovery
+      : status === "failed" && recovery && headline !== recovery
+        ? recovery
+        : "";
+  els.last.hidden = false;
+  els.lastBody.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
+  // Avoid raw UUID / snapshot / transport text in the primary summary.
+  const blob = els.lastBody.textContent;
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-/i.test(blob) || /criteria_snapshot|execution_snapshot|transport/i.test(blob)) {
+    els.lastBody.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
+  }
+}
+
+async function ensureSearchProfile() {
+  const listResponse = await fetch("/api/v1/search-profiles");
+  const listPayload = await listResponse.json();
+  if (!listResponse.ok) {
+    throw new Error(listPayload.message || "Не удалось загрузить параметры поиска");
+  }
+  if (listPayload.total && listPayload.items?.length) {
+    const profile = listPayload.items[0];
+    activeSearchProfileId = profile.id;
+    fillSearchFormFromProfile(profile);
+    return profile;
+  }
+  const createdResponse = await fetch("/api/v1/search-profiles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      label: "Основной поиск",
+      text: "python",
+      area_id: "1",
+    }),
+  });
+  const created = await createdResponse.json();
+  if (!createdResponse.ok) {
+    throw new Error(created.message || "Не удалось создать параметры поиска");
+  }
+  activeSearchProfileId = created.id;
+  fillSearchFormFromProfile(created);
+  return created;
+}
+
+async function saveSearchProfileFromForm() {
+  const payload = criteriaPayloadFromForm();
+  if (!activeSearchProfileId) {
+    const createdResponse = await fetch("/api/v1/search-profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const created = await createdResponse.json();
+    if (!createdResponse.ok) {
+      throw new Error(created.message || "Не удалось сохранить параметры поиска");
+    }
+    activeSearchProfileId = created.id;
+    return created;
+  }
+  const response = await fetch(`/api/v1/search-profiles/${activeSearchProfileId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const updated = await response.json();
+  if (!response.ok) {
+    throw new Error(updated.message || "Не удалось сохранить параметры поиска");
+  }
+  return updated;
+}
+
+async function loadLatestSearchRun() {
+  if (!activeSearchProfileId) return;
+  const response = await fetch(
+    `/api/v1/search-runs?search_profile_id=${encodeURIComponent(activeSearchProfileId)}`,
+  );
+  const payload = await response.json();
+  if (!response.ok || !payload.items?.length) return;
+  const latest = payload.items[0];
+  renderSearchRunSummary(latest);
+  if (latest.status === "running") {
+    setSearchRunning(true);
+    setSearchStatus("Ищем вакансии…", { running: true });
+  }
+}
+
+async function runVacancySearch(event) {
+  event.preventDefault();
+  if (vacancySearchRunning) return;
+  const els = searchFormEls();
+  const maxPages = Math.max(1, Math.min(5, Number(els.maxPages?.value || 1) || 1));
+  setSearchRunning(true);
+  setSearchStatus("Ищем вакансии…", { running: true });
+  try {
+    await saveSearchProfileFromForm();
+    const response = await fetch("/api/v1/hh/vacancies/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        search_profile_id: activeSearchProfileId,
+        execution: { order: "publication_time", max_pages: maxPages },
+      }),
+    });
+    const payload = await response.json();
+    const run = payload.search_run || null;
+    if (run) {
+      renderSearchRunSummary(run, { acquisitionCode: payload.code });
+    }
+    if (!response.ok && !run) {
+      const msg = humanRecovery(payload.code) || payload.message || "Поиск не удался";
+      setSearchStatus(msg, { error: true });
+      return;
+    }
+    const status = String(run?.status || payload.status || "");
+    if (status === "failed") {
+      setSearchStatus(humanRecovery(run?.error_code || payload.code) || "Поиск не удался", {
+        error: true,
+      });
+    } else if (status === "partial") {
+      setSearchStatus("Поиск завершён не полностью", { error: false });
+    } else if (status === "success" && Number(run?.found_count || 0) === 0) {
+      setSearchStatus("По вашему запросу результатов нет");
+    } else {
+      setSearchStatus("Поиск завершён");
+    }
+    await loadVacancies();
+  } catch (error) {
+    setSearchStatus(error.message || "Поиск не удался", { error: true });
+  } finally {
+    setSearchRunning(false);
+  }
+}
+
+function initVacancySearch() {
+  const els = searchFormEls();
+  if (!els.form) return;
+  els.form.addEventListener("submit", (event) => {
+    void runVacancySearch(event);
+  });
+  // Persist criteria when the user leaves a field (reload must restore them).
+  els.form.addEventListener("change", () => {
+    if (vacancySearchRunning) return;
+    void saveSearchProfileFromForm().catch(() => {});
+  });
+  void (async () => {
+    try {
+      await ensureSearchProfile();
+      await loadLatestSearchRun();
+    } catch (error) {
+      setSearchStatus(error.message || "Не удалось загрузить параметры поиска", { error: true });
+    }
+  })();
 }
 
 document.querySelector("#open-form").addEventListener("click", () => dialog.showModal());
@@ -1687,6 +1984,7 @@ if (hhResumeSync) {
 clearNotice();
 initNavigation();
 loadHhConnection();
+initVacancySearch();
 loadVacancies();
 loadApplications();
 loadMetrics();

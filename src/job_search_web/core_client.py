@@ -60,6 +60,20 @@ class CoreGateway(Protocol):
 
     def get_candidate_context(self) -> tuple[int, Any]: ...
 
+    def list_search_profiles(self) -> tuple[int, Any]: ...
+
+    def create_search_profile(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
+
+    def get_search_profile(self, profile_id: str) -> tuple[int, Any]: ...
+
+    def update_search_profile(
+        self, profile_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]: ...
+
+    def list_search_runs(self, *, search_profile_id: str | None = None) -> tuple[int, Any]: ...
+
+    def get_search_run(self, run_id: str) -> tuple[int, Any]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -178,3 +192,30 @@ class CoreClient:
     def get_candidate_context(self) -> tuple[int, Any]:
         """Return CandidateProfile / ProfileVersion / HH resume link from Core."""
         return self._request("GET", "/api/v1/candidate-context")
+
+    def list_search_profiles(self) -> tuple[int, Any]:
+        """List mutable SearchProfiles (newest first)."""
+        return self._request("GET", "/api/v1/search-profiles")
+
+    def create_search_profile(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Create one SearchProfile with semantic criteria only."""
+        return self._request("POST", "/api/v1/search-profiles", json=payload)
+
+    def get_search_profile(self, profile_id: str) -> tuple[int, Any]:
+        """Read one SearchProfile by id."""
+        return self._request("GET", f"/api/v1/search-profiles/{profile_id}")
+
+    def update_search_profile(self, profile_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Patch semantic SearchProfile criteria."""
+        return self._request("PATCH", f"/api/v1/search-profiles/{profile_id}", json=payload)
+
+    def list_search_runs(self, *, search_profile_id: str | None = None) -> tuple[int, Any]:
+        """List SearchRuns, optionally filtered by SearchProfile."""
+        path = "/api/v1/search-runs"
+        if search_profile_id:
+            path = f"{path}?search_profile_id={search_profile_id}"
+        return self._request("GET", path)
+
+    def get_search_run(self, run_id: str) -> tuple[int, Any]:
+        """Read one SearchRun including snapshots and counters."""
+        return self._request("GET", f"/api/v1/search-runs/{run_id}")

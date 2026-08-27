@@ -483,6 +483,120 @@ button { cursor: pointer; }
   margin-bottom: var(--space-4);
 }
 
+.vacancy-search {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.vacancy-search__header {
+  margin-bottom: var(--space-3);
+}
+
+.vacancy-search__title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vacancy-search__hint {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.vacancy-search__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.vacancy-search__advanced {
+  margin-top: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.vacancy-search__advanced summary {
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+}
+
+.vacancy-search__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.vacancy-search__status {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.vacancy-search__status.is-running {
+  color: var(--color-text);
+}
+
+.vacancy-search__status.is-error {
+  color: var(--color-danger, #b42318);
+}
+
+.vacancy-search__last {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.vacancy-search__last-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.vacancy-search__last-body {
+  margin: 0;
+  font-size: var(--font-size-secondary);
+  line-height: 1.45;
+}
+
+.field--checkbox {
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  gap: var(--space-2);
+}
+
+.control--checkbox {
+  width: 1rem;
+  height: 1rem;
+  min-height: auto;
+  padding: 0;
+}
+
+.field--inline {
+  max-width: 12rem;
+}
+
+@media (max-width: 960px) {
+  .vacancy-search__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .vacancy-search__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .app-main h2 {
   font-family: var(--font-family-ui);
   font-size: var(--font-size-section-title);

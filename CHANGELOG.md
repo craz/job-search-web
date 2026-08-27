@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- R2.2.5: human-readable vacancy search on «Вакансии» — SearchProfile form,
+  manual HH SearchRun via `POST /api/v1/hh/vacancies/search`, running/summary UX,
+  list refresh (no page_size; default max_pages=1).
 - Add a Core-backed normalized Assessments dashboard and manual contract form.
 - Add a Core-backed Hypotheses dashboard with experiment creation and result capture.
 - Add a Core-backed confirmed People dashboard with local contact statuses and no

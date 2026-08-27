@@ -26,6 +26,8 @@ class HhGateway(Protocol):
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]: ...
 
+    def search_vacancies(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
+
 
 class HhClient:
     """Bounded HTTP client for HH connection/account; never touches HH volumes."""
@@ -83,3 +85,12 @@ class HhClient:
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/connection/confirm", json={"confirmed": confirmed})
+
+    def search_vacancies(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Run HH SearchRun orchestration (bounded; measured ~151s for max_pages=1)."""
+        return self._request(
+            "POST",
+            "/api/v1/vacancies/search",
+            json=payload,
+            timeout=max(self.timeout_seconds, 180.0),
+        )

@@ -234,6 +234,86 @@ def create_app(
                 content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
             )
 
+    @application.get("/api/v1/search-profiles")
+    def get_search_profiles() -> JSONResponse:
+        """List SearchProfiles from Core (newest first)."""
+        try:
+            return proxy_response(*gateway.list_search_profiles())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/search-profiles")
+    def post_search_profile(payload: dict[str, Any]) -> JSONResponse:
+        """Create one SearchProfile with semantic criteria only."""
+        try:
+            return proxy_response(*gateway.create_search_profile(payload))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/search-profiles/{profile_id}")
+    def get_search_profile(profile_id: str) -> JSONResponse:
+        """Read one SearchProfile."""
+        try:
+            return proxy_response(*gateway.get_search_profile(profile_id))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/search-profiles/{profile_id}")
+    def patch_search_profile(profile_id: str, payload: dict[str, Any]) -> JSONResponse:
+        """Update semantic SearchProfile criteria."""
+        try:
+            return proxy_response(*gateway.update_search_profile(profile_id, payload))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/search-runs")
+    def get_search_runs(search_profile_id: str | None = None) -> JSONResponse:
+        """List SearchRuns; optional filter by SearchProfile."""
+        try:
+            return proxy_response(*gateway.list_search_runs(search_profile_id=search_profile_id))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/search-runs/{run_id}")
+    def get_search_run(run_id: str) -> JSONResponse:
+        """Read one SearchRun including counters and snapshots."""
+        try:
+            return proxy_response(*gateway.get_search_run(run_id))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hh/vacancies/search")
+    def post_hh_vacancies_search(payload: dict[str, Any]) -> JSONResponse:
+        """Proxy HH SearchRun orchestration (browser acquire; long timeout)."""
+        profile_id = payload.get("search_profile_id")
+        if not isinstance(profile_id, str) or not profile_id.strip():
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "code": "invalid_request",
+                    "message": "search_profile_id is required (string)",
+                },
+            )
+        execution = payload.get("execution")
+        if execution is not None and not isinstance(execution, dict):
+            return JSONResponse(
+                status_code=400,
+                content={"code": "invalid_request", "message": "execution must be an object"},
+            )
+        body: dict[str, Any] = {"search_profile_id": profile_id.strip()}
+        if isinstance(execution, dict):
+            body["execution"] = execution
+        try:
+            return proxy_response(*hh_gateway.search_vacancies(body))
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH vacancy search API is unavailable",
+                },
+            )
+
     @application.get("/dev/revision", include_in_schema=False)
     def dev_revision() -> dict[str, str | bool]:
         """Expose an asset revision used by the local browser reload loop."""

@@ -91,6 +91,93 @@
             <button class="btn btn--primary" id="open-form" type="button">+ Добавить вакансию</button>
           </section>
 
+          <section class="vacancy-search" id="vacancy-search" aria-labelledby="vacancy-search-title">
+            <div class="vacancy-search__header">
+              <h3 id="vacancy-search-title" class="vacancy-search__title">Поиск вакансий</h3>
+              <p class="vacancy-search__hint">Критерии сохраняются. Поиск запускается вручную.</p>
+            </div>
+            <form id="vacancy-search-form" class="vacancy-search__form" autocomplete="off">
+              <div class="vacancy-search__grid">
+                <label class="field">
+                  <span class="field__label">Текст поиска</span>
+                  <input class="control" id="search-text" name="text" type="text" required maxlength="1000" placeholder="например, python" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Регион</span>
+                  <select class="control control--select" id="search-area" name="area_id">
+                    <option value="">Любой</option>
+                    <option value="1">Москва</option>
+                    <option value="2">Санкт-Петербург</option>
+                    <option value="113">Россия</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">Зарплата от</span>
+                  <input class="control" id="search-salary-from" name="salary_from" type="number" min="0" step="1000" placeholder="не важно" />
+                </label>
+                <label class="field field--checkbox">
+                  <span class="field__label">Только с зарплатой</span>
+                  <input class="control control--checkbox" id="search-only-salary" name="only_with_salary" type="checkbox" />
+                </label>
+                <label class="field">
+                  <span class="field__label">Опыт</span>
+                  <select class="control control--select" id="search-experience" name="experience">
+                    <option value="">Любой</option>
+                    <option value="noExperience">Нет опыта</option>
+                    <option value="between1And3">1–3 года</option>
+                    <option value="between3And6">3–6 лет</option>
+                    <option value="moreThan6">Более 6 лет</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">Занятость</span>
+                  <select class="control control--select" id="search-employment" name="employment">
+                    <option value="">Любая</option>
+                    <option value="full">Полная</option>
+                    <option value="part">Частичная</option>
+                    <option value="project">Проект / разовое</option>
+                    <option value="probation">Стажировка</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">График</span>
+                  <select class="control control--select" id="search-schedule" name="schedule">
+                    <option value="">Любой</option>
+                    <option value="fullDay">Полный день</option>
+                    <option value="shift">Сменный</option>
+                    <option value="flexible">Гибкий</option>
+                    <option value="remote">Удалённая работа</option>
+                    <option value="flyInFlyOut">Вахта</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field__label">Искать в</span>
+                  <select class="control control--select" id="search-field" name="search_field">
+                    <option value="">Везде</option>
+                    <option value="name">В названии</option>
+                    <option value="company_name">В компании</option>
+                    <option value="description">В описании</option>
+                  </select>
+                </label>
+              </div>
+              <details class="vacancy-search__advanced">
+                <summary>Дополнительно</summary>
+                <label class="field field--inline">
+                  <span class="field__label">Страниц поиска</span>
+                  <input class="control" id="search-max-pages" name="max_pages" type="number" min="1" max="5" value="1" />
+                </label>
+              </details>
+              <div class="vacancy-search__actions">
+                <button class="btn btn--primary" id="vacancy-search-submit" type="submit">Найти вакансии</button>
+                <p class="vacancy-search__status" id="vacancy-search-status" role="status" aria-live="polite"></p>
+              </div>
+            </form>
+            <div class="vacancy-search__last" id="vacancy-search-last" hidden>
+              <p class="vacancy-search__last-title">Последний поиск</p>
+              <p class="vacancy-search__last-body" id="vacancy-search-last-body"></p>
+            </div>
+          </section>
+
           <section id="vacancies" class="list-rows vacancy-list" aria-live="polite" aria-busy="true">
             <article class="state state--loading" aria-busy="true">
               <span class="loader state__loader" aria-hidden="true"></span>
