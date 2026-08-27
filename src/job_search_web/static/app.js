@@ -112,7 +112,7 @@ const personStatusLabels = { new: "Новый", researching: "Изучаю", con
 const personRoleLabels = { hiring_manager: "Нанимающий менеджер", recruiter: "Рекрутер", referral: "Referral", peer: "Коллега" };
 
 const vacancyStatusBadge = {
-  new: "neutral",
+  new: "accent",
   reviewing: "info",
   shortlisted: "success",
   rejected: "danger",
@@ -399,7 +399,7 @@ function vacancyRow(item) {
         </div>
       </details>`
     : "";
-  return `<article class="list-row-group" data-id="${escapeHtml(item.id)}">
+  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}">
     <div class="list-row">
       <div class="list-row__primary">
         <div class="list-row__identity">
@@ -434,15 +434,11 @@ function formatFirstSeen(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  const now = new Date();
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
   const time = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date);
-  if (sameDay) return `сегодня, ${time}`;
-  const dayMonth = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit" }).format(date);
-  return `${dayMonth}, ${time}`;
+  return `${day}.${month}.${year}, ${time}`;
 }
 
 function formatJournalDate(value) {

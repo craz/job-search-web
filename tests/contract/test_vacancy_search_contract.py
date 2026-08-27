@@ -50,6 +50,7 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "HH предлагает" in js
     assert "vacancyPassesFilter" in js
     assert "formatFirstSeen" in js
+    assert "getFullYear()" in js
     assert "Получена:" in js
     assert "first_seen_desc" in js
     assert "vacancy-list-sort" in html

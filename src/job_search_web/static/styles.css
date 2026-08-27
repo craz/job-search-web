@@ -863,6 +863,13 @@ button { cursor: pointer; }
 
 .badge--neutral .badge__dot { background: var(--color-text-secondary); }
 
+.badge--accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.badge--accent .badge__dot { background: var(--color-accent); }
+
 .badge--info {
   background: var(--color-info-soft);
   color: var(--color-info);
@@ -1026,6 +1033,45 @@ button { cursor: pointer; }
 .list-row-group .list-row:hover,
 .list-row-group .assessment-details > summary.list-row:hover {
   background: var(--color-surface-hover);
+}
+
+/* Vacancy list — restrained hierarchy (R2.2.5); workflow badges only, not scoring */
+.vacancy-list .list-row-group--vacancy {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.vacancy-list .list-row-group--vacancy:first-child {
+  border-top: none;
+}
+
+.vacancy-list .list-row-group--vacancy .list-row {
+  transition: background 0.12s ease;
+}
+
+.vacancy-list .list-row-group--vacancy:hover .list-row {
+  background: var(--color-surface-hover);
+}
+
+.vacancy-list .list-row__title {
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.vacancy-list .list-row__secondary {
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.vacancy-list .list-row__meta {
+  color: #b4bcc8;
+  font-size: var(--font-size-metadata);
+  letter-spacing: 0.01em;
+}
+
+.vacancy-list .list-row-group--vacancy[data-status="rejected"] .list-row__title {
+  color: var(--color-text-secondary);
 }
 
 .row-detail {
