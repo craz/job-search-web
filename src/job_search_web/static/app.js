@@ -1302,6 +1302,7 @@ const HH_RECOVERY_ACCOUNT_LABELS = {
   reauth: "Аккаунт: нужна повторная авторизация",
   captcha_or_action_required: "Аккаунт: требуется действие на стороне HH",
   external_limitation: "Аккаунт: доступ ограничен HeadHunter",
+  local_egress_unavailable: "Аккаунт: локальный сетевой выход недоступен",
   network_failure: "Аккаунт: временно недоступен",
 };
 
@@ -1340,7 +1341,9 @@ function renderHhAccount(payload) {
         : payload.status === "action_required"
           ? HH_RECOVERY_ACCOUNT_LABELS.captcha_or_action_required
           : payload.status === "unavailable"
-            ? HH_RECOVERY_ACCOUNT_LABELS.network_failure
+            ? kind === "local_egress_unavailable"
+              ? HH_RECOVERY_ACCOUNT_LABELS.local_egress_unavailable
+              : HH_RECOVERY_ACCOUNT_LABELS.network_failure
             : "";
   const text = HH_RECOVERY_ACCOUNT_LABELS[kind] || fallback;
   if (!text) return;
@@ -1707,6 +1710,15 @@ function renderHhResumes(payload) {
     hhResumesStatus.textContent =
       "HeadHunter требует проверку (CAPTCHA или доп. действие). Пройдите её во вкладке входа — обход не поддерживается.";
     setHhResumesActions({ open: true, confirm: true, novncUrl });
+    void loadHhResumeContent({ hhCheckFailed: true });
+    return false;
+  }
+
+  if (kind === "local_egress_unavailable" || code === "browser_proxy_unavailable") {
+    stopHhResumesPoll();
+    setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
+    hhResumesStatus.textContent =
+      "Не работает локальный сетевой выход HeadHunter. Перезапустите Job Search штатной командой make up.";
     void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
