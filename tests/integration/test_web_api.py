@@ -50,8 +50,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — показать резюме" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260826-r15a" in page.text
-    assert "/assets/styles.css?v=20260826-r15a" in page.text
+    assert "/assets/app.js?v=20260827-r215" in page.text
+    assert "/assets/styles.css?v=20260827-r215" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
@@ -540,12 +540,46 @@ def test_hh_active_resume_can_be_selected_and_cleared() -> None:
     assert "access_token" not in invalid.text
 
 
-def test_hh_resumes_markup_exposes_clear_control() -> None:
+def test_hh_resumes_markup_exposes_clear_and_sync_controls() -> None:
     client = WebClient(StubCore())
     page = client.request("GET", "/")
     assert 'id="hh-resumes-clear"' in page.text
     assert "Сбросить выбор" in page.text
-    assert 'id="hh-resumes-linkage"' in page.text
+    assert 'id="hh-resume-content"' in page.text
+    assert 'id="hh-resume-sync"' in page.text
+    assert "Синхронизировать" in page.text
+    assert "Локальная связь" not in page.text
+
+
+def test_app_js_resume_content_ux_contract() -> None:
+    js = WebClient(StubCore()).request("GET", "/assets/app.js").text
+    for fragment in (
+        "renderHhResumeContent",
+        "syncHhResumeContent",
+        "Содержание синхронизировано",
+        "Содержание ещё не синхронизировано",
+        "Локальная копия сохранена",
+        "Не удалось проверить HeadHunter",
+        "/api/v1/hh/resumes/sync",
+        "Обновить",
+    ):
+        assert fragment in js
+    assert "Локальная связь" not in js
+    assert "content_hash" not in js
+    assert "ProfileVersion" not in js
+
+
+def test_hh_resume_sync_is_proxied() -> None:
+    hh = StubHh(status="connected")
+    hh.active_external_id = "resume-fixture-1"
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("POST", "/api/v1/hh/resumes/sync", json={})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["code"] == "unchanged"
+    assert body["candidate_context"]["resume_content"]["content_state"] == "synced"
+    assert ("resumes-sync", "resume-fixture-1") in hh.calls
 
 
 def test_candidate_context_is_proxied_from_core() -> None:
@@ -567,8 +601,17 @@ def test_candidate_context_is_proxied_from_core() -> None:
         "selected_at": "2026-08-26T12:00:00Z",
         "updated_at": "2026-08-26T12:00:00Z",
     }
+    core.resume_content = {
+        "content_state": "synced",
+        "resume_version_id": "00000000-0000-0000-0000-000000000097",
+        "external_resume_id": "resume-fixture-1",
+        "captured_at": "2026-08-27T12:00:00Z",
+        "source": "hh",
+        "schema_version": 1,
+    }
     client = WebClient(core)
     response = client.request("GET", "/api/v1/candidate-context")
     assert response.status_code == 200
     assert response.json()["hh_resume_link"]["status"] == "active"
+    assert response.json()["resume_content"]["content_state"] == "synced"
     assert ("candidate-context", None) in core.calls

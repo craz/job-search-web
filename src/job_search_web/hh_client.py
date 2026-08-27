@@ -20,6 +20,8 @@ class HhGateway(Protocol):
 
     def set_active_resume(self, *, external_id: str | None) -> tuple[int, Any]: ...
 
+    def sync_resume_content(self, *, external_id: str | None = None) -> tuple[int, Any]: ...
+
     def open_login(self) -> tuple[int, Any]: ...
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]: ...
@@ -62,6 +64,18 @@ class HhClient:
             "/api/v1/resumes/active",
             json={"external_id": external_id},
             timeout=max(self.timeout_seconds, 60.0),
+        )
+
+    def sync_resume_content(self, *, external_id: str | None = None) -> tuple[int, Any]:
+        """Manual HH→Core resume content sync (R2.1.3 / R2.1.5 Web CTA)."""
+        payload: dict[str, Any] = {}
+        if external_id is not None:
+            payload["external_id"] = external_id
+        return self._request(
+            "POST",
+            "/api/v1/resumes/sync",
+            json=payload,
+            timeout=max(self.timeout_seconds, 90.0),
         )
 
     def open_login(self) -> tuple[int, Any]:

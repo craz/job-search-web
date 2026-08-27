@@ -13,7 +13,10 @@ const hhAccountLabel = document.querySelector("#hh-account-label");
 const hhConnectionAction = document.querySelector("#hh-connection-action");
 const hhResumes = document.querySelector("#hh-resumes");
 const hhResumesStatus = document.querySelector("#hh-resumes-status");
-const hhResumesLinkage = document.querySelector("#hh-resumes-linkage");
+const hhResumeContent = document.querySelector("#hh-resume-content");
+const hhResumeWorking = document.querySelector("#hh-resume-working");
+const hhResumeSyncState = document.querySelector("#hh-resume-sync-state");
+const hhResumeSync = document.querySelector("#hh-resume-sync");
 const hhResumesList = document.querySelector("#hh-resumes-list");
 const hhResumesActions = document.querySelector("#hh-resumes-actions");
 const hhResumesOpen = document.querySelector("#hh-resumes-open");
@@ -1151,58 +1154,206 @@ function clearHhResumes() {
   if (!hhResumes) return;
   hhResumes.hidden = true;
   hhResumesStatus.textContent = "";
-  if (hhResumesLinkage) {
-    hhResumesLinkage.textContent = "";
-    hhResumesLinkage.hidden = true;
-  }
+  clearHhResumeContent();
   hhResumesList.innerHTML = "";
   if (hhResumesClear) hhResumesClear.hidden = true;
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
 }
 
-function renderHhResumeLinkage(payload) {
-  if (!hhResumesLinkage) return;
-  const link = payload && payload.hh_resume_link ? payload.hh_resume_link : null;
-  if (!link || !link.status) {
-    hhResumesLinkage.textContent = "";
-    hhResumesLinkage.hidden = true;
-    return;
+function clearHhResumeContent() {
+  if (!hhResumeContent) return;
+  hhResumeContent.hidden = true;
+  if (hhResumeWorking) hhResumeWorking.textContent = "";
+  if (hhResumeSyncState) {
+    hhResumeSyncState.textContent = "";
+    hhResumeSyncState.removeAttribute("data-tone");
   }
-  if (link.status === "active" && link.title) {
-    hhResumesLinkage.textContent = `Локальная связь: активна — ${link.title}`;
-    hhResumesLinkage.hidden = false;
-    return;
+  if (hhResumeSync) {
+    hhResumeSync.hidden = true;
+    hhResumeSync.disabled = false;
+    hhResumeSync.dataset.mode = "";
+    hhResumeSync.textContent = "Синхронизировать";
   }
-  if (link.status === "active") {
-    hhResumesLinkage.textContent = "Локальная связь: активна";
-    hhResumesLinkage.hidden = false;
-    return;
-  }
-  if (link.status === "stale") {
-    hhResumesLinkage.textContent = "Локальная связь: устарела — выберите резюме снова";
-    hhResumesLinkage.hidden = false;
-    return;
-  }
-  if (link.status === "cleared") {
-    hhResumesLinkage.textContent = "Локальная связь: нет активного резюме";
-    hhResumesLinkage.hidden = false;
-    return;
-  }
-  hhResumesLinkage.hidden = true;
 }
 
-async function loadHhResumeLinkage() {
-  if (!hhResumesLinkage) return;
+function formatResumeTimestamp(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return String(iso);
+  try {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch (_error) {
+    return String(iso);
+  }
+}
+
+function renderHhResumeContent(payload, { hhCheckFailed = false } = {}) {
+  if (!hhResumeContent) return;
+  const link = payload && payload.hh_resume_link ? payload.hh_resume_link : null;
+  const meta = payload && payload.resume_content ? payload.resume_content : null;
+  const linkStatus = link && link.status ? String(link.status) : "";
+
+  // Cleared / none: do not keep previous snapshot as if it were current.
+  if (!link || linkStatus === "cleared" || (meta && meta.content_state === "none")) {
+    clearHhResumeContent();
+    return;
+  }
+
+  if (linkStatus === "stale") {
+    hhResumeContent.hidden = false;
+    if (hhResumeWorking) {
+      hhResumeWorking.textContent = link.title
+        ? `Рабочее резюме\n«${link.title}»`
+        : "Рабочее резюме";
+    }
+    if (hhResumeSyncState) {
+      hhResumeSyncState.dataset.tone = "warning";
+      hhResumeSyncState.textContent =
+        "Ранее выбранное резюме устарело — выберите актуальное из списка.";
+    }
+    if (hhResumeSync) hhResumeSync.hidden = true;
+    return;
+  }
+
+  if (linkStatus !== "active") {
+    clearHhResumeContent();
+    return;
+  }
+
+  const title = link.title ? String(link.title) : "";
+  const contentState = meta && meta.content_state ? String(meta.content_state) : "not_synced";
+  const captured = meta && meta.captured_at ? formatResumeTimestamp(meta.captured_at) : "";
+
+  hhResumeContent.hidden = false;
+  if (hhResumeWorking) {
+    hhResumeWorking.textContent = title
+      ? `Рабочее резюме\n«${title}»`
+      : "Рабочее резюме";
+  }
+
+  if (hhCheckFailed && contentState === "synced") {
+    if (hhResumeSyncState) {
+      hhResumeSyncState.dataset.tone = "warning";
+      hhResumeSyncState.textContent = captured
+        ? `Локальная копия сохранена\n${captured}\nНе удалось проверить HeadHunter`
+        : "Локальная копия сохранена\nНе удалось проверить HeadHunter";
+    }
+    if (hhResumeSync) {
+      hhResumeSync.hidden = false;
+      hhResumeSync.disabled = false;
+      hhResumeSync.dataset.mode = "retry";
+      hhResumeSync.textContent = "Повторить";
+    }
+    return;
+  }
+
+  if (contentState === "synced") {
+    if (hhResumeSyncState) {
+      hhResumeSyncState.removeAttribute("data-tone");
+      hhResumeSyncState.textContent = captured
+        ? `Содержание синхронизировано\n${captured}`
+        : "Содержание синхронизировано";
+    }
+    if (hhResumeSync) {
+      hhResumeSync.hidden = false;
+      hhResumeSync.disabled = false;
+      hhResumeSync.dataset.mode = "refresh";
+      hhResumeSync.textContent = "Обновить";
+    }
+    return;
+  }
+
+  // Active but never synced (or unknown).
+  if (hhResumeSyncState) {
+    hhResumeSyncState.removeAttribute("data-tone");
+    hhResumeSyncState.textContent = "Содержание ещё не синхронизировано";
+  }
+  if (hhResumeSync) {
+    hhResumeSync.hidden = false;
+    hhResumeSync.disabled = false;
+    hhResumeSync.dataset.mode = "sync";
+    hhResumeSync.textContent = "Синхронизировать";
+  }
+}
+
+async function loadHhResumeContent({ hhCheckFailed = false } = {}) {
+  if (!hhResumeContent) return;
   try {
     const response = await fetch("/api/v1/candidate-context");
     const payload = await response.json();
     if (!response.ok) {
-      hhResumesLinkage.hidden = true;
+      if (hhCheckFailed) {
+        // Keep strip honest: HH failed and Core context also unavailable.
+        clearHhResumeContent();
+      }
       return;
     }
-    renderHhResumeLinkage(payload);
+    renderHhResumeContent(payload, { hhCheckFailed });
   } catch (_error) {
-    if (hhResumesLinkage) hhResumesLinkage.hidden = true;
+    if (!hhCheckFailed) clearHhResumeContent();
+  }
+}
+
+async function syncHhResumeContent() {
+  if (!hhResumeSync) return;
+  const mode = hhResumeSync.dataset.mode || "sync";
+  if (mode === "retry") {
+    showNotice("Повторная проверка HeadHunter…");
+    await loadHhResumes();
+    return;
+  }
+  hhResumeSync.disabled = true;
+  const previousLabel = hhResumeSync.textContent;
+  hhResumeSync.textContent = "Синхронизация…";
+  try {
+    const response = await fetch("/api/v1/hh/resumes/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      const message =
+        (payload && (payload.message || payload.code)) ||
+        "Не удалось синхронизировать содержание резюме";
+      showNotice(String(message), "error");
+      if (payload && payload.candidate_context) {
+        renderHhResumeContent(payload.candidate_context);
+      } else {
+        await loadHhResumeContent();
+      }
+      // Recovery actions already live in the resumes strip when HH needs login.
+      if (payload && payload.status && payload.status !== "available") {
+        await loadHhResumes({ quiet: true });
+      }
+      return;
+    }
+    if (payload.candidate_context) {
+      renderHhResumeContent(payload.candidate_context);
+    } else {
+      await loadHhResumeContent();
+    }
+    if (payload.code === "unchanged") {
+      showNotice("Локальная копия уже актуальна.");
+    } else {
+      showNotice("Содержание резюме синхронизировано.");
+    }
+  } catch (_error) {
+    showNotice("Не удалось синхронизировать содержание резюме", "error");
+    await loadHhResumeContent();
+  } finally {
+    if (hhResumeSync) {
+      hhResumeSync.disabled = false;
+      if (hhResumeSync.hidden === false && hhResumeSync.textContent === "Синхронизация…") {
+        hhResumeSync.textContent = previousLabel || "Обновить";
+      }
+    }
   }
 }
 
@@ -1264,7 +1415,7 @@ function renderHhResumes(payload) {
     if (hhResumesClear) {
       hhResumesClear.hidden = !(selectionStatus === "active" || selectionStatus === "stale");
     }
-    void loadHhResumeLinkage();
+    void loadHhResumeContent();
     return true;
   }
 
@@ -1275,6 +1426,7 @@ function renderHhResumes(payload) {
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent =
       "HeadHunter ограничил доступ к списку резюме (внешнее ограничение). Это не пустой список.";
+    void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
 
@@ -1284,6 +1436,7 @@ function renderHhResumes(payload) {
     hhResumesStatus.textContent =
       "HeadHunter требует проверку (CAPTCHA или доп. действие). Пройдите её во вкладке входа — обход не поддерживается.";
     setHhResumesActions({ open: true, confirm: true, novncUrl });
+    void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
 
@@ -1292,6 +1445,7 @@ function renderHhResumes(payload) {
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent =
       "Не удалось получить список резюме (сеть или временный сбой). Повторите позже вручную — автоповтор не крутится.";
+    void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
 
@@ -1322,6 +1476,7 @@ function renderHhResumes(payload) {
         "Войдите в HeadHunter во вкладке входа. Список обновится сам — или нажмите «Я вошёл — показать резюме».";
       setHhResumesActions({ open: true, confirm: true, novncUrl });
       if (!hhResumesPollTimer) startHhResumesPoll({ attempts: 20, intervalMs: 2500 });
+      void loadHhResumeContent({ hhCheckFailed: true });
       return false;
     }
     const expiredHint = status === "expired" || kind === "reauth";
@@ -1329,11 +1484,13 @@ function renderHhResumes(payload) {
       ? "Сессия HeadHunter истекла или нужна повторная авторизация. Войдите снова."
       : "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
     setHhResumesActions({ open: true, confirm: false, novncUrl });
+    void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
 
   setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
   hhResumesStatus.textContent = "Список резюме сейчас недоступен.";
+  void loadHhResumeContent({ hhCheckFailed: true });
   return false;
 }
 
@@ -1355,9 +1512,9 @@ async function selectHhActiveResume(externalId) {
     }
     renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
     if (payload.core_linkage && payload.core_linkage.candidate_context) {
-      renderHhResumeLinkage(payload.core_linkage.candidate_context);
+      renderHhResumeContent(payload.core_linkage.candidate_context);
     } else {
-      await loadHhResumeLinkage();
+      await loadHhResumeContent();
     }
     showNotice("Активное резюме обновлено.");
   } catch (_error) {
@@ -1379,9 +1536,9 @@ async function clearHhActiveResume() {
     }
     renderHhResumes(payload.status ? payload : { status: "unavailable", items: [] });
     if (payload.core_linkage && payload.core_linkage.candidate_context) {
-      renderHhResumeLinkage(payload.core_linkage.candidate_context);
+      renderHhResumeContent(payload.core_linkage.candidate_context);
     } else {
-      await loadHhResumeLinkage();
+      await loadHhResumeContent();
     }
     showNotice("Выбор резюме сброшен.");
   } catch (_error) {
@@ -1519,6 +1676,11 @@ if (hhResumesConfirm) {
 if (hhResumesClear) {
   hhResumesClear.addEventListener("click", () => {
     void clearHhActiveResume();
+  });
+}
+if (hhResumeSync) {
+  hhResumeSync.addEventListener("click", () => {
+    void syncHhResumeContent();
   });
 }
 

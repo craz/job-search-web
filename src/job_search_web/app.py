@@ -165,9 +165,38 @@ def create_app(
                 },
             )
 
+    @application.post("/api/v1/hh/resumes/sync")
+    def post_hh_resume_sync(payload: dict[str, Any]) -> JSONResponse:
+        """Proxy manual resume content sync to HH (R2.1.5); Core remains SoT."""
+        external_id = payload.get("external_id")
+        if external_id is not None and not isinstance(external_id, str):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "code": "invalid_request",
+                    "message": "external_id must be a string when provided",
+                },
+            )
+        try:
+            return proxy_response(
+                *hh_gateway.sync_resume_content(
+                    external_id=external_id if isinstance(external_id, str) else None
+                )
+            )
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH resumes sync API is unavailable",
+                    "ok": False,
+                    "status": "unavailable",
+                },
+            )
+
     @application.get("/api/v1/candidate-context")
     def get_candidate_context() -> JSONResponse:
-        """Return Core CandidateProfile / ProfileVersion / HH resume link (R1.5)."""
+        """Return Core CandidateProfile / HH link / resume content meta."""
         try:
             return proxy_response(*gateway.get_candidate_context())
         except CoreUnavailableError:
@@ -179,6 +208,7 @@ def create_app(
                     "candidate_profile": None,
                     "profile_version": None,
                     "hh_resume_link": None,
+                    "resume_content": None,
                 },
             )
 

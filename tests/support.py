@@ -145,6 +145,7 @@ class StubCore:
         self.candidate_profile: dict[str, Any] | None = None
         self.profile_version: dict[str, Any] | None = None
         self.hh_resume_link: dict[str, Any] | None = None
+        self.resume_content: dict[str, Any] | None = None
         self.calls: list[tuple[str, Any]] = []
 
     def _guard(self) -> None:
@@ -282,6 +283,7 @@ class StubCore:
             "candidate_profile": self.candidate_profile,
             "profile_version": self.profile_version,
             "hh_resume_link": self.hh_resume_link,
+            "resume_content": self.resume_content,
         }
 
 
@@ -536,6 +538,35 @@ class StubHh:
             }
         self.active_external_id = external_id
         payload = self.resumes_list()[1]
+        title = (
+            "Fixture Engineer"
+            if external_id == "resume-fixture-2"
+            else ("Fixture Product Manager" if external_id else None)
+        )
+        if external_id is None:
+            resume_content = {
+                "content_state": "none",
+                "resume_version_id": None,
+                "external_resume_id": None,
+                "captured_at": None,
+            }
+        elif external_id == "resume-fixture-1":
+            resume_content = {
+                "content_state": "synced",
+                "resume_version_id": "00000000-0000-0000-0000-000000000097",
+                "external_resume_id": external_id,
+                "captured_at": "2026-08-27T12:00:00Z",
+                "source": "hh",
+                "schema_version": 1,
+            }
+        else:
+            resume_content = {
+                "content_state": "not_synced",
+                "resume_version_id": None,
+                "external_resume_id": external_id,
+                "captured_at": None,
+                "source": "hh",
+            }
         payload["core_linkage"] = {
             "ok": True,
             "code": "synced",
@@ -549,15 +580,78 @@ class StubHh:
                     "source": "hh",
                     "external_resume_id": external_id,
                     "status": "active" if external_id else "cleared",
-                    "title": (
-                        "Fixture Engineer"
-                        if external_id == "resume-fixture-2"
-                        else ("Fixture Product Manager" if external_id else None)
-                    ),
+                    "title": title,
                 },
+                "resume_content": resume_content,
             },
         }
         return 200, payload
+
+    def sync_resume_content(self, *, external_id: str | None = None) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        target = external_id or self.active_external_id
+        self.calls.append(("resumes-sync", target))
+        if not target:
+            return 409, {
+                "ok": False,
+                "status": "unavailable",
+                "code": "no_active_resume",
+                "ingest": None,
+                "candidate_context": None,
+            }
+        if self.status != "connected":
+            return 409, {
+                "ok": False,
+                "status": "not_authorized",
+                "code": "browser_login_required",
+                "ingest": None,
+                "candidate_context": None,
+                "action": {"code": "open_login", "novnc_url": "http://127.0.0.1:6080/"},
+            }
+        created = target == "resume-fixture-2"
+        version_id = (
+            "00000000-0000-0000-0000-000000000096"
+            if created
+            else "00000000-0000-0000-0000-000000000097"
+        )
+        title = "Fixture Engineer" if target == "resume-fixture-2" else "Fixture Product Manager"
+        context = {
+            "candidate_profile": {"id": "00000000-0000-0000-0000-000000000099"},
+            "profile_version": {
+                "id": "00000000-0000-0000-0000-000000000098",
+                "label": "r1-default",
+            },
+            "hh_resume_link": {
+                "source": "hh",
+                "external_resume_id": target,
+                "status": "active",
+                "title": title,
+            },
+            "resume_content": {
+                "content_state": "synced",
+                "resume_version_id": version_id,
+                "external_resume_id": target,
+                "captured_at": "2026-08-27T12:30:00Z",
+                "source": "hh",
+                "schema_version": 1,
+            },
+        }
+        return 200, {
+            "ok": True,
+            "status": "available",
+            "code": "synced" if created else "unchanged",
+            "external_resume_id": target,
+            "ingest": {
+                "ok": True,
+                "created": created,
+                "resume_version_id": version_id,
+                "content_hash": "fixturehash",
+            },
+            "candidate_context": context,
+        }
 
     def open_login(self) -> tuple[int, Any]:
         if self.unavailable:

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260826-r15a">
-    <script src="/assets/app.js?v=20260826-r15a" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260827-r215">
+    <script src="/assets/app.js?v=20260827-r215" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -37,7 +37,18 @@
         <p class="hh-resumes__label">Резюме HH</p>
         <div class="hh-resumes__content">
           <p id="hh-resumes-status" class="hh-resumes__status"></p>
-          <p id="hh-resumes-linkage" class="hh-resumes__linkage" hidden></p>
+          <div id="hh-resume-content" class="hh-resume-content" hidden>
+            <div class="hh-resume-content__text">
+              <p id="hh-resume-working" class="hh-resume-content__working"></p>
+              <p id="hh-resume-sync-state" class="hh-resume-content__state"></p>
+            </div>
+            <button
+              class="btn btn--secondary btn--compact"
+              id="hh-resume-sync"
+              type="button"
+              hidden
+            >Синхронизировать</button>
+          </div>
           <ul id="hh-resumes-list" class="hh-resumes__list" role="listbox" aria-label="Резюме HH"></ul>
           <button class="btn btn--ghost btn--compact" id="hh-resumes-clear" type="button" hidden>
             Сбросить выбор
