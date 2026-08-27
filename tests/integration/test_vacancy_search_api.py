@@ -86,18 +86,70 @@ def test_hh_vacancies_search_failed_recovery_payload() -> None:
     assert response.json()["code"] == "browser_captcha_or_action_required"
 
 
+def test_hh_vacancies_suitable_proxied() -> None:
+    hh = StubHh()
+    response = WebClient(StubCore(), hh=hh).request(
+        "POST",
+        "/api/v1/hh/vacancies/suitable",
+        json={"execution": {"max_pages": 1, "order": "publication_time"}},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["source_total"] == 2272
+    assert body["search_run"]["acquisition_kind"] == "resume_suitable"
+    assert body["search_run"]["search_profile_id"] is None
+    assert body["search_run"]["found_count"] == 2
+    assert hh.calls[-1][0] == "vacancies-suitable"
+
+
+def test_hh_vacancies_suitable_failed_recovery_payload() -> None:
+    hh = StubHh()
+    hh.suitable_result = (
+        409,
+        {
+            "ok": False,
+            "status": "failed",
+            "code": "resume_search_page_mismatch",
+            "source_total": None,
+            "search_run": {
+                "id": "00000000-0000-0000-0000-000000000084",
+                "search_profile_id": None,
+                "acquisition_kind": "resume_suitable",
+                "status": "failed",
+                "found_count": 0,
+                "created_count": 0,
+                "updated_count": 0,
+                "unchanged_count": 0,
+                "error_count": 0,
+                "error_code": "resume_search_page_mismatch",
+                "source_total": None,
+                "started_at": "2026-08-27T12:00:00Z",
+                "finished_at": "2026-08-27T12:00:10Z",
+            },
+        },
+    )
+    response = WebClient(StubCore(), hh=hh).request(
+        "POST", "/api/v1/hh/vacancies/suitable", json={}
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "resume_search_page_mismatch"
+
+
 def test_search_runs_list_proxied() -> None:
     core = StubCore()
     core.search_runs = [
         {
             "id": "00000000-0000-0000-0000-000000000081",
             "search_profile_id": "00000000-0000-0000-0000-000000000080",
+            "acquisition_kind": "profile_search",
             "status": "success",
             "found_count": 0,
             "created_count": 0,
             "updated_count": 0,
             "unchanged_count": 0,
             "error_count": 0,
+            "source_total": None,
         }
     ]
     response = WebClient(core).request(

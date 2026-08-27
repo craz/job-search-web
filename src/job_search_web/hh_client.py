@@ -28,6 +28,10 @@ class HhGateway(Protocol):
 
     def search_vacancies(self, payload: dict[str, Any]) -> tuple[int, Any]: ...
 
+    def search_suitable_vacancies(
+        self, payload: dict[str, Any] | None = None
+    ) -> tuple[int, Any]: ...
+
 
 class HhClient:
     """Bounded HTTP client for HH connection/account; never touches HH volumes."""
@@ -92,5 +96,14 @@ class HhClient:
             "POST",
             "/api/v1/vacancies/search",
             json=payload,
+            timeout=max(self.timeout_seconds, 180.0),
+        )
+
+    def search_suitable_vacancies(self, payload: dict[str, Any] | None = None) -> tuple[int, Any]:
+        """Primary resume-suitable SearchRun (bounded browser acquire)."""
+        return self._request(
+            "POST",
+            "/api/v1/vacancies/suitable",
+            json=payload or {},
             timeout=max(self.timeout_seconds, 180.0),
         )

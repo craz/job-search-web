@@ -284,7 +284,7 @@ def create_app(
 
     @application.post("/api/v1/hh/vacancies/search")
     def post_hh_vacancies_search(payload: dict[str, Any]) -> JSONResponse:
-        """Proxy HH SearchRun orchestration (browser acquire; long timeout)."""
+        """Proxy HH profile_search orchestration (secondary/manual path)."""
         profile_id = payload.get("search_profile_id")
         if not isinstance(profile_id, str) or not profile_id.strip():
             return JSONResponse(
@@ -311,6 +311,30 @@ def create_app(
                 content={
                     "code": "hh_unavailable",
                     "message": "HH vacancy search API is unavailable",
+                },
+            )
+
+    @application.post("/api/v1/hh/vacancies/suitable")
+    def post_hh_vacancies_suitable(payload: dict[str, Any] | None = None) -> JSONResponse:
+        """Proxy primary resume-suitable SearchRun orchestration."""
+        body = payload if isinstance(payload, dict) else {}
+        execution = body.get("execution")
+        if execution is not None and not isinstance(execution, dict):
+            return JSONResponse(
+                status_code=400,
+                content={"code": "invalid_request", "message": "execution must be an object"},
+            )
+        request_body: dict[str, Any] = {}
+        if isinstance(execution, dict):
+            request_body["execution"] = execution
+        try:
+            return proxy_response(*hh_gateway.search_suitable_vacancies(request_body))
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH suitable vacancy API is unavailable",
                 },
             )
 

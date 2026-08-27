@@ -752,6 +752,7 @@ class StubHh:
         run = {
             "id": "00000000-0000-0000-0000-000000000081",
             "search_profile_id": payload["search_profile_id"],
+            "acquisition_kind": "profile_search",
             "status": "success",
             "found_count": 2,
             "created_count": 1,
@@ -759,6 +760,7 @@ class StubHh:
             "unchanged_count": 1,
             "error_count": 0,
             "error_code": None,
+            "source_total": None,
             "started_at": "2026-08-27T12:00:00Z",
             "finished_at": "2026-08-27T12:02:00Z",
             "criteria_snapshot": {"text": "python", "area_id": "1"},
@@ -773,6 +775,53 @@ class StubHh:
             "status": "success",
             "code": "ready",
             "search_profile_id": payload["search_profile_id"],
+            "search_run": run,
+            "items": [],
+            "hh_writes": False,
+        }
+
+    def search_suitable_vacancies(self, payload: dict[str, Any] | None = None) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        body = payload if isinstance(payload, dict) else {}
+        self.calls.append(("vacancies-suitable", body))
+        if getattr(self, "suitable_result", None) is not None:
+            status_code, result = self.suitable_result
+            return status_code, result
+        run = {
+            "id": "00000000-0000-0000-0000-000000000083",
+            "search_profile_id": None,
+            "acquisition_kind": "resume_suitable",
+            "status": "success",
+            "found_count": 2,
+            "created_count": 1,
+            "updated_count": 0,
+            "unchanged_count": 1,
+            "error_count": 0,
+            "error_code": None,
+            "source_total": 2272,
+            "started_at": "2026-08-27T12:00:00Z",
+            "finished_at": "2026-08-27T12:02:00Z",
+            "criteria_snapshot": {},
+            "candidate_context_snapshot": {
+                "hh_resume_external_id": "resume-hash-1",
+                "hh_resume_title": "Project Manager",
+            },
+            "execution_snapshot": {
+                "order": "publication_time",
+                "max_pages": 1,
+                "transport": "browser",
+                "acquisition_kind": "resume_suitable",
+            },
+        }
+        return 200, {
+            "ok": True,
+            "status": "success",
+            "code": "ready",
+            "source_total": 2272,
+            "candidate_context": run["candidate_context_snapshot"],
             "search_run": run,
             "items": [],
             "hh_writes": False,

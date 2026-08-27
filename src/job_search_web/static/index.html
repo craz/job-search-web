@@ -92,91 +92,56 @@
           </section>
 
           <section class="vacancy-search" id="vacancy-search" aria-labelledby="vacancy-search-title">
-            <div class="vacancy-search__header">
-              <h3 id="vacancy-search-title" class="vacancy-search__title">Поиск вакансий</h3>
-              <p class="vacancy-search__hint">Критерии сохраняются. Поиск запускается вручную.</p>
+            <div class="vacancy-search__tabs" role="tablist" aria-label="Режимы поиска вакансий">
+              <button type="button" class="vacancy-search__tab is-active" role="tab" aria-selected="true" data-search-tab="suitable" id="tab-suitable">Подходящие</button>
+              <button type="button" class="vacancy-search__tab" role="tab" aria-selected="false" data-search-tab="own" id="tab-own">Свой поиск</button>
             </div>
-            <form id="vacancy-search-form" class="vacancy-search__form" autocomplete="off">
-              <div class="vacancy-search__grid">
-                <label class="field">
-                  <span class="field__label">Текст поиска</span>
-                  <input class="control" id="search-text" name="text" type="text" required maxlength="1000" placeholder="например, python" />
-                </label>
-                <label class="field">
-                  <span class="field__label">Регион</span>
-                  <select class="control control--select" id="search-area" name="area_id">
-                    <option value="">Любой</option>
-                    <option value="1">Москва</option>
-                    <option value="2">Санкт-Петербург</option>
-                    <option value="113">Россия</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field__label">Зарплата от</span>
-                  <input class="control" id="search-salary-from" name="salary_from" type="number" min="0" step="1000" placeholder="не важно" />
-                </label>
-                <label class="field field--checkbox">
-                  <span class="field__label">Только с зарплатой</span>
-                  <input class="control control--checkbox" id="search-only-salary" name="only_with_salary" type="checkbox" />
-                </label>
-                <label class="field">
-                  <span class="field__label">Опыт</span>
-                  <select class="control control--select" id="search-experience" name="experience">
-                    <option value="">Любой</option>
-                    <option value="noExperience">Нет опыта</option>
-                    <option value="between1And3">1–3 года</option>
-                    <option value="between3And6">3–6 лет</option>
-                    <option value="moreThan6">Более 6 лет</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field__label">Занятость</span>
-                  <select class="control control--select" id="search-employment" name="employment">
-                    <option value="">Любая</option>
-                    <option value="full">Полная</option>
-                    <option value="part">Частичная</option>
-                    <option value="project">Проект / разовое</option>
-                    <option value="probation">Стажировка</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field__label">График</span>
-                  <select class="control control--select" id="search-schedule" name="schedule">
-                    <option value="">Любой</option>
-                    <option value="fullDay">Полный день</option>
-                    <option value="shift">Сменный</option>
-                    <option value="flexible">Гибкий</option>
-                    <option value="remote">Удалённая работа</option>
-                    <option value="flyInFlyOut">Вахта</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span class="field__label">Искать в</span>
-                  <select class="control control--select" id="search-field" name="search_field">
-                    <option value="">Везде</option>
-                    <option value="name">В названии</option>
-                    <option value="company_name">В компании</option>
-                    <option value="description">В описании</option>
-                  </select>
-                </label>
+
+            <div class="vacancy-search__panel" id="panel-suitable" data-search-panel="suitable">
+              <div class="vacancy-search__header">
+                <h3 id="vacancy-search-title" class="vacancy-search__title">Подходящие вакансии</h3>
+                <p class="vacancy-search__hint">По рабочему резюме HeadHunter. Проверяем до ~50 вакансий за запуск; это может занять несколько минут.</p>
               </div>
-              <details class="vacancy-search__advanced">
-                <summary>Дополнительно</summary>
-                <label class="field field--inline">
-                  <span class="field__label">Страниц поиска</span>
-                  <input class="control" id="search-max-pages" name="max_pages" type="number" min="1" max="5" value="1" />
-                </label>
-              </details>
+              <p class="vacancy-search__resume" id="suitable-resume-line">Рабочее резюме: —</p>
+              <p class="vacancy-search__total" id="suitable-total-line" hidden>HH предлагает: —</p>
               <div class="vacancy-search__actions">
-                <button class="btn btn--primary" id="vacancy-search-submit" type="submit">Найти вакансии</button>
-                <p class="vacancy-search__status" id="vacancy-search-status" role="status" aria-live="polite"></p>
+                <button class="btn btn--primary" id="suitable-run" type="button">Проверить подходящие</button>
+                <p class="vacancy-search__status" id="suitable-status" role="status" aria-live="polite"></p>
               </div>
-            </form>
-            <div class="vacancy-search__last" id="vacancy-search-last" hidden>
-              <p class="vacancy-search__last-title">Последний поиск</p>
-              <p class="vacancy-search__last-body" id="vacancy-search-last-body"></p>
+              <div class="vacancy-search__last" id="suitable-last" hidden>
+                <p class="vacancy-search__last-title">Последняя проверка</p>
+                <p class="vacancy-search__last-body" id="suitable-last-body"></p>
+              </div>
+            </div>
+
+            <div class="vacancy-search__panel" id="panel-own" data-search-panel="own" hidden>
+              <div class="vacancy-search__header">
+                <h3 class="vacancy-search__title">Свой поиск</h3>
+                <p class="vacancy-search__hint">Ручной поиск с промежуточным выбором вакансий перед добавлением в основной список — появится позже. Сейчас этот режим не запускает импорт в список.</p>
+              </div>
+              <p class="vacancy-search__deferred">Скоро: поиск по своим фильтрам → список результатов → «Добавить выбранные» / «Добавить все».</p>
             </div>
           </section>
+
+          <details class="vacancy-list-filter" id="vacancy-list-filter">
+            <summary>Фильтр списка</summary>
+            <div class="vacancy-list-filter__body">
+              <label class="field">
+                <span class="field__label">Текст</span>
+                <input class="control" id="vacancy-filter-text" type="search" placeholder="название, компания, описание" />
+              </label>
+              <label class="field">
+                <span class="field__label">Статус</span>
+                <select class="control control--select" id="vacancy-filter-status">
+                  <option value="">Любой</option>
+                  <option value="new">Новая</option>
+                  <option value="reviewing">На рассмотрении</option>
+                  <option value="shortlisted">В шортлисте</option>
+                  <option value="rejected">Отклонена</option>
+                </select>
+              </label>
+            </div>
+          </details>
 
           <section id="vacancies" class="list-rows vacancy-list" aria-live="polite" aria-busy="true">
             <article class="state state--loading" aria-busy="true">

@@ -12,43 +12,51 @@ ROOT = Path(__file__).resolve().parents[2]
 STATIC = ROOT / "src" / "job_search_web" / "static"
 
 
-def test_openapi_publishes_search_and_hh_search_routes() -> None:
+def test_openapi_publishes_suitable_and_manual_search_routes() -> None:
     paths = create_app(StubCore(), StubOsint(), StubHh()).openapi()["paths"]
     assert "get" in paths["/api/v1/search-profiles"]
-    assert "post" in paths["/api/v1/search-profiles"]
-    assert "patch" in paths["/api/v1/search-profiles/{profile_id}"]
     assert "get" in paths["/api/v1/search-runs"]
+    assert "post" in paths["/api/v1/hh/vacancies/suitable"]
     assert "post" in paths["/api/v1/hh/vacancies/search"]
 
 
-def test_vacancies_page_exposes_human_search_controls() -> None:
+def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
-    assert "Поиск вакансий" in html
-    assert "Найти вакансии" in html
-    assert 'id="vacancy-search-form"' in html
-    assert 'id="search-text"' in html
-    assert 'id="search-area"' in html
-    assert 'id="search-salary-from"' in html
-    assert 'id="search-only-salary"' in html
+    assert "Подходящие вакансии" in html
+    assert "Проверить подходящие" in html
+    assert 'id="suitable-run"' in html
+    assert "Рабочее резюме" in html
+    assert "HH предлагает" in html
+    assert "Свой поиск" in html
+    assert "Фильтр списка" in html
+    assert 'id="vacancy-filter-text"' in html
+    assert "Только с зарплатой" not in html
+    assert 'id="vacancy-search-form"' not in html
+    assert 'id="search-text"' not in html
     assert "page_size" not in html
     assert "criteria_snapshot" not in html
     assert "execution_snapshot" not in html
+    assert "Не запускает импорт" in html or "не запускает импорт" in html
 
 
-def test_app_js_uses_hh_search_proxy_not_browser_provider() -> None:
+def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "/api/v1/hh/vacancies/search" in js
-    assert "Ищем вакансии" in js
+    assert "/api/v1/hh/vacancies/suitable" in js
+    assert "Проверяем подходящие вакансии" in js
+    assert "Проверено:" in js
     assert "Новых:" in js
-    assert "Уже были:" in js
-    assert "Поиск завершён не полностью" in js
+    assert "Уже в базе:" in js
+    assert "HH предлагает" in js
+    assert "vacancyPassesFilter" in js
+    assert "resume_search_page_mismatch" in js
     assert "Нужно войти в HeadHunter" in js
     assert "HeadHunter требует действие в браузере" in js
     assert "acquire_vacancies" not in js
     assert "BrowserHhVacancyProvider" not in js
+    assert "Только с зарплатой" not in js
 
 
-def test_hh_client_search_uses_long_timeout() -> None:
+def test_hh_client_suitable_uses_long_timeout() -> None:
     text = (ROOT / "src" / "job_search_web" / "hh_client.py").read_text(encoding="utf-8")
-    assert "vacancies/search" in text
+    assert "vacancies/suitable" in text
     assert "180.0" in text

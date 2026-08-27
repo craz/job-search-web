@@ -632,9 +632,122 @@ async function loadApplications() {
   }
 }
 
+/* --- Vacancy search (R2.2.5 corrected: resume_suitable primary) --- */
+
+let vacancySearchRunning = false;
+let vacancyListFilter = { text: "", status: "" };
+
+const SEARCH_RECOVERY = {
+  browser_login_required: "Нужно войти в HeadHunter",
+  browser_session_not_logged_in: "Нужно войти в HeadHunter",
+  not_authorized: "Нужно войти в HeadHunter",
+  browser_captcha_or_action_required: "HeadHunter требует действие в браузере",
+  action_required: "HeadHunter требует действие в браузере",
+  profile_locked: "Профиль браузера HeadHunter сейчас занят",
+  transport_unavailable: "HeadHunter сейчас недоступен",
+  browser_vacancy_read_failed: "HeadHunter сейчас недоступен",
+  search_page_failed: "Не удалось получить результаты поиска",
+  page_parse_failed: "Не удалось разобрать страницу поиска",
+  vacancy_detail_failed: "Не удалось открыть часть вакансий",
+  core_ingest_failed: "Не удалось сохранить часть вакансий",
+  partial_pagination: "Проверка завершена не полностью",
+  resume_search_page_mismatch: "Страница подходящих вакансий не подтверждена",
+  active_resume_required: "Нужно выбрать рабочее резюме HeadHunter",
+  hh_unavailable: "HeadHunter сейчас недоступен",
+};
+
+function humanRecovery(code) {
+  if (!code) return "";
+  return SEARCH_RECOVERY[code] || "Проверка завершилась с ошибкой";
+}
+
+function setSuitableStatus(message, { running = false, error = false } = {}) {
+  const status = document.querySelector("#suitable-status");
+  if (!status) return;
+  status.textContent = message || "";
+  status.classList.toggle("is-running", Boolean(running));
+  status.classList.toggle("is-error", Boolean(error));
+}
+
+function setSuitableRunning(running) {
+  vacancySearchRunning = running;
+  const button = document.querySelector("#suitable-run");
+  if (button) {
+    button.disabled = running;
+    button.textContent = running ? "Проверяем…" : "Проверить подходящие";
+  }
+}
+
+function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
+  const last = document.querySelector("#suitable-last");
+  const body = document.querySelector("#suitable-last-body");
+  const totalLine = document.querySelector("#suitable-total-line");
+  const resumeLine = document.querySelector("#suitable-resume-line");
+  if (resumeLine && resumeTitle) {
+    resumeLine.textContent = `Рабочее резюме: ${resumeTitle}`;
+  }
+  const total = sourceTotal ?? run?.source_total;
+  if (totalLine) {
+    if (total != null && total !== "") {
+      totalLine.hidden = false;
+      totalLine.textContent = `HH предлагает: ${Number(total).toLocaleString("ru-RU")}`;
+    }
+  }
+  if (!last || !body || !run) return;
+  const when = formatDate(run.finished_at || run.started_at);
+  const status = String(run.status || "");
+  const processed = Number(run.found_count || 0);
+  const created = Number(run.created_count || 0);
+  const updated = Number(run.updated_count || 0);
+  const unchanged = Number(run.unchanged_count || 0);
+  const recovery = humanRecovery(run.error_code);
+  let headline = "Последняя проверка";
+  if (status === "running") headline = "Проверяем подходящие вакансии…";
+  else if (status === "success" && processed === 0) headline = "По вашему резюме подходящих вакансий в этой проверке нет";
+  else if (status === "success") headline = "Проверка завершена";
+  else if (status === "partial") headline = "Проверка завершена не полностью";
+  else if (status === "failed") headline = recovery || "Проверка не удалась";
+  const counts =
+    status === "failed" && processed === 0
+      ? ""
+      : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.`;
+  const extra = status === "partial" && recovery ? recovery : "";
+  last.hidden = false;
+  body.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
+}
+
+function vacancyPassesFilter(item) {
+  const status = vacancyListFilter.status;
+  if (status && item.status !== status) return false;
+  const text = (vacancyListFilter.text || "").trim().toLowerCase();
+  if (!text) return true;
+  const blob = [
+    item.title,
+    item.company?.name,
+    item.description,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return blob.includes(text);
+}
+
+function renderVacancyList(items) {
+  const filtered = items.filter(vacancyPassesFilter);
+  setSectionCount(count, items.length);
+  grid.innerHTML = filtered.length ? filtered.map(vacancyRow).join("") : "";
+  if (!items.length) {
+    renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
+      buttonId: "suitable-run",
+      label: "Проверить подходящие",
+    });
+  } else if (!filtered.length) {
+    renderEmptyState(grid, "Ничего не найдено в фильтре", "Сбросьте фильтр списка, чтобы снова увидеть все вакансии.");
+  }
+}
+
 async function loadVacancies() {
   grid.setAttribute("aria-busy", "true");
-  // Keep existing rows visible while a search is running; otherwise show loading.
   if (!vacancySearchRunning) {
     renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает данные у Core API.");
   }
@@ -642,7 +755,6 @@ async function loadVacancies() {
     const response = await fetch("/api/v1/vacancies");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить вакансии");
-    setSectionCount(count, payload.total);
     signal.classList.add("online");
     signal.classList.remove("offline");
     connectionLabel.textContent = "Core доступен";
@@ -668,15 +780,7 @@ async function loadVacancies() {
       mirrorReports = [];
       assessmentsByVacancyId = new Map();
     }
-    grid.innerHTML = payload.total
-      ? payload.items.map(vacancyRow).join("")
-      : "";
-    if (!payload.total) {
-      renderEmptyState(grid, "Вакансий пока нет", "Добавьте первую вакансию — она сохранится в Core.", {
-        buttonId: "open-form",
-        label: "+ Добавить вакансию",
-      });
-    }
+    renderVacancyList(knownVacancies);
   } catch (error) {
     setSectionCount(count, null);
     signal.classList.add("offline");
@@ -689,296 +793,136 @@ async function loadVacancies() {
   }
 }
 
-/* --- Vacancy search (R2.2.5) --- */
-
-let activeSearchProfileId = null;
-let vacancySearchRunning = false;
-let lastSearchRunSummary = null;
-
-const SEARCH_RECOVERY = {
-  browser_login_required: "Нужно войти в HeadHunter",
-  browser_session_not_logged_in: "Нужно войти в HeadHunter",
-  not_authorized: "Нужно войти в HeadHunter",
-  browser_captcha_or_action_required: "HeadHunter требует действие в браузере",
-  action_required: "HeadHunter требует действие в браузере",
-  profile_locked: "Профиль браузера HeadHunter сейчас занят",
-  transport_unavailable: "HeadHunter сейчас недоступен",
-  browser_vacancy_read_failed: "HeadHunter сейчас недоступен",
-  search_page_failed: "Не удалось получить результаты поиска",
-  page_parse_failed: "Не удалось разобрать страницу поиска",
-  vacancy_detail_failed: "Не удалось открыть часть вакансий",
-  core_ingest_failed: "Не удалось сохранить часть вакансий",
-  partial_pagination: "Поиск завершён не полностью",
-  hh_unavailable: "HeadHunter сейчас недоступен",
-};
-
-function searchFormEls() {
-  return {
-    form: document.querySelector("#vacancy-search-form"),
-    submit: document.querySelector("#vacancy-search-submit"),
-    status: document.querySelector("#vacancy-search-status"),
-    last: document.querySelector("#vacancy-search-last"),
-    lastBody: document.querySelector("#vacancy-search-last-body"),
-    text: document.querySelector("#search-text"),
-    area: document.querySelector("#search-area"),
-    salaryFrom: document.querySelector("#search-salary-from"),
-    onlySalary: document.querySelector("#search-only-salary"),
-    experience: document.querySelector("#search-experience"),
-    employment: document.querySelector("#search-employment"),
-    schedule: document.querySelector("#search-schedule"),
-    searchField: document.querySelector("#search-field"),
-    maxPages: document.querySelector("#search-max-pages"),
-  };
-}
-
-function setSearchStatus(message, { running = false, error = false } = {}) {
-  const { status } = searchFormEls();
-  if (!status) return;
-  status.textContent = message || "";
-  status.classList.toggle("is-running", Boolean(running));
-  status.classList.toggle("is-error", Boolean(error));
-}
-
-function setSearchRunning(running) {
-  vacancySearchRunning = running;
-  const { submit, form } = searchFormEls();
-  if (submit) {
-    submit.disabled = running;
-    submit.textContent = running ? "Ищем…" : "Найти вакансии";
-  }
-  if (form) {
-    form.querySelectorAll("input, select, button").forEach((el) => {
-      if (el.id === "vacancy-search-submit") return;
-      el.disabled = running;
-    });
-  }
-}
-
-function criteriaPayloadFromForm() {
-  const els = searchFormEls();
-  const text = (els.text?.value || "").trim();
-  const area = (els.area?.value || "").trim() || null;
-  const salaryRaw = (els.salaryFrom?.value || "").trim();
-  const salaryFrom = salaryRaw === "" ? null : Number(salaryRaw);
-  const payload = {
-    label: "Основной поиск",
-    text: text || "python",
-    area_id: area,
-    experience: (els.experience?.value || "").trim() || null,
-    employment: (els.employment?.value || "").trim() || null,
-    schedule: (els.schedule?.value || "").trim() || null,
-    search_field: (els.searchField?.value || "").trim() || null,
-    only_with_salary: Boolean(els.onlySalary?.checked) || null,
-    salary: null,
-  };
-  if (salaryFrom !== null && Number.isFinite(salaryFrom)) {
-    payload.salary = { from: salaryFrom, currency: "RUR" };
-  }
-  return payload;
-}
-
-function fillSearchFormFromProfile(profile) {
-  const els = searchFormEls();
-  if (!els.form || !profile) return;
-  els.text.value = profile.text || "";
-  els.area.value = profile.area_id || "";
-  const salary = profile.salary && typeof profile.salary === "object" ? profile.salary : null;
-  els.salaryFrom.value = salary && salary.from != null ? String(salary.from) : "";
-  els.onlySalary.checked = Boolean(profile.only_with_salary);
-  els.experience.value = profile.experience || "";
-  els.employment.value = profile.employment || "";
-  els.schedule.value = profile.schedule || "";
-  els.searchField.value = profile.search_field || "";
-}
-
-function humanRecovery(code) {
-  if (!code) return "";
-  return SEARCH_RECOVERY[code] || "Поиск завершился с ошибкой";
-}
-
-function renderSearchRunSummary(run, { acquisitionCode } = {}) {
-  const els = searchFormEls();
-  if (!els.last || !els.lastBody || !run) return;
-  lastSearchRunSummary = run;
-  const when = formatDate(run.finished_at || run.started_at);
-  const status = String(run.status || "");
-  const found = Number(run.found_count || 0);
-  const created = Number(run.created_count || 0);
-  const updated = Number(run.updated_count || 0);
-  const unchanged = Number(run.unchanged_count || 0);
-  const errors = Number(run.error_count || 0);
-  const recovery = humanRecovery(run.error_code || acquisitionCode);
-  let headline = "";
-  if (status === "running") {
-    headline = "Ищем вакансии…";
-  } else if (status === "success" && found === 0) {
-    headline = "По вашему запросу результатов нет";
-  } else if (status === "success") {
-    headline = "Поиск завершён";
-  } else if (status === "partial") {
-    headline = "Поиск завершён не полностью";
-  } else if (status === "failed") {
-    headline = recovery || "Поиск не удался";
-  } else {
-    headline = "Последний поиск";
-  }
-  const counts =
-    status === "failed" && found === 0
-      ? ""
-      : `Найдено: ${found}. Новых: ${created}. Обновлено: ${updated}. Уже были: ${unchanged}${
-          errors ? `. Ошибок: ${errors}` : ""
-        }.`;
-  const extra =
-    status === "partial" && recovery
-      ? recovery
-      : status === "failed" && recovery && headline !== recovery
-        ? recovery
-        : "";
-  els.last.hidden = false;
-  els.lastBody.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
-  // Avoid raw UUID / snapshot / transport text in the primary summary.
-  const blob = els.lastBody.textContent;
-  if (/[0-9a-f]{8}-[0-9a-f]{4}-/i.test(blob) || /criteria_snapshot|execution_snapshot|transport/i.test(blob)) {
-    els.lastBody.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
-  }
-}
-
-async function ensureSearchProfile() {
-  const listResponse = await fetch("/api/v1/search-profiles");
-  const listPayload = await listResponse.json();
-  if (!listResponse.ok) {
-    throw new Error(listPayload.message || "Не удалось загрузить параметры поиска");
-  }
-  if (listPayload.total && listPayload.items?.length) {
-    const profile = listPayload.items[0];
-    activeSearchProfileId = profile.id;
-    fillSearchFormFromProfile(profile);
-    return profile;
-  }
-  const createdResponse = await fetch("/api/v1/search-profiles", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      label: "Основной поиск",
-      text: "python",
-      area_id: "1",
-    }),
-  });
-  const created = await createdResponse.json();
-  if (!createdResponse.ok) {
-    throw new Error(created.message || "Не удалось создать параметры поиска");
-  }
-  activeSearchProfileId = created.id;
-  fillSearchFormFromProfile(created);
-  return created;
-}
-
-async function saveSearchProfileFromForm() {
-  const payload = criteriaPayloadFromForm();
-  if (!activeSearchProfileId) {
-    const createdResponse = await fetch("/api/v1/search-profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const created = await createdResponse.json();
-    if (!createdResponse.ok) {
-      throw new Error(created.message || "Не удалось сохранить параметры поиска");
+async function loadActiveResumeLine() {
+  const resumeLine = document.querySelector("#suitable-resume-line");
+  if (!resumeLine) return null;
+  try {
+    const response = await fetch("/api/v1/hh/resumes");
+    const payload = await response.json();
+    const active = payload.active_resume;
+    if (response.ok && active?.title) {
+      resumeLine.textContent = `Рабочее резюме: ${active.title}`;
+      return active;
     }
-    activeSearchProfileId = created.id;
-    return created;
+    if (response.ok && active?.external_id) {
+      resumeLine.textContent = "Рабочее резюме: выбрано";
+      return active;
+    }
+    resumeLine.textContent = "Рабочее резюме: не выбрано";
+  } catch (_error) {
+    resumeLine.textContent = "Рабочее резюме: недоступно";
   }
-  const response = await fetch(`/api/v1/search-profiles/${activeSearchProfileId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const updated = await response.json();
-  if (!response.ok) {
-    throw new Error(updated.message || "Не удалось сохранить параметры поиска");
-  }
-  return updated;
+  return null;
 }
 
-async function loadLatestSearchRun() {
-  if (!activeSearchProfileId) return;
-  const response = await fetch(
-    `/api/v1/search-runs?search_profile_id=${encodeURIComponent(activeSearchProfileId)}`,
-  );
+async function loadLatestSuitableRun() {
+  const response = await fetch("/api/v1/search-runs");
   const payload = await response.json();
   if (!response.ok || !payload.items?.length) return;
-  const latest = payload.items[0];
-  renderSearchRunSummary(latest);
+  const latest = payload.items.find((item) => item.acquisition_kind === "resume_suitable") || null;
+  if (!latest) return;
+  const title = latest.candidate_context_snapshot?.hh_resume_title;
+  renderSuitableSummary(latest, { sourceTotal: latest.source_total, resumeTitle: title });
   if (latest.status === "running") {
-    setSearchRunning(true);
-    setSearchStatus("Ищем вакансии…", { running: true });
+    setSuitableRunning(true);
+    setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
   }
 }
 
-async function runVacancySearch(event) {
-  event.preventDefault();
+async function runSuitableSearch() {
   if (vacancySearchRunning) return;
-  const els = searchFormEls();
-  const maxPages = Math.max(1, Math.min(5, Number(els.maxPages?.value || 1) || 1));
-  setSearchRunning(true);
-  setSearchStatus("Ищем вакансии…", { running: true });
+  setSuitableRunning(true);
+  setSuitableStatus("Проверяем подходящие вакансии… Это может занять несколько минут.", { running: true });
   try {
-    await saveSearchProfileFromForm();
-    const response = await fetch("/api/v1/hh/vacancies/search", {
+    const response = await fetch("/api/v1/hh/vacancies/suitable", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        search_profile_id: activeSearchProfileId,
-        execution: { order: "publication_time", max_pages: maxPages },
+        execution: { order: "publication_time", max_pages: 1 },
       }),
     });
     const payload = await response.json();
     const run = payload.search_run || null;
+    const resumeTitle =
+      payload.candidate_context?.hh_resume_title ||
+      run?.candidate_context_snapshot?.hh_resume_title;
     if (run) {
-      renderSearchRunSummary(run, { acquisitionCode: payload.code });
+      renderSuitableSummary(run, {
+        sourceTotal: payload.source_total ?? run.source_total,
+        resumeTitle,
+      });
     }
     if (!response.ok && !run) {
-      const msg = humanRecovery(payload.code) || payload.message || "Поиск не удался";
-      setSearchStatus(msg, { error: true });
+      setSuitableStatus(humanRecovery(payload.code) || payload.message || "Проверка не удалась", {
+        error: true,
+      });
       return;
     }
     const status = String(run?.status || payload.status || "");
     if (status === "failed") {
-      setSearchStatus(humanRecovery(run?.error_code || payload.code) || "Поиск не удался", {
+      setSuitableStatus(humanRecovery(run?.error_code || payload.code) || "Проверка не удалась", {
         error: true,
       });
     } else if (status === "partial") {
-      setSearchStatus("Поиск завершён не полностью", { error: false });
+      setSuitableStatus("Проверка завершена не полностью");
     } else if (status === "success" && Number(run?.found_count || 0) === 0) {
-      setSearchStatus("По вашему запросу результатов нет");
+      setSuitableStatus("В этой проверке подходящих вакансий нет");
     } else {
-      setSearchStatus("Поиск завершён");
+      setSuitableStatus("Проверка завершена");
     }
     await loadVacancies();
   } catch (error) {
-    setSearchStatus(error.message || "Поиск не удался", { error: true });
+    setSuitableStatus(error.message || "Проверка не удалась", { error: true });
   } finally {
-    setSearchRunning(false);
+    setSuitableRunning(false);
   }
 }
 
+function initVacancySearchTabs() {
+  document.querySelectorAll("[data-search-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.searchTab;
+      document.querySelectorAll("[data-search-tab]").forEach((node) => {
+        const active = node.dataset.searchTab === target;
+        node.classList.toggle("is-active", active);
+        node.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-search-panel]").forEach((panel) => {
+        panel.hidden = panel.dataset.searchPanel !== target;
+      });
+    });
+  });
+}
+
+function initVacancyListFilter() {
+  const text = document.querySelector("#vacancy-filter-text");
+  const status = document.querySelector("#vacancy-filter-status");
+  const apply = () => {
+    vacancyListFilter = {
+      text: text?.value || "",
+      status: status?.value || "",
+    };
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  };
+  text?.addEventListener("input", apply);
+  status?.addEventListener("change", apply);
+}
+
 function initVacancySearch() {
-  const els = searchFormEls();
-  if (!els.form) return;
-  els.form.addEventListener("submit", (event) => {
-    void runVacancySearch(event);
-  });
-  // Persist criteria when the user leaves a field (reload must restore them).
-  els.form.addEventListener("change", () => {
-    if (vacancySearchRunning) return;
-    void saveSearchProfileFromForm().catch(() => {});
-  });
+  initVacancySearchTabs();
+  initVacancyListFilter();
+  const button = document.querySelector("#suitable-run");
+  if (button) {
+    button.addEventListener("click", () => {
+      void runSuitableSearch();
+    });
+  }
   void (async () => {
+    await loadActiveResumeLine();
     try {
-      await ensureSearchProfile();
-      await loadLatestSearchRun();
-    } catch (error) {
-      setSearchStatus(error.message || "Не удалось загрузить параметры поиска", { error: true });
+      await loadLatestSuitableRun();
+    } catch (_error) {
+      // latest run is optional on first visit
     }
   })();
 }
