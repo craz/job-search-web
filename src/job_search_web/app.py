@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
@@ -211,6 +211,27 @@ def create_app(
                     "resume_content": None,
                 },
             )
+
+    @application.get("/api/v1/resume-artifacts/{artifact_id}/download", response_model=None)
+    def download_resume_artifact(artifact_id: str) -> Response | JSONResponse:
+        """Proxy exact stored resume file bytes from Core."""
+        try:
+            status, payload, headers = gateway.download_resume_artifact(artifact_id)
+        except CoreUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "core_unavailable",
+                    "message": "Core resume artifact download is unavailable",
+                },
+            )
+        if status != 200:
+            return JSONResponse(status_code=status, content={"code": "download_failed"})
+        media_type = headers.get("content-type", "application/octet-stream")
+        response_headers = {}
+        if "content-disposition" in headers:
+            response_headers["Content-Disposition"] = headers["content-disposition"]
+        return Response(content=payload, media_type=media_type, headers=response_headers)
 
     @application.post("/api/v1/hh/connection/open-login")
     def post_hh_open_login() -> JSONResponse:

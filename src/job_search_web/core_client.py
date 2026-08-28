@@ -219,3 +219,19 @@ class CoreClient:
     def get_search_run(self, run_id: str) -> tuple[int, Any]:
         """Read one SearchRun including snapshots and counters."""
         return self._request("GET", f"/api/v1/search-runs/{run_id}")
+
+    def download_resume_artifact(self, artifact_id: str) -> tuple[int, bytes, dict[str, str]]:
+        """Download auxiliary resume file bytes from Core."""
+        try:
+            response = httpx.get(
+                f"{self.base_url}/api/v1/resume-artifacts/{artifact_id}/download",
+                timeout=self.timeout_seconds,
+            )
+        except httpx.RequestError as error:
+            raise CoreUnavailableError from error
+        headers = {
+            key.lower(): value
+            for key, value in response.headers.items()
+            if key.lower() in {"content-type", "content-disposition"}
+        }
+        return response.status_code, response.content, headers

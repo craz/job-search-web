@@ -32,6 +32,7 @@ def test_openapi_publishes_vacancy_facade() -> None:
     assert "put" in paths["/api/v1/hh/resumes/active"]
     assert "post" in paths["/api/v1/hh/resumes/sync"]
     assert "get" in paths["/api/v1/candidate-context"]
+    assert "get" in paths["/api/v1/resume-artifacts/{artifact_id}/download"]
     assert "post" in paths["/api/v1/hh/connection/open-login"]
     assert "post" in paths["/api/v1/hh/connection/confirm"]
     assert "get" in paths["/api/v1/search-profiles"]

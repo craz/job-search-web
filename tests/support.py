@@ -289,6 +289,17 @@ class StubCore:
             "profile_version": self.profile_version,
             "hh_resume_link": self.hh_resume_link,
             "resume_content": self.resume_content,
+            "resume_file": getattr(self, "resume_file", None),
+        }
+
+    def download_resume_artifact(self, artifact_id: str) -> tuple[int, bytes, dict[str, str]]:
+        """Return synthetic resume file bytes for download proxy tests."""
+        self._guard()
+        self.calls.append(("resume-artifact-download", artifact_id))
+        payload = getattr(self, "resume_artifact_bytes", b"%PDF-1.4 fixture")
+        return 200, payload, {
+            "content-type": "application/pdf",
+            "content-disposition": 'attachment; filename="resume.pdf"',
         }
 
     def list_search_profiles(self) -> tuple[int, Any]:

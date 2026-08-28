@@ -399,6 +399,22 @@ button { cursor: pointer; }
   color: var(--color-warning, #9a6700);
 }
 
+.hh-resume-content__file {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-text-muted, #5f6b7a);
+}
+
+.hh-resume-content__file-link {
+  color: var(--color-link, #0b57d0);
+  text-decoration: none;
+}
+
+.hh-resume-content__file-link:hover {
+  text-decoration: underline;
+}
+
 .hh-resumes__list {
   display: flex;
   flex-wrap: wrap;

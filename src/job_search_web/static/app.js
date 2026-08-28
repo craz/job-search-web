@@ -16,6 +16,7 @@ const hhResumesStatus = document.querySelector("#hh-resumes-status");
 const hhResumeContent = document.querySelector("#hh-resume-content");
 const hhResumeWorking = document.querySelector("#hh-resume-working");
 const hhResumeSyncState = document.querySelector("#hh-resume-sync-state");
+const hhResumeFile = document.querySelector("#hh-resume-file");
 const hhResumeSync = document.querySelector("#hh-resume-sync");
 const hhResumesList = document.querySelector("#hh-resumes-list");
 const hhResumesActions = document.querySelector("#hh-resumes-actions");
@@ -1448,6 +1449,43 @@ function clearHhResumeContent() {
     hhResumeSync.dataset.mode = "";
     hhResumeSync.textContent = "Синхронизировать";
   }
+  if (hhResumeFile) {
+    hhResumeFile.hidden = true;
+    hhResumeFile.textContent = "";
+  }
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return "";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderResumeFileBlock(fileMeta) {
+  if (!hhResumeFile) return;
+  if (!fileMeta || !fileMeta.artifact_id) {
+    hhResumeFile.hidden = true;
+    hhResumeFile.textContent = "";
+    return;
+  }
+  const label = fileMeta.format_label ? String(fileMeta.format_label) : "FILE";
+  const size = formatFileSize(fileMeta.size_bytes);
+  const saved = formatResumeTimestamp(fileMeta.captured_at);
+  const href = `/api/v1/resume-artifacts/${encodeURIComponent(fileMeta.artifact_id)}/download`;
+  hhResumeFile.hidden = false;
+  hhResumeFile.innerHTML = "";
+  const title = document.createElement("span");
+  title.textContent = `Файл резюме: ${label}${size ? ` · ${size}` : ""}${
+    saved ? ` · сохранён ${saved}` : ""
+  }`;
+  const link = document.createElement("a");
+  link.href = href;
+  link.className = "hh-resume-content__file-link";
+  link.textContent = "Скачать локальную копию";
+  link.setAttribute("download", fileMeta.original_filename || "resume");
+  hhResumeFile.append(title, document.createElement("br"), link);
 }
 
 function formatResumeTimestamp(iso) {
@@ -1471,6 +1509,7 @@ function renderHhResumeContent(payload, { hhCheckFailed = false } = {}) {
   if (!hhResumeContent) return;
   const link = payload && payload.hh_resume_link ? payload.hh_resume_link : null;
   const meta = payload && payload.resume_content ? payload.resume_content : null;
+  const fileMeta = payload && payload.resume_file ? payload.resume_file : null;
   const linkStatus = link && link.status ? String(link.status) : "";
 
   // Cleared / none: do not keep previous snapshot as if it were current.
@@ -1524,6 +1563,7 @@ function renderHhResumeContent(payload, { hhCheckFailed = false } = {}) {
       hhResumeSync.dataset.mode = "retry";
       hhResumeSync.textContent = "Повторить";
     }
+    renderResumeFileBlock(fileMeta);
     return;
   }
 
@@ -1534,6 +1574,7 @@ function renderHhResumeContent(payload, { hhCheckFailed = false } = {}) {
         ? `Содержание синхронизировано\n${captured}`
         : "Содержание синхронизировано";
     }
+    renderResumeFileBlock(fileMeta);
     if (hhResumeSync) {
       hhResumeSync.hidden = false;
       hhResumeSync.disabled = false;
@@ -1617,6 +1658,9 @@ async function syncHhResumeContent() {
       showNotice("Локальная копия уже актуальна.");
     } else {
       showNotice("Содержание резюме синхронизировано.");
+    }
+    if (payload.file && payload.file.ok === false) {
+      showNotice("Не удалось сохранить файл резюме.", "error");
     }
   } catch (_error) {
     showNotice("Не удалось синхронизировать содержание резюме", "error");
