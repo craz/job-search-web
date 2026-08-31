@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- R2.3.6.1: add blind owner calibration labeling page `/calibration` that proxies
+  Scoring calibration HTTP and persists labels into the canonical private suite
+  store (`apply` / `maybe` / `skip`).
 - R2.2.5 corrected: primary «Подходящие вакансии» via
   `POST /api/v1/hh/vacancies/suitable`; «Получена» from `first_seen_at`;
   default sort newest-first; deferred «Свой поиск»; local list filter.

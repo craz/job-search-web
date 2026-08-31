@@ -37,6 +37,10 @@ def test_openapi_publishes_vacancy_facade() -> None:
     assert "post" in paths["/api/v1/hh/connection/confirm"]
     assert "get" in paths["/api/v1/search-profiles"]
     assert "post" in paths["/api/v1/hh/vacancies/search"]
+    assert "get" in paths["/api/v1/calibration/suites/{suite_id}"]
+    assert "get" in paths["/api/v1/calibration/suites/{suite_id}/cases/{case_id}"]
+    assert "put" in paths["/api/v1/calibration/suites/{suite_id}/labels/{case_id}"]
+    assert "put" in paths["/api/v1/calibration/suites/{suite_id}/session"]
 
 
 def test_web_source_does_not_import_core_or_database_drivers() -> None:
@@ -45,5 +49,6 @@ def test_web_source_does_not_import_core_or_database_drivers() -> None:
     source = "\n".join(path.read_text() for path in source_root.rglob("*.py"))
 
     assert "job_search_core" not in source
+    assert "job_search_scoring" not in source
     assert "sqlalchemy" not in source
     assert "psycopg" not in source

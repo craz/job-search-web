@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Blind owner calibration labeling for Job Search">
+    <title>Job Search — Calibration labeling</title>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260831-cal">
+    <link rel="stylesheet" href="/assets/calibration.css?v=20260831-cal">
+    <script src="/assets/calibration.js?v=20260831-cal" defer></script>
+  </head>
+  <body class="calibration-page">
+    <a class="skip-link" href="#calibration-main">К основному содержимому</a>
+    <div class="calibration-shell">
+      <header class="calibration-header">
+        <div>
+          <p class="calibration-header__eyebrow">Job Search · R2.3.6.1</p>
+          <h1 class="calibration-header__title">Owner calibration labeling</h1>
+          <p class="calibration-header__meta" id="suite-meta">Загрузка suite…</p>
+        </div>
+        <div class="calibration-header__actions">
+          <a class="btn btn--ghost btn--compact" href="/">К доске</a>
+          <button class="btn btn--secondary btn--compact" id="jump-unlabeled" type="button">
+            Первый без метки
+          </button>
+        </div>
+      </header>
+
+      <p class="calibration-progress" id="progress" aria-live="polite">—</p>
+      <p class="calibration-notice" id="notice" hidden role="status"></p>
+
+      <main id="calibration-main" class="calibration-main" tabindex="-1">
+        <section class="calibration-case" id="case-panel" aria-labelledby="case-title">
+          <p class="calibration-case__company" id="case-company"></p>
+          <h2 class="calibration-case__title" id="case-title"></h2>
+          <dl class="calibration-facts" id="case-facts"></dl>
+          <div class="calibration-description" id="case-description"></div>
+        </section>
+
+        <aside class="calibration-label-panel" aria-label="Owner label">
+          <p class="calibration-label-panel__hint">
+            Выберите ожидаемый verdict относительно текущего ResumeVersion.
+            Model score / Assessment не показываются.
+          </p>
+          <div class="calibration-verdicts" role="group" aria-label="Expected verdict">
+            <button class="btn btn--verdict" type="button" data-verdict="apply" id="label-apply">
+              apply
+            </button>
+            <button class="btn btn--verdict" type="button" data-verdict="maybe" id="label-maybe">
+              maybe
+            </button>
+            <button class="btn btn--verdict" type="button" data-verdict="skip" id="label-skip">
+              skip
+            </button>
+          </div>
+          <label class="calibration-reason">
+            <span>Короткий reason (optional)</span>
+            <textarea id="label-reason" rows="3" maxlength="500"></textarea>
+          </label>
+          <p class="calibration-current-label" id="current-label" hidden></p>
+          <div class="calibration-nav">
+            <button class="btn btn--ghost" id="prev-case" type="button">Previous</button>
+            <button class="btn btn--primary" id="save-label" type="button">Save label</button>
+            <button class="btn btn--ghost" id="next-case" type="button">Next</button>
+          </div>
+        </aside>
+      </main>
+
+      <section class="calibration-complete" id="complete-panel" hidden>
+        <h2>Labels complete</h2>
+        <p id="complete-summary"></p>
+        <p>CLI fallback: <code>job-search-scoring calibration validate-labels --suite-id …</code></p>
+      </section>
+    </div>
+  </body>
+</html>

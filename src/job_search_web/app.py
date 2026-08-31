@@ -27,6 +27,7 @@ from job_search_web.schemas import (
     VacancyMirrorRequest,
     VacancyStatusUpdate,
 )
+from job_search_web.scoring_client import ScoringClient, ScoringGateway, ScoringUnavailableError
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -50,17 +51,29 @@ def proxy_response(status_code: int, payload: Any) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=payload)
 
 
+def scoring_unavailable_response() -> JSONResponse:
+    """Return a stable browser-facing error when Scoring cannot be reached."""
+    return JSONResponse(
+        status_code=503,
+        content={"code": "scoring_unavailable", "message": "Scoring API is unavailable"},
+    )
+
+
 def create_app(
     core: CoreGateway | None = None,
     osint: OsintGateway | None = None,
     hh: HhGateway | None = None,
+    scoring: ScoringGateway | None = None,
     *,
     live_reload: bool | None = None,
 ) -> FastAPI:
-    """Build an isolated Web app around injectable Core/OSINT/HH HTTP gateways."""
+    """Build an isolated Web app around injectable Core/OSINT/HH/Scoring HTTP gateways."""
     gateway = core or CoreClient(os.getenv("CORE_API_URL", "http://127.0.0.1:8000"))
     osint_gateway = osint or OsintClient(os.getenv("OSINT_API_URL", "http://127.0.0.1:8081"))
     hh_gateway = hh or HhClient(os.getenv("HH_API_URL", "http://127.0.0.1:8092"))
+    scoring_gateway = scoring or ScoringClient(
+        os.getenv("SCORING_API_URL", "http://127.0.0.1:8090")
+    )
     live_reload_enabled = (
         os.getenv("WEB_LIVE_RELOAD", "0") == "1" if live_reload is None else live_reload
     )
@@ -79,6 +92,11 @@ def create_app(
     def index() -> FileResponse:
         """Serve the single vacancy-board document."""
         return FileResponse(STATIC_DIR / "index.html")
+
+    @application.get("/calibration", include_in_schema=False)
+    def calibration_page() -> FileResponse:
+        """Serve the blind owner calibration labeling UI."""
+        return FileResponse(STATIC_DIR / "calibration.html")
 
     @application.get("/health/live")
     def liveness() -> dict[str, str]:
@@ -578,6 +596,40 @@ def create_app(
             )
         except CoreUnavailableError:
             return unavailable_response()
+
+    @application.get("/api/v1/calibration/suites/{suite_id}")
+    def get_calibration_suite(suite_id: str) -> JSONResponse:
+        """Return calibration suite progress for blind owner labeling."""
+        try:
+            return proxy_response(*scoring_gateway.get_calibration_suite(suite_id))
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
+    @application.get("/api/v1/calibration/suites/{suite_id}/cases/{case_id}")
+    def get_calibration_case(suite_id: str, case_id: str) -> JSONResponse:
+        """Return one blind vacancy case without model/assessment fields."""
+        try:
+            return proxy_response(*scoring_gateway.get_calibration_case(suite_id, case_id))
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
+    @application.put("/api/v1/calibration/suites/{suite_id}/labels/{case_id}")
+    def put_calibration_label(suite_id: str, case_id: str, payload: dict[str, Any]) -> JSONResponse:
+        """Persist an owner label into the Scoring calibration store."""
+        try:
+            return proxy_response(
+                *scoring_gateway.put_calibration_label(suite_id, case_id, payload)
+            )
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
+    @application.put("/api/v1/calibration/suites/{suite_id}/session")
+    def put_calibration_session(suite_id: str, payload: dict[str, Any]) -> JSONResponse:
+        """Persist labeling navigation index for resume-after-reload."""
+        try:
+            return proxy_response(*scoring_gateway.put_calibration_session(suite_id, payload))
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
 
     return application
 

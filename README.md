@@ -37,12 +37,18 @@ refreshes an already open browser page when static assets change. This behavior
 is enabled only by `WEB_LIVE_RELOAD=1`; packaged standalone startup keeps normal
 asset caching and no polling dependency.
 
+Blind owner calibration labeling (R2.3.6.1) is served at
+`/calibration?suite_id=<suite_id>` and proxies Scoring calibration HTTP. It
+persists labels into the same private Scoring store as the CLI and never shows
+model scores, verdicts or Assessments.
+
 ## Boundaries
 
 - Browser requests use Web's same-origin `/api/v1` facade.
-- Web forwards the public Core contract and normalized OSINT research contract.
-- Core error status and payloads are preserved.
-- Transport failures become a stable `503 core_unavailable` response.
+- Web forwards the public Core contract, normalized OSINT research contract,
+  and Scoring calibration labeling contract.
+- Core/Scoring error status and payloads are preserved.
+- Transport failures become a stable `503 *_unavailable` response.
 - Fixtures and examples are synthetic.
 
 See the [vacancy board](docs/specs/vacancy-board.md) and

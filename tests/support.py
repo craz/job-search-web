@@ -297,10 +297,14 @@ class StubCore:
         self._guard()
         self.calls.append(("resume-artifact-download", artifact_id))
         payload = getattr(self, "resume_artifact_bytes", b"%PDF-1.4 fixture")
-        return 200, payload, {
-            "content-type": "application/pdf",
-            "content-disposition": 'attachment; filename="resume.pdf"',
-        }
+        return (
+            200,
+            payload,
+            {
+                "content-type": "application/pdf",
+                "content-disposition": 'attachment; filename="resume.pdf"',
+            },
+        )
 
     def list_search_profiles(self) -> tuple[int, Any]:
         self._guard()
@@ -842,6 +846,155 @@ class StubHh:
         }
 
 
+class StubScoring:
+    """In-memory Scoring calibration gateway for Web facade tests."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, Any]] = []
+        self.suite_id = "cal-synthetic-fixture"
+        self.case_ids = ["case-001-synthetic", "case-002-synthetic"]
+        self.labels: dict[str, dict[str, Any]] = {}
+        self.session_index = 0
+        self.unavailable = False
+
+    def _raise_if_unavailable(self) -> None:
+        if self.unavailable:
+            from job_search_web.scoring_client import ScoringUnavailableError
+
+            raise ScoringUnavailableError
+
+    def get_calibration_suite(self, suite_id: str) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("get_suite", suite_id))
+        if suite_id != self.suite_id:
+            return 404, {"detail": {"code": "suite_not_found", "message": "suite_not_found"}}
+        return 200, {
+            "suite_id": self.suite_id,
+            "status": "awaiting_labels",
+            "case_count": len(self.case_ids),
+            "labeled_cases": len(self.labels),
+            "labels_total": len(self.case_ids),
+            "complete": len(self.labels) == len(self.case_ids),
+            "missing_case_ids": [cid for cid in self.case_ids if cid not in self.labels],
+            "distribution": {
+                "apply": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "apply"
+                ),
+                "maybe": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "maybe"
+                ),
+                "skip": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "skip"
+                ),
+            },
+            "expected_verdicts": ["apply", "maybe", "skip"],
+            "selected_case_ids": list(self.case_ids),
+            "session_index": self.session_index,
+            "first_unlabeled_index": next(
+                (index for index, cid in enumerate(self.case_ids) if cid not in self.labels),
+                None,
+            ),
+            "profile_version_id": "00000000-0000-4000-8000-000000000001",
+            "resume_version_id": "00000000-0000-4000-8000-000000000002",
+            "candidate_context_hash": "a" * 64,
+            "pool_kind": "real_hh_resume_suitable",
+            "eligibility_rule_version": "real-hh-resume-suitable-v1",
+            "selection_seed": 20260831,
+        }
+
+    def get_calibration_case(self, suite_id: str, case_id: str) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("get_case", suite_id, case_id))
+        if suite_id != self.suite_id or case_id not in self.case_ids:
+            return 404, {"detail": {"code": "case_not_found", "message": "case_not_found"}}
+        index = self.case_ids.index(case_id)
+        return 200, {
+            "suite_id": suite_id,
+            "index": index,
+            "position": index + 1,
+            "total": len(self.case_ids),
+            "case": {
+                "case_id": case_id,
+                "vacancy_id": "00000000-0000-4000-8000-000000000010",
+                "title": "Synthetic Backend Engineer",
+                "company": "Synthetic Co",
+                "description": "Synthetic vacancy description for calibration UI tests.",
+                "conditions_summary": "remote · Moscow",
+                "work_format": "remote",
+                "salary": "250000 RUB",
+                "location": "Moscow",
+                "experience": "3+ years",
+                "selection_stratum": "ic_it_role",
+            },
+            "label": self.labels.get(case_id),
+            "expected_verdicts": ["apply", "maybe", "skip"],
+            "labeled_cases": len(self.labels),
+            "complete": len(self.labels) == len(self.case_ids),
+        }
+
+    def put_calibration_label(
+        self, suite_id: str, case_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("put_label", suite_id, case_id, payload))
+        if suite_id != self.suite_id or case_id not in self.case_ids:
+            return 404, {"detail": {"code": "case_not_found", "message": "case_not_found"}}
+        verdict = str(payload.get("expected_verdict", ""))
+        if verdict not in {"apply", "maybe", "skip"}:
+            return 400, {"detail": {"code": "invalid_label", "message": "invalid_expected_verdict"}}
+        label = {
+            "case_id": case_id,
+            "expected_verdict": verdict,
+            "labeled_at": "2026-08-31T12:00:00+00:00",
+            "label_schema_version": 1,
+        }
+        if payload.get("reason"):
+            label["reason"] = str(payload["reason"])
+        self.labels[case_id] = label
+        self.session_index = min(self.case_ids.index(case_id) + 1, len(self.case_ids) - 1)
+        return 200, {
+            "suite_id": suite_id,
+            "case_id": case_id,
+            "label": label,
+            "labeled_cases": len(self.labels),
+            "labels_total": len(self.case_ids),
+            "complete": len(self.labels) == len(self.case_ids),
+            "distribution": {
+                "apply": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "apply"
+                ),
+                "maybe": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "maybe"
+                ),
+                "skip": sum(
+                    1 for item in self.labels.values() if item["expected_verdict"] == "skip"
+                ),
+            },
+            "session_index": self.session_index,
+            "first_unlabeled_index": next(
+                (index for index, cid in enumerate(self.case_ids) if cid not in self.labels),
+                None,
+            ),
+        }
+
+    def put_calibration_session(self, suite_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("put_session", suite_id, payload))
+        if suite_id != self.suite_id:
+            return 404, {"detail": {"code": "suite_not_found", "message": "suite_not_found"}}
+        index = int(payload.get("index", 0))
+        if index < 0 or index >= len(self.case_ids):
+            return 400, {
+                "detail": {"code": "invalid_session_index", "message": "invalid_session_index"}
+            }
+        self.session_index = index
+        return 200, {
+            "suite_id": suite_id,
+            "session_index": index,
+            "case_id": self.case_ids[index],
+        }
+
+
 class WebClient:
     """Synchronous facade around HTTPX's maintained ASGI transport."""
 
@@ -851,10 +1004,17 @@ class WebClient:
         *,
         osint: StubOsint | None = None,
         hh: StubHh | None = None,
+        scoring: StubScoring | None = None,
         live_reload: bool = False,
     ) -> None:
         """Bind requests to one Web app and synthetic Core gateway."""
-        self.app = create_app(core, osint or StubOsint(), hh or StubHh(), live_reload=live_reload)
+        self.app = create_app(
+            core,
+            osint or StubOsint(),
+            hh or StubHh(),
+            scoring or StubScoring(),
+            live_reload=live_reload,
+        )
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Send one request without opening a network socket."""
