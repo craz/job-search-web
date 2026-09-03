@@ -332,3 +332,64 @@ def mirror_stays_outside_core(mirror_flow: tuple[httpx.Response, StubCore, StubO
     response, core, _ = mirror_flow
     assert response.json()["items"][0]["mirrors"][0]["status"] == "proposed"
     assert core.calls == []
+
+
+@given(
+    "Core содержит активную вакансию без оценки",
+    target_fixture="score_context",
+)
+def core_has_active_unscored() -> dict:
+    from tests.support import StubHh, StubScoring
+
+    core = StubCore()
+    core.items[0]["source_status"] = "active"
+    scoring = StubScoring()
+    hh = StubHh()
+    return {"core": core, "scoring": scoring, "hh": hh}
+
+
+@given("Core содержит архивную вакансию", target_fixture="score_context")
+def core_has_archived() -> dict:
+    from tests.support import StubHh, StubScoring
+
+    core = StubCore()
+    core.items[0]["source_status"] = "archived"
+    scoring = StubScoring()
+    hh = StubHh()
+    return {"core": core, "scoring": scoring, "hh": hh}
+
+
+@when("Web запускает ручную оценку вакансии", target_fixture="score_response")
+def run_manual_score(score_context: dict) -> tuple[httpx.Response, dict]:
+    client = WebClient(
+        score_context["core"],
+        hh=score_context["hh"],
+        scoring=score_context["scoring"],
+    )
+    response = client.request(
+        "POST",
+        "/api/v1/vacancies/00000000-0000-0000-0000-000000000042/score",
+    )
+    return response, score_context
+
+
+@then("Web ставит semantic_v1 job в очередь Scoring")
+def score_enqueued(score_response: tuple[httpx.Response, dict]) -> None:
+    response, ctx = score_response
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    assert ("score_semantic_v1", "00000000-0000-0000-0000-000000000042") in ctx["scoring"].calls
+
+
+@then("HH source-status не вызывается")
+def hh_not_called_for_active(score_response: tuple[httpx.Response, dict]) -> None:
+    _, ctx = score_response
+    assert not any(call[0] == "vacancy-source-status" for call in ctx["hh"].calls)
+
+
+@then("Web возвращает vacancy_archived без вызова Scoring")
+def archived_blocks_scoring(score_response: tuple[httpx.Response, dict]) -> None:
+    response, ctx = score_response
+    assert response.status_code == 409
+    assert response.json()["code"] == "vacancy_archived"
+    assert "score_semantic_v1" not in [call[0] for call in ctx["scoring"].calls]

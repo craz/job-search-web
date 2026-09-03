@@ -59,6 +59,43 @@ def scoring_unavailable_response() -> JSONResponse:
     )
 
 
+def hh_unavailable_response() -> JSONResponse:
+    """Return a stable browser-facing error when HH cannot be reached."""
+    return JSONResponse(
+        status_code=503,
+        content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+    )
+
+
+def _source_status_of(vacancy: dict[str, Any]) -> str:
+    """Normalize Core vacancy source_status; missing values behave as unknown."""
+    value = vacancy.get("source_status")
+    if value in {"active", "archived", "unknown"}:
+        return str(value)
+    return "unknown"
+
+
+def _vacancy_archived_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "code": "vacancy_archived",
+            "message": "Vacancy is archived on the source; scoring is blocked",
+        },
+    )
+
+
+def _source_status_unknown_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "code": "source_status_unknown",
+            "message": "Vacancy source status is still unknown after refresh",
+            "retryable": True,
+        },
+    )
+
+
 def create_app(
     core: CoreGateway | None = None,
     osint: OsintGateway | None = None,
@@ -628,6 +665,112 @@ def create_app(
         """Persist labeling navigation index for resume-after-reload."""
         try:
             return proxy_response(*scoring_gateway.put_calibration_session(suite_id, payload))
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
+    def refresh_vacancy_source_status(vacancy_id: str) -> tuple[int, Any] | JSONResponse:
+        """HH RO check → Core source-status write → re-read vacancy.
+
+        Returns either a ``(status_code, vacancy)`` tuple from Core or a
+        browser-facing ``JSONResponse`` error. Does not call Scoring.
+        """
+        try:
+            status, vacancy = gateway.get_vacancy(vacancy_id)
+        except CoreUnavailableError:
+            return unavailable_response()
+        if status != 200 or not isinstance(vacancy, dict):
+            return proxy_response(status, vacancy)
+
+        external_id = str(vacancy.get("external_id") or "").strip()
+        if not external_id:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "code": "source_status_unknown",
+                    "message": "Vacancy has no external_id for source-status refresh",
+                    "retryable": True,
+                },
+            )
+
+        try:
+            hh_status, hh_payload = hh_gateway.get_vacancy_source_status(external_id)
+        except HhUnavailableError:
+            return hh_unavailable_response()
+        if hh_status != 200 or not isinstance(hh_payload, dict):
+            return proxy_response(hh_status, hh_payload)
+
+        observed = hh_payload.get("status")
+        if observed not in {"active", "archived", "unknown"}:
+            observed = "unknown"
+        core_body: dict[str, Any] = {"status": observed}
+        if hh_payload.get("reason"):
+            core_body["reason"] = hh_payload["reason"]
+        if hh_payload.get("checked_at"):
+            core_body["checked_at"] = hh_payload["checked_at"]
+
+        try:
+            write_status, written = gateway.post_vacancy_source_status(vacancy_id, core_body)
+        except CoreUnavailableError:
+            return unavailable_response()
+        if write_status not in {200, 201} or not isinstance(written, dict):
+            return proxy_response(write_status, written)
+
+        try:
+            reread_status, reread = gateway.get_vacancy(vacancy_id)
+        except CoreUnavailableError:
+            return unavailable_response()
+        if reread_status != 200 or not isinstance(reread, dict):
+            return proxy_response(reread_status, reread)
+        return reread_status, reread
+
+    @application.post("/api/v1/vacancies/{vacancy_id}/source-status/refresh")
+    def post_vacancy_source_status_refresh(vacancy_id: str) -> JSONResponse:
+        """Refresh Core source_status from HH without enqueueing Scoring."""
+        result = refresh_vacancy_source_status(vacancy_id)
+        if isinstance(result, JSONResponse):
+            return result
+        return proxy_response(*result)
+
+    @application.post("/api/v1/vacancies/{vacancy_id}/score")
+    def post_vacancy_score(vacancy_id: str) -> JSONResponse:
+        """Manual semantic_v1 score with source-status gate (R2.4.1b).
+
+        Flow: Core vacancy → block archived → refresh unknown via HH→Core →
+        enqueue Scoring only when source_status is active. Never invokes LLM
+        inside Web; Scoring identity reuse handles double-submit.
+        """
+        try:
+            status, vacancy = gateway.get_vacancy(vacancy_id)
+        except CoreUnavailableError:
+            return unavailable_response()
+        if status != 200 or not isinstance(vacancy, dict):
+            return proxy_response(status, vacancy)
+
+        source_status = _source_status_of(vacancy)
+        if source_status == "archived":
+            return _vacancy_archived_response()
+
+        if source_status == "unknown":
+            refreshed = refresh_vacancy_source_status(vacancy_id)
+            if isinstance(refreshed, JSONResponse):
+                return refreshed
+            _, vacancy = refreshed
+            source_status = _source_status_of(vacancy)
+            if source_status == "archived":
+                return _vacancy_archived_response()
+            if source_status != "active":
+                return _source_status_unknown_response()
+
+        try:
+            return proxy_response(*scoring_gateway.score_semantic_v1(vacancy_id))
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
+    @application.get("/api/v1/score/jobs/{job_id}")
+    def get_score_job(job_id: str) -> JSONResponse:
+        """Proxy Scoring job status for light UI polling after queue accept."""
+        try:
+            return proxy_response(*scoring_gateway.get_job(job_id))
         except ScoringUnavailableError:
             return scoring_unavailable_response()
 

@@ -11,7 +11,9 @@ The browser lists and creates vacancies, changes their controlled funnel status,
 records local Applications linked to existing Vacancies, displays/updates
 Core-owned Daily Metrics, tracks confirmed people connected to a company and
 manages measurable search Hypotheses. Hypothesis results are local evidence;
-normalized vacancy Assessments are displayed without invoking a model provider;
+normalized vacancy Assessments are displayed from Core; the vacancy list can
+enqueue a manual semantic_v1 score via Web orchestration (source_status gate,
+optional HH refresh) without Web calling Ollama itself;
 vacancy. Application and contact statuses are local tracking workflows only:
 the Web service never submits to an employer or sends a message. It can trigger
 bounded public OSINT research and displays the result as unverified evidence.

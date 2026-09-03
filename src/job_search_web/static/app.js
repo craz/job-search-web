@@ -180,6 +180,62 @@ function renderVacancyAssessmentDetail(assessment) {
   </div>`;
 }
 
+const sourceStatusLabels = {
+  active: "На источнике",
+  archived: "В архиве",
+  unknown: "Статус неизвестен",
+};
+
+const sourceStatusBadge = {
+  active: "success",
+  archived: "danger",
+  unknown: "warning",
+};
+
+const FRESHNESS_DAYS = 14;
+
+function vacancySourceStatus(item) {
+  const value = item?.source_status;
+  if (value === "active" || value === "archived" || value === "unknown") return value;
+  return "unknown";
+}
+
+function vacancyFreshnessHint(item) {
+  const raw = item?.source_published_at || item?.first_seen_at;
+  if (!raw) return "";
+  const ageMs = Date.now() - Date.parse(raw);
+  if (Number.isNaN(ageMs) || ageMs < 0) return "";
+  const days = ageMs / 86400000;
+  if (days > FRESHNESS_DAYS) return "старше 14 дн.";
+  return "";
+}
+
+/**
+ * Map NEVER_SCORED + source_status (+ existing assessment) to row action markup.
+ * States: scored | archived | score (enabled Оценить for active/unknown/expired-active).
+ */
+function vacancyScoreActionHtml(item, assessment) {
+  if (assessment) return "";
+  const sourceStatus = vacancySourceStatus(item);
+  if (sourceStatus === "archived") {
+    return `<span class="list-row__score-state" data-score-state="archived">В архиве</span>`;
+  }
+  return `<button class="btn btn--secondary btn--sm" data-score type="button">Оценить</button>`;
+}
+
+function vacancySourceSignalsHtml(item) {
+  const sourceStatus = vacancySourceStatus(item);
+  const freshness = vacancyFreshnessHint(item);
+  const badge = renderBadge(
+    sourceStatusLabels[sourceStatus] || sourceStatus,
+    sourceStatusBadge[sourceStatus] || "neutral",
+  );
+  const hint = freshness
+    ? `<span class="list-row__freshness" data-freshness="stale">${escapeHtml(freshness)}</span>`
+    : "";
+  return `${badge}${hint}`;
+}
+
 function renderBadge(label, variant = "neutral") {
   return `<span class="badge badge--${variant}"><span class="badge__dot" aria-hidden="true"></span>${escapeHtml(label)}</span>`;
 }
@@ -372,6 +428,8 @@ function vacancyRow(item) {
   const assessment = assessmentsByVacancyId.get(item.id);
   const assessmentSummary = renderVacancyAssessmentSummary(assessment);
   const assessmentDetail = renderVacancyAssessmentDetail(assessment);
+  const scoreAction = vacancyScoreActionHtml(item, assessment);
+  const sourceSignals = vacancySourceSignalsHtml(item);
   const detailParts = [];
   if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
   else if (item.company.website_url) detailParts.push("OSINT и зеркала");
@@ -400,7 +458,7 @@ function vacancyRow(item) {
         </div>
       </details>`
     : "";
-  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}">
+  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}" data-source-status="${escapeHtml(vacancySourceStatus(item))}">
     <div class="list-row">
       <div class="list-row__primary">
         <div class="list-row__identity">
@@ -408,6 +466,7 @@ function vacancyRow(item) {
           <div class="list-row__badges">
             ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
             ${renderBadge(item.source, "neutral")}
+            ${sourceSignals}
           </div>
         </div>
         <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(excerpt(item.description))}</p>
@@ -418,6 +477,7 @@ function vacancyRow(item) {
         <div class="list-row__actions">
           <a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
           <label class="list-row__control"><span class="sr-only">Статус</span><select class="control control--select" data-status>${options}</select></label>
+          ${scoreAction}
           <button class="btn btn--secondary btn--sm" data-apply type="button">Записать отклик</button>
         </div>
       </div>
@@ -1037,6 +1097,67 @@ grid.addEventListener("click", async (event) => {
       showNotice(error.message, "error");
       confirmButton.disabled = false;
       confirmButton.textContent = "Подтвердить в Core";
+    }
+    return;
+  }
+  const scoreButton = event.target.closest("[data-score]");
+  if (scoreButton) {
+    const card = scoreButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    if (!vacancyId) return;
+    scoreButton.disabled = true;
+    scoreButton.classList.add("is-processing");
+    scoreButton.textContent = "Оценивается…";
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/score`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (payload.code === "vacancy_archived") {
+          showNotice(payload.message || "Вакансия в архиве на источнике", "warning");
+          await loadVacancies();
+          return;
+        }
+        if (payload.code === "source_status_unknown") {
+          showNotice(payload.message || "Статус на источнике неизвестен — повторите позже", "warning");
+          scoreButton.disabled = false;
+          scoreButton.classList.remove("is-processing");
+          scoreButton.textContent = "Оценить";
+          return;
+        }
+        throw new Error(payload.message || "Оценка не запущена");
+      }
+      const jobId = payload.job_id;
+      scoreButton.textContent = "В очереди";
+      showNotice("Оценка поставлена в очередь");
+      if (jobId) {
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          const jobResponse = await fetch(`/api/v1/score/jobs/${jobId}`);
+          const jobPayload = await jobResponse.json();
+          if (!jobResponse.ok) break;
+          if (jobPayload.status === "processing") {
+            scoreButton.textContent = "Оценивается…";
+            continue;
+          }
+          if (jobPayload.status === "done") {
+            showNotice("Оценка готова");
+            await loadVacancies();
+            return;
+          }
+          if (jobPayload.status === "error") {
+            throw new Error(jobPayload.error_message || jobPayload.error_code || "Оценка не выполнена");
+          }
+        }
+        showNotice("Оценка ещё в очереди — обновите список позже", "info");
+      }
+      scoreButton.disabled = false;
+      scoreButton.classList.remove("is-processing");
+      scoreButton.textContent = "Оценить";
+    } catch (error) {
+      showNotice(error.message, "error");
+      scoreButton.disabled = false;
+      scoreButton.classList.remove("is-processing");
+      scoreButton.textContent = "Оценить";
     }
     return;
   }

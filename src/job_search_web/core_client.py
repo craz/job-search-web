@@ -18,12 +18,22 @@ class CoreGateway(Protocol):
         """Return the Core status and decoded vacancy collection."""
         ...
 
+    def get_vacancy(self, vacancy_id: str) -> tuple[int, Any]:
+        """Return one vacancy by local id."""
+        ...
+
     def create_vacancy(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
         """Create or replay one vacancy through Core."""
         ...
 
     def update_status(self, vacancy_id: str, status: str) -> tuple[int, Any]:
         """Update one vacancy status through Core."""
+        ...
+
+    def post_vacancy_source_status(
+        self, vacancy_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]:
+        """Record an explicit source-availability observation for one vacancy."""
         ...
 
     def list_applications(self) -> tuple[int, Any]:
@@ -74,6 +84,8 @@ class CoreGateway(Protocol):
 
     def get_search_run(self, run_id: str) -> tuple[int, Any]: ...
 
+    def download_resume_artifact(self, artifact_id: str) -> tuple[int, bytes, dict[str, str]]: ...
+
 
 class CoreClient:
     """Synchronous bounded HTTP client with no knowledge of Core persistence."""
@@ -104,6 +116,10 @@ class CoreClient:
         """Fetch normalized vacancies from Core."""
         return self._request("GET", "/api/v1/vacancies")
 
+    def get_vacancy(self, vacancy_id: str) -> tuple[int, Any]:
+        """Fetch one normalized vacancy by local id."""
+        return self._request("GET", f"/api/v1/vacancies/{vacancy_id}")
+
     def create_vacancy(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
         """Forward a validated vacancy with its idempotency key."""
         return self._request(
@@ -116,6 +132,16 @@ class CoreClient:
     def update_status(self, vacancy_id: str, status: str) -> tuple[int, Any]:
         """Forward a controlled status update to Core."""
         return self._request("PATCH", f"/api/v1/vacancies/{vacancy_id}", json={"status": status})
+
+    def post_vacancy_source_status(
+        self, vacancy_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]:
+        """Forward an explicit source-availability observation to Core."""
+        return self._request(
+            "POST",
+            f"/api/v1/vacancies/{vacancy_id}/source-status",
+            json=payload,
+        )
 
     def list_applications(self) -> tuple[int, Any]:
         """Fetch normalized Applications from Core."""

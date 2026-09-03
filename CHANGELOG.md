@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- R2.4.1b: vacancy list «Оценить» action with Web orchestration
+  `POST /api/v1/vacancies/{id}/score` (source_status gate + HH refresh + Scoring
+  semantic-v1 enqueue), optional source-status refresh, and light job polling.
+  No real LLM calls in Web tests.
 - R2.3.6.1: add blind owner calibration labeling page `/calibration` that proxies
   Scoring calibration HTTP and persists labels into the canonical private suite
   store (`apply` / `maybe` / `skip`).

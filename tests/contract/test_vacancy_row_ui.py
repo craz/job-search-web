@@ -1,4 +1,4 @@
-"""Contract checks for Vacancy row UI (R2.2.5 temporal + hierarchy)."""
+"""Contract checks for Vacancy row UI (R2.2.5 temporal + hierarchy + R2.4.1b score)."""
 
 from __future__ import annotations
 
@@ -40,3 +40,25 @@ def test_vacancy_list_hierarchy_styles_present() -> None:
     assert ".vacancy-list .list-row__title" in css
     assert ".vacancy-list .list-row__meta" in css
     assert ".list-row-group--vacancy" in css
+
+
+def test_score_action_mapping_strings_present() -> None:
+    """R2.4.1b: Оценить button mapping and in-flight / archived labels."""
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "function vacancyScoreActionHtml" in js
+    assert 'data-score type="button">Оценить</button>' in js
+    assert 'data-score-state="archived">В архиве</span>' in js
+    assert "Оценивается…" in js
+    assert "В очереди" in js
+    assert "/api/v1/vacancies/${vacancyId}/score" in js
+    assert "vacancy_archived" in js
+    assert "source_status_unknown" in js
+    assert "function vacancySourceSignalsHtml" in js
+    assert 'active: "На источнике"' in js
+    assert 'archived: "В архиве"' in js
+    assert 'unknown: "Статус неизвестен"' in js
+    assert "старше 14 дн." in js
+    # Score CTA sits next to application recording in list-row__actions.
+    score_idx = js.index("vacancyScoreActionHtml(item, assessment)")
+    apply_idx = js.index('data-apply type="button">Записать отклик</button>')
+    assert score_idx < apply_idx

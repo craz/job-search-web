@@ -21,6 +21,11 @@ def vacancy(status: str = "new") -> dict[str, Any]:
         "url": "https://example.com/vacancies/42",
         "description": "Synthetic Web fixture.",
         "status": status,
+        "archived": None,
+        "source_status": "unknown",
+        "source_status_checked_at": None,
+        "archived_at": None,
+        "source_status_reason": None,
         "first_seen_at": "2026-08-18T10:00:00Z",
         "last_seen_at": "2026-08-18T10:00:00Z",
         "source_published_at": None,
@@ -164,6 +169,15 @@ class StubCore:
         self.calls.append(("list", None))
         return 200, {"items": self.items, "total": len(self.items)}
 
+    def get_vacancy(self, vacancy_id: str) -> tuple[int, Any]:
+        """Return one synthetic vacancy by id."""
+        self._guard()
+        self.calls.append(("get", vacancy_id))
+        for item in self.items:
+            if item["id"] == vacancy_id:
+                return 200, dict(item)
+        return 404, {"code": "vacancy_not_found", "message": "Vacancy does not exist"}
+
     def create_vacancy(self, payload: dict[str, Any], key: str) -> tuple[int, Any]:
         """Record idempotency metadata and return a created vacancy."""
         self._guard()
@@ -180,6 +194,34 @@ class StubCore:
         updated = {**self.items[0], "status": status}
         self.items[0] = updated
         return 200, updated
+
+    def post_vacancy_source_status(
+        self, vacancy_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]:
+        """Apply one synthetic source-status observation."""
+        self._guard()
+        self.calls.append(("source-status", (vacancy_id, payload)))
+        for index, item in enumerate(self.items):
+            if item["id"] != vacancy_id:
+                continue
+            status = payload.get("status", "unknown")
+            updated = {
+                **item,
+                "source_status": status,
+                "source_status_checked_at": payload.get("checked_at") or "2026-09-03T12:00:00Z",
+                "source_status_reason": payload.get("reason"),
+                "archived": True
+                if status == "archived"
+                else (False if status == "active" else None),
+                "archived_at": (
+                    payload.get("checked_at") or "2026-09-03T12:00:00Z"
+                    if status == "archived"
+                    else (None if status == "active" else item.get("archived_at"))
+                ),
+            }
+            self.items[index] = updated
+            return 200, dict(updated)
+        return 404, {"code": "vacancy_not_found", "message": "Vacancy does not exist"}
 
     def list_applications(self) -> tuple[int, Any]:
         """Return the current synthetic Application collection."""
@@ -845,9 +887,31 @@ class StubHh:
             "hh_writes": False,
         }
 
+    def get_vacancy_source_status(self, external_id: str) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("vacancy-source-status", external_id))
+        result = getattr(self, "source_status_result", None)
+        if result is not None:
+            status_code, body = result
+            return status_code, body
+        return 200, {
+            "external_id": external_id,
+            "status": getattr(self, "source_status", "active"),
+            "checked_at": "2026-09-03T12:00:00Z",
+            "evidence": None,
+            "reason": None,
+            "transport_status": "available",
+            "code": "ready",
+            "hh_writes": False,
+            "core_writes": False,
+        }
+
 
 class StubScoring:
-    """In-memory Scoring calibration gateway for Web facade tests."""
+    """In-memory Scoring calibration + semantic score gateway for Web facade tests."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, Any]] = []
@@ -856,6 +920,7 @@ class StubScoring:
         self.labels: dict[str, dict[str, Any]] = {}
         self.session_index = 0
         self.unavailable = False
+        self.jobs: dict[str, dict[str, Any]] = {}
 
     def _raise_if_unavailable(self) -> None:
         if self.unavailable:
@@ -992,6 +1057,53 @@ class StubScoring:
             "suite_id": suite_id,
             "session_index": index,
             "case_id": self.case_ids[index],
+        }
+
+    def score_semantic_v1(self, vacancy_id: str) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("score_semantic_v1", vacancy_id))
+        job_id = "00000000-0000-4000-8000-0000000000aa"
+        self.jobs[job_id] = {
+            "job_id": job_id,
+            "vacancy_id": vacancy_id,
+            "job_kind": "semantic_v1",
+            "status": "queued",
+            "assessment_id": None,
+            "reused_existing": False,
+            "error_code": None,
+            "error_message": None,
+            "diagnostic_id": None,
+        }
+        return 202, {
+            "job_id": job_id,
+            "status": "queued",
+            "links": {
+                "job": f"/api/v1/jobs/{job_id}",
+                "result": f"/api/v1/jobs/{job_id}/result",
+            },
+        }
+
+    def get_job(self, job_id: str) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("get_job", job_id))
+        job = self.jobs.get(job_id)
+        if job is None:
+            return 404, {"detail": {"code": "job_not_found"}}
+        return 200, dict(job)
+
+    def get_scoring_state(
+        self, vacancy_id: str, scoring_mode: str = "semantic_v1"
+    ) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("get_scoring_state", vacancy_id, scoring_mode))
+        return 200, {
+            "vacancy_id": vacancy_id,
+            "state": "never_scored",
+            "scoring_mode": scoring_mode,
+            "current_scoring_identity_hash": "a" * 64,
+            "reusable_assessment_id": None,
+            "latest_assessment_id": None,
+            "stale_reason_codes": [],
         }
 
 

@@ -1,4 +1,4 @@
-"""HTTP-only adapter for Scoring calibration labeling (R2.3.6.1)."""
+"""HTTP-only adapter for Scoring calibration labeling and semantic scoring (R2.4.1b)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ class ScoringUnavailableError(Exception):
 
 
 class ScoringGateway(Protocol):
-    """Minimal Scoring operations required by the owner labeling UI."""
+    """Minimal Scoring operations required by the owner labeling UI and manual score."""
 
     def get_calibration_suite(self, suite_id: str) -> tuple[int, Any]: ...
 
@@ -24,6 +24,14 @@ class ScoringGateway(Protocol):
 
     def put_calibration_session(
         self, suite_id: str, payload: dict[str, Any]
+    ) -> tuple[int, Any]: ...
+
+    def score_semantic_v1(self, vacancy_id: str) -> tuple[int, Any]: ...
+
+    def get_job(self, job_id: str) -> tuple[int, Any]: ...
+
+    def get_scoring_state(
+        self, vacancy_id: str, scoring_mode: str = "semantic_v1"
     ) -> tuple[int, Any]: ...
 
 
@@ -63,4 +71,26 @@ class ScoringClient:
             "PUT",
             f"/api/v1/calibration/suites/{suite_id}/session",
             json=payload,
+        )
+
+    def score_semantic_v1(self, vacancy_id: str) -> tuple[int, Any]:
+        """Enqueue one semantic_v1 scoring job; never blocks on LLM completion."""
+        return self._request(
+            "POST",
+            "/api/v1/score/semantic-v1",
+            json={"vacancy_id": vacancy_id},
+        )
+
+    def get_job(self, job_id: str) -> tuple[int, Any]:
+        """Return one Scoring job envelope for UI polling."""
+        return self._request("GET", f"/api/v1/jobs/{job_id}")
+
+    def get_scoring_state(
+        self, vacancy_id: str, scoring_mode: str = "semantic_v1"
+    ) -> tuple[int, Any]:
+        """Return derived never_scored/current/stale state for one vacancy."""
+        return self._request(
+            "GET",
+            f"/api/v1/vacancies/{vacancy_id}/scoring-state",
+            params={"scoring_mode": scoring_mode},
         )

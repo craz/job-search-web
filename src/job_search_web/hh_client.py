@@ -32,6 +32,8 @@ class HhGateway(Protocol):
         self, payload: dict[str, Any] | None = None
     ) -> tuple[int, Any]: ...
 
+    def get_vacancy_source_status(self, external_id: str) -> tuple[int, Any]: ...
+
 
 class HhClient:
     """Bounded HTTP client for HH connection/account; never touches HH volumes."""
@@ -106,4 +108,12 @@ class HhClient:
             "/api/v1/vacancies/suitable",
             json=payload or {},
             timeout=max(self.timeout_seconds, 180.0),
+        )
+
+    def get_vacancy_source_status(self, external_id: str) -> tuple[int, Any]:
+        """RO check whether one HH vacancy looks active or archived on the source."""
+        return self._request(
+            "GET",
+            f"/api/v1/vacancies/{external_id}/source-status",
+            timeout=max(self.timeout_seconds, 60.0),
         )
