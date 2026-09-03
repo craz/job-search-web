@@ -1083,6 +1083,11 @@ class StubScoring:
             },
         }
 
+    def list_semantic_failures(self) -> tuple[int, Any]:
+        self._raise_if_unavailable()
+        self.calls.append(("list_semantic_failures",))
+        return 200, {"count": 0, "items": []}
+
     def get_job(self, job_id: str) -> tuple[int, Any]:
         self._raise_if_unavailable()
         self.calls.append(("get_job", job_id))

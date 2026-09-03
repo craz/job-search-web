@@ -34,6 +34,8 @@ class ScoringGateway(Protocol):
         self, vacancy_id: str, scoring_mode: str = "semantic_v1"
     ) -> tuple[int, Any]: ...
 
+    def list_semantic_failures(self) -> tuple[int, Any]: ...
+
 
 class ScoringClient:
     """Bounded HTTP client with no knowledge of Scoring private storage."""
@@ -88,9 +90,13 @@ class ScoringClient:
     def get_scoring_state(
         self, vacancy_id: str, scoring_mode: str = "semantic_v1"
     ) -> tuple[int, Any]:
-        """Return derived never_scored/current/stale state for one vacancy."""
+        """Return derived never_scored/current/stale/failed state for one vacancy."""
         return self._request(
             "GET",
             f"/api/v1/vacancies/{vacancy_id}/scoring-state",
             params={"scoring_mode": scoring_mode},
         )
+
+    def list_semantic_failures(self) -> tuple[int, Any]:
+        """Return terminal-for-auto semantic failure records for vacancy board UI."""
+        return self._request("GET", "/api/v1/semantic-failures")

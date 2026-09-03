@@ -54,6 +54,7 @@ let knownVacancies = [];
 let osintReports = [];
 let mirrorReports = [];
 let assessmentsByVacancyId = new Map();
+let semanticFailuresByVacancyId = new Map();
 
 const NAV_SECTIONS = [
   "vacancies",
@@ -157,6 +158,17 @@ function indexAssessmentsByVacancy(items) {
   return byVacancy;
 }
 
+function indexSemanticFailuresByVacancy(items) {
+  const byVacancy = new Map();
+  for (const item of items || []) {
+    const vacancyId = item?.vacancy_id;
+    if (!vacancyId) continue;
+    if (item.terminal_for_auto === false) continue;
+    byVacancy.set(vacancyId, item);
+  }
+  return byVacancy;
+}
+
 function assessmentVerdictLabel(verdict) {
   return assessmentVerdictLabels[verdict] || verdict;
 }
@@ -211,14 +223,17 @@ function vacancyFreshnessHint(item) {
 }
 
 /**
- * Map NEVER_SCORED + source_status (+ existing assessment) to row action markup.
- * States: scored | archived | score (enabled Оценить for active/unknown/expired-active).
+ * Map NEVER_SCORED / failed_current_identity + source_status to row action markup.
+ * States: scored | archived | retry | score.
  */
-function vacancyScoreActionHtml(item, assessment) {
+function vacancyScoreActionHtml(item, assessment, failure) {
   if (assessment) return "";
   const sourceStatus = vacancySourceStatus(item);
   if (sourceStatus === "archived") {
     return `<span class="list-row__score-state" data-score-state="archived">В архиве</span>`;
+  }
+  if (failure) {
+    return `<button class="btn btn--secondary btn--sm" data-score data-score-retry="1" type="button">Повторить оценку</button>`;
   }
   return `<button class="btn btn--secondary btn--sm" data-score type="button">Оценить</button>`;
 }
@@ -426,9 +441,10 @@ function vacancyRow(item) {
     : inlineState("Для поиска контактов и зеркал сначала нужен сайт компании.");
   const evidenceCount = people.length + mirrors.length;
   const assessment = assessmentsByVacancyId.get(item.id);
+  const failure = semanticFailuresByVacancyId.get(item.id);
   const assessmentSummary = renderVacancyAssessmentSummary(assessment);
   const assessmentDetail = renderVacancyAssessmentDetail(assessment);
-  const scoreAction = vacancyScoreActionHtml(item, assessment);
+  const scoreAction = vacancyScoreActionHtml(item, assessment, failure);
   const sourceSignals = vacancySourceSignalsHtml(item);
   const detailParts = [];
   if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
@@ -848,10 +864,11 @@ async function loadVacancies() {
     connectionLabel.textContent = "Core доступен";
     knownVacancies = payload.items;
     try {
-      const [osintResponse, mirrorResponse, assessmentsResponse] = await Promise.all([
+      const [osintResponse, mirrorResponse, assessmentsResponse, failuresResponse] = await Promise.all([
         fetch("/api/v1/osint/people-proposals"),
         fetch("/api/v1/osint/vacancy-mirrors"),
         fetch("/api/v1/assessments"),
+        fetch("/api/v1/semantic-failures"),
       ]);
       const osintPayload = await osintResponse.json();
       const mirrorPayload = await mirrorResponse.json();
@@ -863,10 +880,17 @@ async function loadVacancies() {
       } else {
         assessmentsByVacancyId = new Map();
       }
+      if (failuresResponse.ok) {
+        const failuresPayload = await failuresResponse.json();
+        semanticFailuresByVacancyId = indexSemanticFailuresByVacancy(failuresPayload.items);
+      } else {
+        semanticFailuresByVacancyId = new Map();
+      }
     } catch (_error) {
       osintReports = [];
       mirrorReports = [];
       assessmentsByVacancyId = new Map();
+      semanticFailuresByVacancyId = new Map();
     }
     renderVacancyList(knownVacancies);
   } catch (error) {
@@ -1107,6 +1131,7 @@ grid.addEventListener("click", async (event) => {
     if (!vacancyId) return;
     scoreButton.disabled = true;
     scoreButton.classList.add("is-processing");
+    const idleLabel = scoreButton.dataset.scoreRetry === "1" ? "Повторить оценку" : "Оценить";
     scoreButton.textContent = "Оценивается…";
     try {
       const response = await fetch(`/api/v1/vacancies/${vacancyId}/score`, { method: "POST" });
@@ -1121,7 +1146,7 @@ grid.addEventListener("click", async (event) => {
           showNotice(payload.message || "Статус на источнике неизвестен — повторите позже", "warning");
           scoreButton.disabled = false;
           scoreButton.classList.remove("is-processing");
-          scoreButton.textContent = "Оценить";
+          scoreButton.textContent = idleLabel;
           return;
         }
         throw new Error(payload.message || "Оценка не запущена");
@@ -1152,12 +1177,12 @@ grid.addEventListener("click", async (event) => {
       }
       scoreButton.disabled = false;
       scoreButton.classList.remove("is-processing");
-      scoreButton.textContent = "Оценить";
+      scoreButton.textContent = idleLabel;
     } catch (error) {
       showNotice(error.message, "error");
       scoreButton.disabled = false;
       scoreButton.classList.remove("is-processing");
-      scoreButton.textContent = "Оценить";
+      scoreButton.textContent = idleLabel;
     }
     return;
   }

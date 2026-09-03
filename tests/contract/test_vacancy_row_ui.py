@@ -43,14 +43,16 @@ def test_vacancy_list_hierarchy_styles_present() -> None:
 
 
 def test_score_action_mapping_strings_present() -> None:
-    """R2.4.1b: Оценить button mapping and in-flight / archived labels."""
+    """R2.4.1b/R2.4.3a: Оценить / Повторить оценку mapping and in-flight labels."""
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "function vacancyScoreActionHtml" in js
     assert 'data-score type="button">Оценить</button>' in js
+    assert 'data-score-retry="1" type="button">Повторить оценку</button>' in js
     assert 'data-score-state="archived">В архиве</span>' in js
     assert "Оценивается…" in js
     assert "В очереди" in js
     assert "/api/v1/vacancies/${vacancyId}/score" in js
+    assert "/api/v1/semantic-failures" in js
     assert "vacancy_archived" in js
     assert "source_status_unknown" in js
     assert "function vacancySourceSignalsHtml" in js
@@ -59,6 +61,6 @@ def test_score_action_mapping_strings_present() -> None:
     assert 'unknown: "Статус неизвестен"' in js
     assert "старше 14 дн." in js
     # Score CTA sits next to application recording in list-row__actions.
-    score_idx = js.index("vacancyScoreActionHtml(item, assessment)")
+    score_idx = js.index("vacancyScoreActionHtml(item, assessment, failure)")
     apply_idx = js.index('data-apply type="button">Записать отклик</button>')
     assert score_idx < apply_idx

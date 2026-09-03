@@ -774,6 +774,14 @@ def create_app(
         except ScoringUnavailableError:
             return scoring_unavailable_response()
 
+    @application.get("/api/v1/semantic-failures")
+    def get_semantic_failures() -> JSONResponse:
+        """Proxy terminal semantic failure memory for vacancy board actions."""
+        try:
+            return proxy_response(*scoring_gateway.list_semantic_failures())
+        except ScoringUnavailableError:
+            return scoring_unavailable_response()
+
     return application
 
 
