@@ -986,7 +986,7 @@ class StubScoring:
                 "description": "Synthetic vacancy description for calibration UI tests.",
                 "conditions_summary": "remote · Moscow",
                 "work_format": "remote",
-                "salary": "250000 RUB",
+                "salary": "123456 RUB",
                 "location": "Moscow",
                 "experience": "3+ years",
                 "selection_stratum": "ic_it_role",
