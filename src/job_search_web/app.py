@@ -56,7 +56,13 @@ def scoring_unavailable_response() -> JSONResponse:
     """Return a stable browser-facing error when Scoring cannot be reached."""
     return JSONResponse(
         status_code=503,
-        content={"code": "scoring_unavailable", "message": "Scoring API is unavailable"},
+        content={
+            "code": "scoring_unavailable",
+            "message": (
+                "Scoring сейчас недоступен. Очередь и ваши решения работают; "
+                "оценку повторите позже."
+            ),
+        },
     )
 
 

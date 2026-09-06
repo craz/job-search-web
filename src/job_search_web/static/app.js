@@ -1370,6 +1370,16 @@ grid.addEventListener("click", async (event) => {
           scoreButton.textContent = idleLabel;
           return;
         }
+        if (payload.code === "scoring_unavailable") {
+          showNotice(
+            payload.message || "Scoring сейчас недоступен. Очередь работает; оценку повторите позже.",
+            "warning",
+          );
+          scoreButton.disabled = false;
+          scoreButton.classList.remove("is-processing");
+          scoreButton.textContent = idleLabel;
+          return;
+        }
         throw new Error(payload.message || "Оценка не запущена");
       }
       const jobId = payload.job_id;
