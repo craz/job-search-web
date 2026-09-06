@@ -10,6 +10,11 @@ from fastapi import FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from job_search_web.automation_client import (
+    AutomationClient,
+    AutomationGateway,
+    AutomationUnavailableError,
+)
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
 from job_search_web.hh_client import HhClient, HhGateway, HhUnavailableError
 from job_search_web.osint_client import OsintClient, OsintGateway, OsintUnavailableError
@@ -66,6 +71,17 @@ def scoring_unavailable_response() -> JSONResponse:
     )
 
 
+def automation_unavailable_response() -> JSONResponse:
+    """Return a stable browser-facing error when automation cannot be reached."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "code": "automation_unavailable",
+            "message": "Автоматизация сейчас недоступна",
+        },
+    )
+
+
 def hh_unavailable_response() -> JSONResponse:
     """Return a stable browser-facing error when HH cannot be reached."""
     return JSONResponse(
@@ -108,6 +124,7 @@ def create_app(
     osint: OsintGateway | None = None,
     hh: HhGateway | None = None,
     scoring: ScoringGateway | None = None,
+    automation: AutomationGateway | None = None,
     *,
     live_reload: bool | None = None,
 ) -> FastAPI:
@@ -117,6 +134,9 @@ def create_app(
     hh_gateway = hh or HhClient(os.getenv("HH_API_URL", "http://127.0.0.1:8092"))
     scoring_gateway = scoring or ScoringClient(
         os.getenv("SCORING_API_URL", "http://127.0.0.1:8090")
+    )
+    automation_gateway = automation or AutomationClient(
+        os.getenv("AUTOMATION_API_URL", "http://127.0.0.1:8095")
     )
     live_reload_enabled = (
         os.getenv("WEB_LIVE_RELOAD", "0") == "1" if live_reload is None else live_reload
@@ -420,6 +440,36 @@ def create_app(
                     "message": "HH suitable vacancy API is unavailable",
                 },
             )
+
+    @application.get("/api/v1/automation/status")
+    def get_automation_status() -> JSONResponse:
+        """Return automation enablement, schedule and last cycle summary."""
+        try:
+            return proxy_response(*automation_gateway.get_status())
+        except AutomationUnavailableError:
+            return automation_unavailable_response()
+
+    @application.post("/api/v1/automation/enable")
+    def post_automation_enable(payload: dict[str, Any]) -> JSONResponse:
+        """Enable or disable the daily vacancy automation loop."""
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            return JSONResponse(
+                status_code=400,
+                content={"code": "invalid_request", "message": "enabled must be a boolean"},
+            )
+        try:
+            return proxy_response(*automation_gateway.set_enabled(enabled))
+        except AutomationUnavailableError:
+            return automation_unavailable_response()
+
+    @application.post("/api/v1/automation/run-now")
+    def post_automation_run_now() -> JSONResponse:
+        """Trigger one automation cycle through the same path as the scheduler."""
+        try:
+            return proxy_response(*automation_gateway.run_now())
+        except AutomationUnavailableError:
+            return automation_unavailable_response()
 
     @application.get("/dev/revision", include_in_schema=False)
     def dev_revision() -> dict[str, str | bool]:

@@ -1165,6 +1165,7 @@ class WebClient:
         osint: StubOsint | None = None,
         hh: StubHh | None = None,
         scoring: StubScoring | None = None,
+        automation: Any | None = None,
         live_reload: bool = False,
     ) -> None:
         """Bind requests to one Web app and synthetic Core gateway."""
@@ -1173,6 +1174,7 @@ class WebClient:
             osint or StubOsint(),
             hh or StubHh(),
             scoring or StubScoring(),
+            automation=automation,
             live_reload=live_reload,
         )
 

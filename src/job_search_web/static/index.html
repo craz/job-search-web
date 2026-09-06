@@ -114,6 +114,21 @@
                 <p class="vacancy-search__last-title">Последняя проверка</p>
                 <p class="vacancy-search__last-body" id="suitable-last-body"></p>
               </div>
+
+              <div class="automation-panel" id="automation-panel" aria-labelledby="automation-title">
+                <h4 id="automation-title" class="automation-panel__title">Автоматизация</h4>
+                <p class="automation-panel__hint">
+                  Фон: подходящие HH → импорт → ограниченная оценка новых/изменённых.
+                  Без автооткликов и без разбора старого backlog.
+                </p>
+                <p class="automation-panel__status" id="automation-status-line" role="status">Статус: —</p>
+                <p class="automation-panel__meta" id="automation-meta-line"></p>
+                <p class="automation-panel__error" id="automation-error-line" hidden></p>
+                <div class="automation-panel__actions">
+                  <button class="btn btn--ghost" id="automation-toggle" type="button">Включить</button>
+                  <button class="btn btn--primary" id="automation-run-now" type="button">Запустить сейчас</button>
+                </div>
+              </div>
             </div>
 
             <div class="vacancy-search__panel" id="panel-own" data-search-panel="own" hidden>

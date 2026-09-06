@@ -1175,6 +1175,146 @@ function initVacancySearchTabs() {
   });
 }
 
+function formatAutomationTime(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString("ru-RU", { hour12: false });
+  } catch (_error) {
+    return String(value);
+  }
+}
+
+function renderAutomationStatus(payload) {
+  const statusLine = document.querySelector("#automation-status-line");
+  const metaLine = document.querySelector("#automation-meta-line");
+  const errorLine = document.querySelector("#automation-error-line");
+  const toggle = document.querySelector("#automation-toggle");
+  if (!statusLine || !metaLine || !errorLine || !toggle) return;
+  const enabled = Boolean(payload?.enabled);
+  const running = Boolean(payload?.running);
+  const lastStatus = payload?.last_status || "never_run";
+  statusLine.textContent = `Автоматизация: ${enabled ? "ВКЛ" : "ВЫКЛ"}${running ? " · выполняется" : ""} · ${lastStatus}`;
+  const cycle = payload?.last_cycle || {};
+  const counts = [
+    cycle.created != null ? `new ${cycle.created}` : null,
+    cycle.updated != null ? `changed ${cycle.updated}` : null,
+    cycle.unchanged != null ? `unchanged ${cycle.unchanged}` : null,
+    cycle.scoring_enqueued != null ? `enqueued ${cycle.scoring_enqueued}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  metaLine.textContent = [
+    `Последний: ${formatAutomationTime(payload?.last_finished_at || payload?.last_started_at)}`,
+    enabled ? `Следующий: ${formatAutomationTime(payload?.next_run_at)}` : null,
+    counts || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (payload?.last_error) {
+    errorLine.hidden = false;
+    errorLine.textContent = `Ошибка: ${payload.last_error}`;
+  } else {
+    errorLine.hidden = true;
+    errorLine.textContent = "";
+  }
+  toggle.textContent = enabled ? "Выключить" : "Включить";
+  toggle.dataset.enabled = enabled ? "1" : "0";
+}
+
+async function loadAutomationStatus() {
+  try {
+    const response = await fetch("/api/v1/automation/status");
+    const payload = await response.json();
+    if (!response.ok) {
+      renderAutomationStatus({
+        enabled: false,
+        last_status: "unavailable",
+        last_error: payload.message || payload.code || "unavailable",
+      });
+      return;
+    }
+    renderAutomationStatus(payload);
+  } catch (error) {
+    renderAutomationStatus({
+      enabled: false,
+      last_status: "unavailable",
+      last_error: error.message || "unavailable",
+    });
+  }
+}
+
+async function toggleAutomation() {
+  const toggle = document.querySelector("#automation-toggle");
+  if (!toggle) return;
+  const next = toggle.dataset.enabled !== "1";
+  toggle.disabled = true;
+  try {
+    const response = await fetch("/api/v1/automation/enable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: next }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      showNotice(payload.message || "Не удалось переключить автоматизацию", "warning");
+      return;
+    }
+    renderAutomationStatus(payload);
+    showNotice(next ? "Автоматизация включена" : "Автоматизация выключена");
+  } catch (error) {
+    showNotice(error.message || "Не удалось переключить автоматизацию", "warning");
+  } finally {
+    toggle.disabled = false;
+  }
+}
+
+async function runAutomationNow() {
+  const button = document.querySelector("#automation-run-now");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  const prev = button.textContent;
+  button.textContent = "Цикл…";
+  showNotice("Запускаем цикл автоматизации…");
+  try {
+    const response = await fetch("/api/v1/automation/run-now", { method: "POST" });
+    const payload = await response.json();
+    if (response.status === 409 || payload.status === "skipped_already_running") {
+      showNotice("Цикл уже выполняется", "warning");
+      await loadAutomationStatus();
+      return;
+    }
+    if (!response.ok && !payload.ok) {
+      const detail = payload.detail || payload;
+      showNotice(
+        detail.message || detail.code || payload.message || "Цикл не выполнен",
+        "warning",
+      );
+      await loadAutomationStatus();
+      return;
+    }
+    const cycle = payload.cycle || {};
+    showNotice(
+      `Цикл завершён: enqueued ${cycle.scoring_enqueued ?? 0}, new ${cycle.created ?? 0}, changed ${cycle.updated ?? 0}`,
+    );
+    renderAutomationStatus(payload.state || payload);
+    await loadVacancies();
+  } catch (error) {
+    showNotice(error.message || "Цикл не выполнен", "warning");
+  } finally {
+    button.disabled = false;
+    button.textContent = prev;
+    await loadAutomationStatus();
+  }
+}
+
+function initAutomationControls() {
+  const toggle = document.querySelector("#automation-toggle");
+  const runNow = document.querySelector("#automation-run-now");
+  if (toggle) toggle.addEventListener("click", () => void toggleAutomation());
+  if (runNow) runNow.addEventListener("click", () => void runAutomationNow());
+  void loadAutomationStatus();
+}
+
 function initVacancyListFilter() {
   const text = document.querySelector("#vacancy-filter-text");
   const status = document.querySelector("#vacancy-filter-status");
@@ -1223,6 +1363,7 @@ function initVacancyListFilter() {
 function initVacancySearch() {
   initVacancySearchTabs();
   initVacancyListFilter();
+  initAutomationControls();
   const button = document.querySelector("#suitable-run");
   if (button) {
     button.addEventListener("click", () => {
