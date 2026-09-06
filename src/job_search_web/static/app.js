@@ -845,62 +845,90 @@ let vacancyListFilter = {
   fresh: "",
   owner: "",
 };
+let vacancyPage = { limit: 50, offset: 0, total: 0 };
+let semanticFailedIds = [];
 
-function vacancyPassesFilter(item) {
-  const status = vacancyListFilter.status;
-  if (status && item.status !== status) return false;
-  const fresh = vacancyListFilter.fresh;
-  if (fresh && vacancySourceStatus(item) !== fresh) return false;
-  const owner = vacancyListFilter.owner;
-  if (owner && vacancyOwnerDecision(item) !== owner) return false;
-  const assessment = assessmentsByVacancyId.get(item.id);
-  const failure = semanticFailuresByVacancyId.get(item.id);
-  const scoring = vacancyListFilter.scoring;
-  if (scoring && vacancyScoringState(item, assessment, failure) !== scoring) return false;
-  const verdict = vacancyListFilter.verdict;
-  if (verdict) {
-    if (!assessment || normalizeVerdict(assessment.verdict) !== verdict) return false;
+function indexAssessmentsFromVacancies(items) {
+  const byVacancy = new Map();
+  for (const item of items || []) {
+    const assessment = item?.current_assessment;
+    if (!assessment) continue;
+    byVacancy.set(item.id, { ...assessment, vacancy: { id: item.id } });
   }
-  const text = (vacancyListFilter.text || "").trim().toLowerCase();
-  if (!text) return true;
-  const blob = [item.title, item.company?.name].filter(Boolean).join(" ").toLowerCase();
-  return blob.includes(text);
+  return byVacancy;
 }
 
-function reviewQueueRank(item) {
-  const assessment = assessmentsByVacancyId.get(item.id);
-  const failure = semanticFailuresByVacancyId.get(item.id);
-  if (assessment) {
-    const verdict = normalizeVerdict(assessment.verdict);
-    if (verdict === "apply") return 0;
-    if (verdict === "maybe") return 1;
-    if (verdict === "skip") return 3;
+function buildVacancyListQuery() {
+  const params = new URLSearchParams();
+  params.set("limit", String(vacancyPage.limit));
+  params.set("offset", String(vacancyPage.offset));
+  params.set("review_order", "true");
+  params.set("include_current_assessment", "true");
+  const text = (vacancyListFilter.text || "").trim();
+  if (text) params.set("q", text);
+  if (vacancyListFilter.status) params.set("status", vacancyListFilter.status);
+  if (vacancyListFilter.verdict) params.set("verdict", vacancyListFilter.verdict);
+  if (vacancyListFilter.scoring) params.set("scoring_state", vacancyListFilter.scoring);
+  if (vacancyListFilter.fresh) params.set("source_status", vacancyListFilter.fresh);
+  if (vacancyListFilter.owner) params.set("owner_decision", vacancyListFilter.owner);
+  for (const id of semanticFailedIds) {
+    params.append("semantic_failed_id", id);
   }
-  if (failure) return 2;
-  return 2;
+  return params;
 }
 
-function sortVacancyItems(items) {
-  return [...items].sort((a, b) => {
-    const rankDiff = reviewQueueRank(a) - reviewQueueRank(b);
-    if (rankDiff !== 0) return rankDiff;
-    return compareVacanciesByFirstSeen(a, b, false);
-  });
+function renderVacancyPagination() {
+  const nav = document.querySelector("#vacancy-pagination");
+  const range = document.querySelector("#vacancy-page-range");
+  const prev = document.querySelector("#vacancy-page-prev");
+  const next = document.querySelector("#vacancy-page-next");
+  const size = document.querySelector("#vacancy-page-size");
+  if (!nav || !range || !prev || !next) return;
+  const total = vacancyPage.total || 0;
+  const limit = vacancyPage.limit || 50;
+  const offset = vacancyPage.offset || 0;
+  if (!total) {
+    nav.hidden = true;
+    return;
+  }
+  nav.hidden = false;
+  const from = offset + 1;
+  const to = Math.min(offset + limit, total);
+  range.textContent = `${from}–${to} из ${total}`;
+  prev.disabled = offset <= 0;
+  next.disabled = offset + limit >= total;
+  if (size && String(size.value) !== String(limit)) size.value = String(limit);
 }
 
 function renderVacancyList(items) {
-  const filtered = items.filter(vacancyPassesFilter);
-  const sorted = sortVacancyItems(filtered);
-  setSectionCount(count, items.length);
-  grid.innerHTML = sorted.length ? sorted.map(vacancyRow).join("") : "";
-  if (!items.length) {
-    renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
-      buttonId: "suitable-run",
-      label: "Проверить подходящие",
-    });
-  } else if (!filtered.length) {
-    renderEmptyState(grid, "Ничего не найдено в фильтре", "Сбросьте фильтры очереди, чтобы снова увидеть все вакансии.");
+  setSectionCount(count, vacancyPage.total);
+  grid.innerHTML = items.length ? items.map(vacancyRow).join("") : "";
+  renderVacancyPagination();
+  if (!vacancyPage.total) {
+    const hasFilters = Object.values(vacancyListFilter).some(Boolean);
+    if (hasFilters) {
+      renderEmptyState(
+        grid,
+        "Ничего не найдено в фильтре",
+        "Сбросьте фильтры очереди, чтобы снова увидеть вакансии.",
+      );
+    } else {
+      renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
+        buttonId: "suitable-run",
+        label: "Проверить подходящие",
+      });
+    }
+    const nav = document.querySelector("#vacancy-pagination");
+    if (nav) nav.hidden = true;
   }
+}
+
+function compareVacanciesByFirstSeen(a, b, ascending) {
+  const ta = Date.parse(a.first_seen_at || a.created_at || "");
+  const tb = Date.parse(b.first_seen_at || b.created_at || "");
+  const safeA = Number.isNaN(ta) ? 0 : ta;
+  const safeB = Number.isNaN(tb) ? 0 : tb;
+  return ascending ? safeA - safeB : safeB - safeA;
 }
 const SEARCH_RECOVERY = {
   browser_login_required: "Нужно войти в HeadHunter",
@@ -981,38 +1009,24 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
   body.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
 }
 
-function compareVacanciesByFirstSeen(a, b, ascending) {
-  const ta = Date.parse(a.first_seen_at || a.created_at || "");
-  const tb = Date.parse(b.first_seen_at || b.created_at || "");
-  const safeA = Number.isNaN(ta) ? 0 : ta;
-  const safeB = Number.isNaN(tb) ? 0 : tb;
-  return ascending ? safeA - safeB : safeB - safeA;
-}
-
-async function loadVacancies() {
+async function loadVacancies({ resetOffset = false } = {}) {
+  if (resetOffset) vacancyPage.offset = 0;
   grid.setAttribute("aria-busy", "true");
   if (!vacancySearchRunning) {
-    renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает данные у Core API.");
+    renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает страницу очереди у Core API.");
   }
   try {
-    const response = await fetch("/api/v1/vacancies");
+    const response = await fetch(`/api/v1/vacancies?${buildVacancyListQuery()}`);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить вакансии");
     signal.classList.add("online");
     signal.classList.remove("offline");
     connectionLabel.textContent = "Core доступен";
-    knownVacancies = payload.items;
-    try {
-      const assessmentsResponse = await fetch("/api/v1/assessments");
-      if (assessmentsResponse.ok) {
-        const assessmentsPayload = await assessmentsResponse.json();
-        assessmentsByVacancyId = indexAssessmentsByVacancy(assessmentsPayload.items);
-      } else {
-        assessmentsByVacancyId = new Map();
-      }
-    } catch (_error) {
-      assessmentsByVacancyId = new Map();
-    }
+    knownVacancies = payload.items || [];
+    vacancyPage.total = Number(payload.total || 0);
+    vacancyPage.limit = Number(payload.limit || vacancyPage.limit || 50);
+    vacancyPage.offset = Number(payload.offset || 0);
+    assessmentsByVacancyId = indexAssessmentsFromVacancies(knownVacancies);
     renderVacancyList(knownVacancies);
     void enrichVacancyBoardSecondary();
   } catch (error) {
@@ -1021,13 +1035,17 @@ async function loadVacancies() {
     signal.classList.remove("online");
     connectionLabel.textContent = "Core недоступен";
     assessmentsByVacancyId = new Map();
-    renderErrorState(grid, "Не удалось загрузить вакансии", error.message, loadVacancies);
+    vacancyPage.total = 0;
+    renderErrorState(grid, "Не удалось загрузить вакансии", error.message, () => loadVacancies());
+    const nav = document.querySelector("#vacancy-pagination");
+    if (nav) nav.hidden = true;
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
 }
 
 async function enrichVacancyBoardSecondary() {
+  const previousFailed = semanticFailedIds.join(",");
   try {
     const [osintResponse, mirrorResponse, failuresResponse] = await Promise.all([
       fetch("/api/v1/osint/people-proposals"),
@@ -1041,9 +1059,17 @@ async function enrichVacancyBoardSecondary() {
     if (failuresResponse.ok) {
       const failuresPayload = await failuresResponse.json();
       semanticFailuresByVacancyId = indexSemanticFailuresByVacancy(failuresPayload.items);
+      semanticFailedIds = [...semanticFailuresByVacancyId.keys()];
     }
   } catch (_error) {
     // Secondary enrichment must not blank the review queue.
+  }
+  const failedChanged = semanticFailedIds.join(",") !== previousFailed;
+  const needsFailedFilter =
+    vacancyListFilter.scoring === "failed" || vacancyListFilter.scoring === "unscored";
+  if (failedChanged && needsFailedFilter) {
+    await loadVacancies();
+    return;
   }
   if (knownVacancies?.length) renderVacancyList(knownVacancies);
 }
@@ -1156,7 +1182,8 @@ function initVacancyListFilter() {
   const scoring = document.querySelector("#vacancy-filter-scoring");
   const fresh = document.querySelector("#vacancy-filter-fresh");
   const owner = document.querySelector("#vacancy-filter-owner");
-  const apply = () => {
+  let textTimer;
+  const applyFilters = () => {
     vacancyListFilter = {
       text: text?.value || "",
       status: status?.value || "",
@@ -1165,14 +1192,32 @@ function initVacancyListFilter() {
       fresh: fresh?.value || "",
       owner: owner?.value || "",
     };
-    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+    void loadVacancies({ resetOffset: true });
   };
-  text?.addEventListener("input", apply);
-  status?.addEventListener("change", apply);
-  verdict?.addEventListener("change", apply);
-  scoring?.addEventListener("change", apply);
-  fresh?.addEventListener("change", apply);
-  owner?.addEventListener("change", apply);
+  text?.addEventListener("input", () => {
+    window.clearTimeout(textTimer);
+    textTimer = window.setTimeout(applyFilters, 300);
+  });
+  status?.addEventListener("change", applyFilters);
+  verdict?.addEventListener("change", applyFilters);
+  scoring?.addEventListener("change", applyFilters);
+  fresh?.addEventListener("change", applyFilters);
+  owner?.addEventListener("change", applyFilters);
+
+  document.querySelector("#vacancy-page-prev")?.addEventListener("click", () => {
+    vacancyPage.offset = Math.max(0, vacancyPage.offset - vacancyPage.limit);
+    void loadVacancies();
+  });
+  document.querySelector("#vacancy-page-next")?.addEventListener("click", () => {
+    vacancyPage.offset = vacancyPage.offset + vacancyPage.limit;
+    void loadVacancies();
+  });
+  document.querySelector("#vacancy-page-size")?.addEventListener("change", (event) => {
+    const value = Number(event.target.value);
+    if (![25, 50, 100].includes(value)) return;
+    vacancyPage.limit = value;
+    void loadVacancies({ resetOffset: true });
+  });
 }
 
 function initVacancySearch() {

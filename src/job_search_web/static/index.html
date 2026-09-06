@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260906-r250">
-    <script src="/assets/app.js?v=20260906-r250" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260907-r251">
+    <script src="/assets/app.js?v=20260907-r251" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -191,6 +191,20 @@
               </div>
             </article>
           </section>
+
+          <nav class="vacancy-pagination" id="vacancy-pagination" aria-label="Страницы очереди" hidden>
+            <button class="btn btn--secondary btn--sm" id="vacancy-page-prev" type="button">Назад</button>
+            <p class="vacancy-pagination__range" id="vacancy-page-range" aria-live="polite">—</p>
+            <button class="btn btn--secondary btn--sm" id="vacancy-page-next" type="button">Дальше</button>
+            <label class="vacancy-pagination__size field">
+              <span class="field__label">На странице</span>
+              <select class="control control--select" id="vacancy-page-size">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
+            </label>
+          </nav>
 
           </div>
 

@@ -1303,6 +1303,28 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-semibold);
 }
 
+.vacancy-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.vacancy-pagination__range {
+  margin: 0;
+  min-width: 8rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.vacancy-pagination__size {
+  margin-left: auto;
+  min-width: 7rem;
+}
+
 .dialog {
   width: min(40rem, calc(100% - var(--space-5)));
   border: var(--border-width) solid var(--color-border);

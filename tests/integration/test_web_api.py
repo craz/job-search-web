@@ -50,11 +50,12 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — показать резюме" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260906-r250" in page.text
-    assert "/assets/styles.css?v=20260906-r250" in page.text
+    assert "/assets/app.js?v=20260907-r251" in page.text
+    assert "/assets/styles.css?v=20260907-r251" in page.text
     assert 'id="vacancy-filter-verdict"' in page.text
     assert 'id="vacancy-filter-scoring"' in page.text
     assert 'id="vacancy-filter-owner"' in page.text
+    assert 'id="vacancy-pagination"' in page.text
     assert "К разбору" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
@@ -70,6 +71,28 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert owner.status_code == 200
     assert owner.json()["owner_decision"] == "interested"
     assert [call[0] for call in core.calls] == ["list", "create", "update", "owner-decision"]
+
+
+def test_vacancy_list_forwards_pagination_query() -> None:
+    """R2.5.1: Web forwards review pagination query params to Core."""
+    core = StubCore()
+    client = WebClient(core)
+    listing = client.request(
+        "GET",
+        "/api/v1/vacancies?limit=50&offset=0&review_order=true&verdict=apply",
+    )
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["limit"] == 50
+    assert body["offset"] == 0
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    assert core.calls[0][0] == "list"
+    forwarded = core.calls[0][1]
+    assert ("limit", "50") in forwarded
+    assert ("offset", "0") in forwarded
+    assert ("review_order", "true") in forwarded
+    assert ("verdict", "apply") in forwarded
 
 
 def test_styles_expose_ui_primitives() -> None:
@@ -185,12 +208,13 @@ def test_app_js_navigation_contract() -> None:
 
 
 def test_app_js_embeds_assessments_in_vacancy_context() -> None:
-    """Assessments load with vacancies and render in row context, not as a section."""
+    """Assessments come from vacancy current_assessment and render in row context."""
     js = WebClient(StubCore()).request("GET", "/assets/app.js").text
 
     for fragment in (
         "assessmentsByVacancyId",
-        'fetch("/api/v1/assessments")',
+        "include_current_assessment",
+        "indexAssessmentsFromVacancies",
         "vacancy-assessment-summary",
         "renderVacancyAssessmentSummary",
         "renderVacancyAssessmentDetail",

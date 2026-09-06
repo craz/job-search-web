@@ -14,7 +14,9 @@ class CoreUnavailableError(Exception):
 class CoreGateway(Protocol):
     """Minimal Core operations required by the vacancy and Application views."""
 
-    def list_vacancies(self) -> tuple[int, Any]:
+    def list_vacancies(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
         """Return the Core status and decoded vacancy collection."""
         ...
 
@@ -116,9 +118,11 @@ class CoreClient:
             raise CoreUnavailableError from error
         return response.status_code, payload
 
-    def list_vacancies(self) -> tuple[int, Any]:
-        """Fetch normalized vacancies from Core."""
-        return self._request("GET", "/api/v1/vacancies")
+    def list_vacancies(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Fetch normalized vacancies from Core, optionally with review pagination."""
+        return self._request("GET", "/api/v1/vacancies", params=params)
 
     def get_vacancy(self, vacancy_id: str) -> tuple[int, Any]:
         """Fetch one normalized vacancy by local id."""

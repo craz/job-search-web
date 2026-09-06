@@ -169,11 +169,30 @@ class StubCore:
         if self.unavailable:
             raise CoreUnavailableError
 
-    def list_vacancies(self) -> tuple[int, Any]:
-        """Return the current synthetic collection."""
+    def list_vacancies(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return the current synthetic collection, optionally filtered/paginated."""
         self._guard()
-        self.calls.append(("list", None))
-        return 200, {"items": self.items, "total": len(self.items)}
+        self.calls.append(("list", params))
+        items = list(self.items)
+        total = len(items)
+        if params:
+            mapping = (
+                dict(params) if isinstance(params, dict) else {key: value for key, value in params}
+            )
+            limit = mapping.get("limit")
+            offset = int(mapping.get("offset") or 0)
+            if limit is not None:
+                size = int(limit)
+                page = items[offset : offset + size]
+                return 200, {
+                    "items": page,
+                    "total": total,
+                    "limit": size,
+                    "offset": offset,
+                }
+        return 200, {"items": items, "total": total, "limit": None, "offset": None}
 
     def get_vacancy(self, vacancy_id: str) -> tuple[int, Any]:
         """Return one synthetic vacancy by id."""

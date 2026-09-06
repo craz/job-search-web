@@ -424,10 +424,10 @@ def create_app(
         }
 
     @application.get("/api/v1/vacancies")
-    def get_vacancies() -> JSONResponse:
-        """Return vacancies obtained only through Core HTTP."""
+    def get_vacancies(request: Request) -> JSONResponse:
+        """Return a Core vacancy page, forwarding review filters and pagination."""
         try:
-            return proxy_response(*gateway.list_vacancies())
+            return proxy_response(*gateway.list_vacancies(list(request.query_params.multi_items())))
         except CoreUnavailableError:
             return unavailable_response()
 
