@@ -24,6 +24,12 @@ class VacancyStatusUpdate(BaseModel):
     status: str = Field(pattern="^(new|reviewing|rejected|shortlisted)$")
 
 
+class VacancyOwnerDecisionUpdate(BaseModel):
+    """Browser-requested owner review decision (distinct from AI verdict)."""
+
+    owner_decision: str = Field(pattern="^(unreviewed|interested|deferred|skipped|applied)$")
+
+
 class ApplicationCreate(BaseModel):
     """Browser-submitted local Application fields forwarded to Core."""
 

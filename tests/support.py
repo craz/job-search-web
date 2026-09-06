@@ -21,6 +21,12 @@ def vacancy(status: str = "new") -> dict[str, Any]:
         "url": "https://example.com/vacancies/42",
         "description": "Synthetic Web fixture.",
         "status": status,
+        "owner_decision": "unreviewed",
+        "owner_decision_at": None,
+        "salary_text": None,
+        "area_text": None,
+        "work_format_text": None,
+        "schedule_text": None,
         "archived": None,
         "source_status": "unknown",
         "source_status_checked_at": None,
@@ -194,6 +200,24 @@ class StubCore:
         updated = {**self.items[0], "status": status}
         self.items[0] = updated
         return 200, updated
+
+    def update_owner_decision(self, vacancy_id: str, owner_decision: str) -> tuple[int, Any]:
+        """Record owner review decision without touching Assessment.verdict."""
+        self._guard()
+        self.calls.append(("owner-decision", (vacancy_id, owner_decision)))
+        for index, item in enumerate(self.items):
+            if item["id"] != vacancy_id:
+                continue
+            updated = {
+                **item,
+                "owner_decision": owner_decision,
+                "owner_decision_at": None
+                if owner_decision == "unreviewed"
+                else "2026-09-06T12:00:00Z",
+            }
+            self.items[index] = updated
+            return 200, updated
+        return 404, {"code": "vacancy_not_found", "message": "Vacancy does not exist"}
 
     def post_vacancy_source_status(
         self, vacancy_id: str, payload: dict[str, Any]

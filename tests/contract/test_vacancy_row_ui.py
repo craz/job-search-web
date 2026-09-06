@@ -64,3 +64,20 @@ def test_score_action_mapping_strings_present() -> None:
     score_idx = js.index("vacancyScoreActionHtml(item, assessment, failure)")
     apply_idx = js.index('data-apply type="button">Записать отклик</button>')
     assert score_idx < apply_idx
+
+
+def test_review_queue_owner_decision_mvp_strings() -> None:
+    """R2.5.0: verdict-first queue, filters, and owner decision != AI verdict."""
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    assert "function reviewQueueRank" in js
+    assert "/api/v1/vacancies/${vacancyId}/owner-decision" in js
+    assert "data-owner-decision=" in js
+    assert "Ошибка оценки" in js
+    assert "Без оценки" in js
+    assert 'id="vacancy-filter-verdict"' in html
+    assert 'id="vacancy-filter-scoring"' in html
+    assert 'id="vacancy-filter-owner"' in html
+    assert "function renderOwnerDecisionControls" in js
+    assert 'interested: "Интересно"' in js
+    assert 'deferred: "Отложено"' in js

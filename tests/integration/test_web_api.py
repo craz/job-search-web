@@ -50,15 +50,26 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — показать резюме" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260827-r215" in page.text
-    assert "/assets/styles.css?v=20260827-r215" in page.text
+    assert "/assets/app.js?v=20260906-r250" in page.text
+    assert "/assets/styles.css?v=20260906-r250" in page.text
+    assert 'id="vacancy-filter-verdict"' in page.text
+    assert 'id="vacancy-filter-scoring"' in page.text
+    assert 'id="vacancy-filter-owner"' in page.text
+    assert "К разбору" in page.text
     assert 'class="btn btn--primary"' in page.text
     assert 'class="dialog"' in page.text
     assert 'class="dialog__header"' in page.text
     assert listing.json()["total"] == 1
     assert created.status_code == 201
     assert updated.json()["status"] == "shortlisted"
-    assert [call[0] for call in core.calls] == ["list", "create", "update"]
+    owner = client.request(
+        "PATCH",
+        "/api/v1/vacancies/00000000-0000-0000-0000-000000000042/owner-decision",
+        json={"owner_decision": "interested"},
+    )
+    assert owner.status_code == 200
+    assert owner.json()["owner_decision"] == "interested"
+    assert [call[0] for call in core.calls] == ["list", "create", "update", "owner-decision"]
 
 
 def test_styles_expose_ui_primitives() -> None:

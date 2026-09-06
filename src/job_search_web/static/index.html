@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260827-r215">
-    <script src="/assets/app.js?v=20260827-r215" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260906-r250">
+    <script src="/assets/app.js?v=20260906-r250" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -14,7 +14,7 @@
       <header class="app-header">
         <div class="app-header__brand">
           <p class="app-header__title">Job Search</p>
-          <p class="app-header__subtitle">Локальная доска вакансий</p>
+          <p class="app-header__subtitle">Очередь разбора вакансий</p>
         </div>
         <div class="app-header__signals">
           <div class="signal app-header__status" id="hh-connection" data-status="unknown" aria-label="Состояние HeadHunter">
@@ -87,7 +87,8 @@
           <div class="section-view" id="section-vacancies" data-section="vacancies" role="region" aria-labelledby="board-title">
           <section class="toolbar" aria-labelledby="board-title">
             <div>
-              <h2 id="board-title">Вакансии <span class="section-count" id="vacancy-count">—</span></h2>
+              <h2 id="board-title">К разбору <span class="section-count" id="vacancy-count">—</span></h2>
+              <p class="toolbar-note">AI-вердикт и ваше решение — разные вещи. Список: APPLY → MAYBE → без оценки → SKIP.</p>
             </div>
             <button class="btn btn--primary" id="open-form" type="button">+ Добавить вакансию</button>
           </section>
@@ -124,28 +125,58 @@
             </div>
           </section>
 
-          <details class="vacancy-list-filter" id="vacancy-list-filter">
-            <summary>Фильтр списка</summary>
+          <details class="vacancy-list-filter" id="vacancy-list-filter" open>
+            <summary>Фильтры очереди</summary>
             <div class="vacancy-list-filter__body">
               <label class="field">
                 <span class="field__label">Текст</span>
-                <input class="control" id="vacancy-filter-text" type="search" placeholder="название, компания, описание" />
+                <input class="control" id="vacancy-filter-text" type="search" placeholder="название или компания" />
               </label>
               <label class="field">
-                <span class="field__label">Статус</span>
+                <span class="field__label">AI-вердикт</span>
+                <select class="control control--select" id="vacancy-filter-verdict">
+                  <option value="">Любой</option>
+                  <option value="apply">APPLY</option>
+                  <option value="maybe">MAYBE</option>
+                  <option value="skip">SKIP</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">Оценка</span>
+                <select class="control control--select" id="vacancy-filter-scoring">
+                  <option value="">Любое</option>
+                  <option value="current">Есть оценка</option>
+                  <option value="unscored">Без оценки</option>
+                  <option value="failed">Ошибка оценки</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">На источнике</span>
+                <select class="control control--select" id="vacancy-filter-fresh">
+                  <option value="">Все</option>
+                  <option value="active">Активные</option>
+                  <option value="archived">В архиве</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">Моё решение</span>
+                <select class="control control--select" id="vacancy-filter-owner">
+                  <option value="">Любое</option>
+                  <option value="unreviewed">Не разобрано</option>
+                  <option value="interested">Интересно</option>
+                  <option value="deferred">Отложено</option>
+                  <option value="skipped">Пропущено</option>
+                  <option value="applied">Откликнулся</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field__label">Воронка</span>
                 <select class="control control--select" id="vacancy-filter-status">
                   <option value="">Любой</option>
                   <option value="new">Новая</option>
                   <option value="reviewing">На рассмотрении</option>
                   <option value="shortlisted">В шортлисте</option>
                   <option value="rejected">Отклонена</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field__label">Сортировка</span>
-                <select class="control control--select" id="vacancy-list-sort">
-                  <option value="first_seen_desc" selected>Получена — новые сначала</option>
-                  <option value="first_seen_asc">Получена — старые сначала</option>
                 </select>
               </label>
             </div>

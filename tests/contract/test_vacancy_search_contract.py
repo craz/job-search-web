@@ -28,8 +28,9 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     assert "Рабочее резюме" in html
     assert "HH предлагает" in html
     assert "Свой поиск" in html
-    assert "Фильтр списка" in html
+    assert "Фильтры очереди" in html
     assert 'id="vacancy-filter-text"' in html
+    assert 'id="vacancy-filter-verdict"' in html
     assert "Только с зарплатой" not in html
     assert 'id="vacancy-search-form"' not in html
     assert 'id="search-text"' not in html
@@ -52,8 +53,8 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "formatFirstSeen" in js
     assert "getFullYear()" in js
     assert "Получена:" in js
-    assert "first_seen_desc" in js
-    assert "vacancy-list-sort" in html
+    assert "reviewQueueRank" in js
+    assert "vacancy-filter-verdict" in html
     assert "Опубликовано" not in js
     assert "resume_search_page_mismatch" in js
     assert "Нужно войти в HeadHunter" in js

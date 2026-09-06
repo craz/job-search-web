@@ -30,6 +30,10 @@ class CoreGateway(Protocol):
         """Update one vacancy status through Core."""
         ...
 
+    def update_owner_decision(self, vacancy_id: str, owner_decision: str) -> tuple[int, Any]:
+        """Update owner review decision through Core (not Assessment.verdict)."""
+        ...
+
     def post_vacancy_source_status(
         self, vacancy_id: str, payload: dict[str, Any]
     ) -> tuple[int, Any]:
@@ -132,6 +136,14 @@ class CoreClient:
     def update_status(self, vacancy_id: str, status: str) -> tuple[int, Any]:
         """Forward a controlled status update to Core."""
         return self._request("PATCH", f"/api/v1/vacancies/{vacancy_id}", json={"status": status})
+
+    def update_owner_decision(self, vacancy_id: str, owner_decision: str) -> tuple[int, Any]:
+        """Forward owner review decision to Core."""
+        return self._request(
+            "PATCH",
+            f"/api/v1/vacancies/{vacancy_id}/owner-decision",
+            json={"owner_decision": owner_decision},
+        )
 
     def post_vacancy_source_status(
         self, vacancy_id: str, payload: dict[str, Any]

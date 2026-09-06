@@ -140,10 +140,30 @@ const assessmentVerdictBadge = {
 };
 
 const assessmentVerdictLabels = {
-  apply: "Откликаться",
-  maybe: "Подумать",
-  skip: "Пропустить",
+  apply: "APPLY",
+  maybe: "MAYBE",
+  skip: "SKIP",
 };
+
+const ownerDecisionLabels = {
+  unreviewed: "Не разобрано",
+  interested: "Интересно",
+  deferred: "Отложено",
+  skipped: "Пропущено",
+  applied: "Откликнулся",
+};
+
+const ownerDecisionBadge = {
+  unreviewed: "neutral",
+  interested: "success",
+  deferred: "warning",
+  skipped: "danger",
+  applied: "info",
+};
+
+function normalizeVerdict(verdict) {
+  return String(verdict || "").trim().toLowerCase();
+}
 
 function indexAssessmentsByVacancy(items) {
   const byVacancy = new Map();
@@ -170,25 +190,110 @@ function indexSemanticFailuresByVacancy(items) {
 }
 
 function assessmentVerdictLabel(verdict) {
-  return assessmentVerdictLabels[verdict] || verdict;
+  const key = normalizeVerdict(verdict);
+  return assessmentVerdictLabels[key] || verdict;
 }
 
-function renderVacancyAssessmentSummary(assessment) {
-  if (!assessment) return "";
-  const verdict = assessmentVerdictLabel(assessment.verdict);
-  return `<div class="vacancy-assessment-summary">
-    ${renderBadge(verdict, assessmentVerdictBadge[assessment.verdict] || "neutral")}
-    <span class="assessment-score" aria-label="Релевантность">${escapeHtml(assessment.relevance_score)}</span>
+function vacancyScoringState(item, assessment, failure) {
+  if (assessment) return "current";
+  if (failure) return "failed";
+  return "unscored";
+}
+
+function vacancyOwnerDecision(item) {
+  const value = String(item?.owner_decision || "unreviewed").trim().toLowerCase();
+  return ownerDecisionLabels[value] ? value : "unreviewed";
+}
+
+function vacancyFactsLine(item) {
+  const parts = [
+    item.salary_text,
+    item.area_text,
+    item.work_format_text || item.schedule_text,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function renderVacancyAssessmentSummary(assessment, failure) {
+  if (assessment) {
+    const key = normalizeVerdict(assessment.verdict);
+    const verdict = assessmentVerdictLabel(assessment.verdict);
+    return `<div class="vacancy-assessment-summary">
+      ${renderBadge(verdict, assessmentVerdictBadge[key] || "neutral")}
+      <span class="assessment-score" aria-label="Релевантность">${escapeHtml(assessment.relevance_score)}</span>
+    </div>`;
+  }
+  if (failure) {
+    const code = failure.error_code || failure.failure_kind || "semantic_error";
+    return `<div class="vacancy-assessment-summary">
+      ${renderBadge("Ошибка оценки", "danger")}
+      <span class="assessment-score assessment-score--muted" title="${escapeHtml(code)}">${escapeHtml(code)}</span>
+    </div>`;
+  }
+  return `<div class="vacancy-assessment-summary">${renderBadge("Без оценки", "neutral")}</div>`;
+}
+
+function renderAssessmentStoredBits(assessment) {
+  const detail = assessment?.detail || {};
+  const chunks = [];
+  const strengths = Array.isArray(detail.strengths) ? detail.strengths.filter(Boolean) : [];
+  const gaps = Array.isArray(detail.gaps) ? detail.gaps.filter(Boolean) : [];
+  if (strengths.length) {
+    chunks.push(`<p class="assessment-detail__bits"><span class="assessment-detail__label">Сильные стороны</span> ${escapeHtml(strengths.slice(0, 3).join("; "))}</p>`);
+  }
+  if (gaps.length) {
+    chunks.push(`<p class="assessment-detail__bits"><span class="assessment-detail__label">Пробелы</span> ${escapeHtml(gaps.slice(0, 3).join("; "))}</p>`);
+  }
+  return chunks.join("");
+}
+
+function renderVacancyAssessmentDetail(assessment, failure) {
+  if (assessment) {
+    const key = normalizeVerdict(assessment.verdict);
+    return `<div class="row-detail__section vacancy-assessment-detail">
+      <p class="row-detail__label">AI-оценка · ${escapeHtml(assessmentVerdictLabel(assessment.verdict))} · ${escapeHtml(formatDate(assessment.assessed_at))}</p>
+      <p class="assessment-detail__reason">${escapeHtml(assessment.reason || "Пояснение не сохранено.")}</p>
+      ${assessment.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(assessment.risk)}</p>` : ""}
+      ${assessment.action ? `<p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(assessment.action)}</p>` : ""}
+      ${renderAssessmentStoredBits(assessment)}
+      <p class="assessment-detail__meta">Модель: ${escapeHtml(assessment.model)} · ${escapeHtml(assessment.prompt_version || "—")} · вердикт ${escapeHtml(key.toUpperCase())}</p>
+    </div>`;
+  }
+  if (failure) {
+    const code = failure.error_code || failure.failure_kind || "semantic_error";
+    const when = failure.last_failed_at ? formatDate(failure.last_failed_at) : "—";
+    return `<div class="row-detail__section vacancy-assessment-detail">
+      <p class="row-detail__label">Ошибка оценки</p>
+      <p class="assessment-detail__reason">Семантическая оценка не завершилась. Техническое состояние: ${escapeHtml(code)} · ${escapeHtml(when)}</p>
+    </div>`;
+  }
+  return `<div class="row-detail__section vacancy-assessment-detail">
+    <p class="row-detail__label">Оценка</p>
+    <p class="assessment-detail__reason">Вакансия ещё не оценена. Можно запустить ручную оценку.</p>
   </div>`;
 }
 
-function renderVacancyAssessmentDetail(assessment) {
-  if (!assessment) return "";
-  return `<div class="row-detail__section vacancy-assessment-detail">
-    <p class="row-detail__label">Оценка · ${escapeHtml(assessment.model)} · ${escapeHtml(assessment.prompt_version || "—")}</p>
-    <p class="assessment-detail__reason">${escapeHtml(assessment.reason)}</p>
-    ${assessment.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(assessment.risk)}</p>` : ""}
-    <p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(assessment.action)}</p>
+function renderOwnerDecisionControls(item) {
+  const current = vacancyOwnerDecision(item);
+  const decisions = [
+    ["interested", "Интересно"],
+    ["deferred", "Отложить"],
+    ["skipped", "Пропустить"],
+    ["applied", "Откликнулся"],
+  ];
+  const buttons = decisions
+    .map(([value, label]) => {
+      const active = current === value ? " is-active" : "";
+      return `<button class="btn btn--ghost btn--sm owner-decision-btn${active}" type="button" data-owner-decision="${value}" ${current === value ? "aria-pressed=\"true\"" : "aria-pressed=\"false\""}>${label}</button>`;
+    })
+    .join("");
+  const reset =
+    current !== "unreviewed"
+      ? `<button class="btn btn--ghost btn--sm" type="button" data-owner-decision="unreviewed">Сбросить</button>`
+      : "";
+  return `<div class="owner-decision" data-owner-current="${escapeHtml(current)}">
+    <p class="owner-decision__label">Моё решение · ${escapeHtml(ownerDecisionLabels[current])}</p>
+    <div class="owner-decision__actions">${buttons}${reset}</div>
   </div>`;
 }
 
@@ -442,16 +547,27 @@ function vacancyRow(item) {
   const evidenceCount = people.length + mirrors.length;
   const assessment = assessmentsByVacancyId.get(item.id);
   const failure = semanticFailuresByVacancyId.get(item.id);
-  const assessmentSummary = renderVacancyAssessmentSummary(assessment);
-  const assessmentDetail = renderVacancyAssessmentDetail(assessment);
+  const scoringState = vacancyScoringState(item, assessment, failure);
+  const ownerDecision = vacancyOwnerDecision(item);
+  const assessmentSummary = renderVacancyAssessmentSummary(assessment, failure);
+  const assessmentDetail = renderVacancyAssessmentDetail(assessment, failure);
   const scoreAction = vacancyScoreActionHtml(item, assessment, failure);
   const sourceSignals = vacancySourceSignalsHtml(item);
-  const detailParts = [];
+  const facts = vacancyFactsLine(item);
+  const hhId = item.source === "hh" ? item.external_id : "";
+  const detailParts = ["Разбор"];
   if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
   else if (item.company.website_url) detailParts.push("OSINT и зеркала");
-  if (assessment) detailParts.push("Оценка");
   const detailSummary = detailParts.join(" · ");
-  const detailSections = [];
+  const detailSections = [
+    assessmentDetail,
+    renderOwnerDecisionControls(item),
+    `<div class="row-detail__section">
+      <p class="row-detail__label">Материал вакансии</p>
+      <p class="assessment-detail__reason">${escapeHtml(excerpt(item.description, 600))}</p>
+      <p class="list-row__meta">Источник: <a class="inline-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
+    </div>`,
+  ];
   if (item.company.website_url || evidenceCount) {
     detailSections.push(
       researchButtons,
@@ -465,34 +581,31 @@ function vacancyRow(item) {
       </div>`,
     );
   }
-  if (assessmentDetail) detailSections.push(assessmentDetail);
-  const detailBlock = detailSummary
-    ? `<details class="row-detail"${evidenceCount || assessment ? " open" : ""}>
+  const detailBlock = `<details class="row-detail">
         <summary class="row-detail__summary">${escapeHtml(detailSummary)}</summary>
         <div class="row-detail__body">
           ${detailSections.join("")}
         </div>
-      </details>`
-    : "";
-  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}" data-source-status="${escapeHtml(vacancySourceStatus(item))}">
+      </details>`;
+  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}" data-source-status="${escapeHtml(vacancySourceStatus(item))}" data-scoring-state="${escapeHtml(scoringState)}" data-owner-decision="${escapeHtml(ownerDecision)}" data-verdict="${escapeHtml(normalizeVerdict(assessment?.verdict) || "")}">
     <div class="list-row">
       <div class="list-row__primary">
         <div class="list-row__identity">
           <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
           <div class="list-row__badges">
-            ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
-            ${renderBadge(item.source, "neutral")}
+            ${renderBadge(ownerDecisionLabels[ownerDecision], ownerDecisionBadge[ownerDecision] || "neutral")}
             ${sourceSignals}
+            ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
           </div>
         </div>
-        <p class="list-row__secondary">${escapeHtml(item.company.name)} · ${escapeHtml(excerpt(item.description))}</p>
-        <p class="list-row__meta">Получена: ${escapeHtml(formatFirstSeen(item.first_seen_at))}</p>
+        <p class="list-row__secondary">${escapeHtml(item.company.name)}${facts ? ` · ${escapeHtml(facts)}` : ""}</p>
+        <p class="list-row__meta">Получена: ${escapeHtml(formatFirstSeen(item.first_seen_at))}${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
       </div>
       <div class="list-row__trailing">
         ${assessmentSummary}
         <div class="list-row__actions">
-          <a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть ↗</a>
-          <label class="list-row__control"><span class="sr-only">Статус</span><select class="control control--select" data-status>${options}</select></label>
+          <a class="btn btn--ghost btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">HH ↗</a>
+          <label class="list-row__control"><span class="sr-only">Воронка</span><select class="control control--select" data-status>${options}</select></label>
           ${scoreAction}
           <button class="btn btn--secondary btn--sm" data-apply type="button">Записать отклик</button>
         </div>
@@ -724,9 +837,71 @@ async function loadApplications() {
 /* --- Vacancy search (R2.2.5 corrected: resume_suitable primary) --- */
 
 let vacancySearchRunning = false;
-let vacancyListFilter = { text: "", status: "" };
-let vacancyListSort = "first_seen_desc";
+let vacancyListFilter = {
+  text: "",
+  status: "",
+  verdict: "",
+  scoring: "",
+  fresh: "",
+  owner: "",
+};
 
+function vacancyPassesFilter(item) {
+  const status = vacancyListFilter.status;
+  if (status && item.status !== status) return false;
+  const fresh = vacancyListFilter.fresh;
+  if (fresh && vacancySourceStatus(item) !== fresh) return false;
+  const owner = vacancyListFilter.owner;
+  if (owner && vacancyOwnerDecision(item) !== owner) return false;
+  const assessment = assessmentsByVacancyId.get(item.id);
+  const failure = semanticFailuresByVacancyId.get(item.id);
+  const scoring = vacancyListFilter.scoring;
+  if (scoring && vacancyScoringState(item, assessment, failure) !== scoring) return false;
+  const verdict = vacancyListFilter.verdict;
+  if (verdict) {
+    if (!assessment || normalizeVerdict(assessment.verdict) !== verdict) return false;
+  }
+  const text = (vacancyListFilter.text || "").trim().toLowerCase();
+  if (!text) return true;
+  const blob = [item.title, item.company?.name].filter(Boolean).join(" ").toLowerCase();
+  return blob.includes(text);
+}
+
+function reviewQueueRank(item) {
+  const assessment = assessmentsByVacancyId.get(item.id);
+  const failure = semanticFailuresByVacancyId.get(item.id);
+  if (assessment) {
+    const verdict = normalizeVerdict(assessment.verdict);
+    if (verdict === "apply") return 0;
+    if (verdict === "maybe") return 1;
+    if (verdict === "skip") return 3;
+  }
+  if (failure) return 2;
+  return 2;
+}
+
+function sortVacancyItems(items) {
+  return [...items].sort((a, b) => {
+    const rankDiff = reviewQueueRank(a) - reviewQueueRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return compareVacanciesByFirstSeen(a, b, false);
+  });
+}
+
+function renderVacancyList(items) {
+  const filtered = items.filter(vacancyPassesFilter);
+  const sorted = sortVacancyItems(filtered);
+  setSectionCount(count, items.length);
+  grid.innerHTML = sorted.length ? sorted.map(vacancyRow).join("") : "";
+  if (!items.length) {
+    renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
+      buttonId: "suitable-run",
+      label: "Проверить подходящие",
+    });
+  } else if (!filtered.length) {
+    renderEmptyState(grid, "Ничего не найдено в фильтре", "Сбросьте фильтры очереди, чтобы снова увидеть все вакансии.");
+  }
+}
 const SEARCH_RECOVERY = {
   browser_login_required: "Нужно войти в HeadHunter",
   browser_session_not_logged_in: "Нужно войти в HeadHunter",
@@ -806,48 +981,12 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
   body.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
 }
 
-function vacancyPassesFilter(item) {
-  const status = vacancyListFilter.status;
-  if (status && item.status !== status) return false;
-  const text = (vacancyListFilter.text || "").trim().toLowerCase();
-  if (!text) return true;
-  const blob = [
-    item.title,
-    item.company?.name,
-    item.description,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return blob.includes(text);
-}
-
 function compareVacanciesByFirstSeen(a, b, ascending) {
   const ta = Date.parse(a.first_seen_at || a.created_at || "");
   const tb = Date.parse(b.first_seen_at || b.created_at || "");
   const safeA = Number.isNaN(ta) ? 0 : ta;
   const safeB = Number.isNaN(tb) ? 0 : tb;
   return ascending ? safeA - safeB : safeB - safeA;
-}
-
-function sortVacancyItems(items) {
-  const ascending = vacancyListSort === "first_seen_asc";
-  return [...items].sort((a, b) => compareVacanciesByFirstSeen(a, b, ascending));
-}
-
-function renderVacancyList(items) {
-  const filtered = items.filter(vacancyPassesFilter);
-  const sorted = sortVacancyItems(filtered);
-  setSectionCount(count, items.length);
-  grid.innerHTML = sorted.length ? sorted.map(vacancyRow).join("") : "";
-  if (!items.length) {
-    renderEmptyState(grid, "Вакансий пока нет", "Проверьте подходящие вакансии по рабочему резюме или добавьте вручную.", {
-      buttonId: "suitable-run",
-      label: "Проверить подходящие",
-    });
-  } else if (!filtered.length) {
-    renderEmptyState(grid, "Ничего не найдено в фильтре", "Сбросьте фильтр списка, чтобы снова увидеть все вакансии.");
-  }
 }
 
 async function loadVacancies() {
@@ -864,35 +1003,18 @@ async function loadVacancies() {
     connectionLabel.textContent = "Core доступен";
     knownVacancies = payload.items;
     try {
-      const [osintResponse, mirrorResponse, assessmentsResponse, failuresResponse] = await Promise.all([
-        fetch("/api/v1/osint/people-proposals"),
-        fetch("/api/v1/osint/vacancy-mirrors"),
-        fetch("/api/v1/assessments"),
-        fetch("/api/v1/semantic-failures"),
-      ]);
-      const osintPayload = await osintResponse.json();
-      const mirrorPayload = await mirrorResponse.json();
-      osintReports = osintResponse.ok ? osintPayload.items : [];
-      mirrorReports = mirrorResponse.ok ? mirrorPayload.items : [];
+      const assessmentsResponse = await fetch("/api/v1/assessments");
       if (assessmentsResponse.ok) {
         const assessmentsPayload = await assessmentsResponse.json();
         assessmentsByVacancyId = indexAssessmentsByVacancy(assessmentsPayload.items);
       } else {
         assessmentsByVacancyId = new Map();
       }
-      if (failuresResponse.ok) {
-        const failuresPayload = await failuresResponse.json();
-        semanticFailuresByVacancyId = indexSemanticFailuresByVacancy(failuresPayload.items);
-      } else {
-        semanticFailuresByVacancyId = new Map();
-      }
     } catch (_error) {
-      osintReports = [];
-      mirrorReports = [];
       assessmentsByVacancyId = new Map();
-      semanticFailuresByVacancyId = new Map();
     }
     renderVacancyList(knownVacancies);
+    void enrichVacancyBoardSecondary();
   } catch (error) {
     setSectionCount(count, null);
     signal.classList.add("offline");
@@ -903,6 +1025,27 @@ async function loadVacancies() {
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
+}
+
+async function enrichVacancyBoardSecondary() {
+  try {
+    const [osintResponse, mirrorResponse, failuresResponse] = await Promise.all([
+      fetch("/api/v1/osint/people-proposals"),
+      fetch("/api/v1/osint/vacancy-mirrors"),
+      fetch("/api/v1/semantic-failures"),
+    ]);
+    const osintPayload = await osintResponse.json().catch(() => ({ items: [] }));
+    const mirrorPayload = await mirrorResponse.json().catch(() => ({ items: [] }));
+    osintReports = osintResponse.ok ? osintPayload.items || [] : [];
+    mirrorReports = mirrorResponse.ok ? mirrorPayload.items || [] : [];
+    if (failuresResponse.ok) {
+      const failuresPayload = await failuresResponse.json();
+      semanticFailuresByVacancyId = indexSemanticFailuresByVacancy(failuresPayload.items);
+    }
+  } catch (_error) {
+    // Secondary enrichment must not blank the review queue.
+  }
+  if (knownVacancies?.length) renderVacancyList(knownVacancies);
 }
 
 async function loadActiveResumeLine() {
@@ -1009,18 +1152,27 @@ function initVacancySearchTabs() {
 function initVacancyListFilter() {
   const text = document.querySelector("#vacancy-filter-text");
   const status = document.querySelector("#vacancy-filter-status");
-  const sort = document.querySelector("#vacancy-list-sort");
+  const verdict = document.querySelector("#vacancy-filter-verdict");
+  const scoring = document.querySelector("#vacancy-filter-scoring");
+  const fresh = document.querySelector("#vacancy-filter-fresh");
+  const owner = document.querySelector("#vacancy-filter-owner");
   const apply = () => {
     vacancyListFilter = {
       text: text?.value || "",
       status: status?.value || "",
+      verdict: verdict?.value || "",
+      scoring: scoring?.value || "",
+      fresh: fresh?.value || "",
+      owner: owner?.value || "",
     };
-    vacancyListSort = sort?.value || "first_seen_desc";
     if (knownVacancies?.length) renderVacancyList(knownVacancies);
   };
   text?.addEventListener("input", apply);
   status?.addEventListener("change", apply);
-  sort?.addEventListener("change", apply);
+  verdict?.addEventListener("change", apply);
+  scoring?.addEventListener("change", apply);
+  fresh?.addEventListener("change", apply);
+  owner?.addEventListener("change", apply);
 }
 
 function initVacancySearch() {
@@ -1099,6 +1251,30 @@ grid.addEventListener("change", async (event) => {
 });
 
 grid.addEventListener("click", async (event) => {
+  const decisionButton = event.target.closest("[data-owner-decision]");
+  if (decisionButton) {
+    const card = decisionButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const ownerDecision = decisionButton.dataset.ownerDecision;
+    if (!vacancyId || !ownerDecision) return;
+    decisionButton.disabled = true;
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/owner-decision`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner_decision: ownerDecision }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Решение не сохранено");
+      const label = ownerDecisionLabels[payload.owner_decision] || payload.owner_decision;
+      showNotice(`Решение: ${label}`);
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      decisionButton.disabled = false;
+    }
+    return;
+  }
   const confirmButton = event.target.closest("[data-confirm]");
   if (confirmButton) {
     confirmButton.disabled = true;

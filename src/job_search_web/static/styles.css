@@ -545,7 +545,7 @@ button { cursor: pointer; }
 
 .vacancy-list-filter__body {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   margin-top: var(--space-3);
 }
@@ -1259,6 +1259,48 @@ button { cursor: pointer; }
   color: var(--color-text);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.assessment-detail__bits,
+.assessment-detail__meta {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  font-size: var(--font-size-secondary);
+}
+
+.assessment-score--muted {
+  opacity: 0.75;
+  font-size: var(--font-size-metadata);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-decision {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.owner-decision__label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.owner-decision__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.owner-decision-btn.is-active {
+  border-color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
 }
 
 .dialog {

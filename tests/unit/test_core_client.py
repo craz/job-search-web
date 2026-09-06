@@ -83,6 +83,32 @@ def test_metric_update_forwards_dated_contract_and_idempotency(
     }
 
 
+def test_owner_decision_forwards_public_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Owner decision uses Core path and does not touch Assessment endpoints."""
+    captured: dict[str, object] = {}
+
+    def fake_request(method: str, url: str, **kwargs: object) -> httpx.Response:
+        captured.update(method=method, url=url, kwargs=kwargs)
+        return httpx.Response(200, json={"owner_decision": "interested"})
+
+    monkeypatch.setattr(httpx, "request", fake_request)
+    status, payload = CoreClient("http://core.test").update_owner_decision(
+        "00000000-0000-0000-0000-000000000042", "interested"
+    )
+
+    assert status == 200
+    assert payload["owner_decision"] == "interested"
+    assert captured["method"] == "PATCH"
+    assert (
+        captured["url"]
+        == "http://core.test/api/v1/vacancies/00000000-0000-0000-0000-000000000042/owner-decision"
+    )
+    assert captured["kwargs"] == {
+        "timeout": 5.0,
+        "json": {"owner_decision": "interested"},
+    }
+
+
 def test_person_create_and_status_forward_public_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

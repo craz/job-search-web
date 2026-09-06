@@ -25,6 +25,7 @@ from job_search_web.schemas import (
     PersonStatusUpdate,
     VacancyCreate,
     VacancyMirrorRequest,
+    VacancyOwnerDecisionUpdate,
     VacancyStatusUpdate,
 )
 from job_search_web.scoring_client import ScoringClient, ScoringGateway, ScoringUnavailableError
@@ -448,6 +449,16 @@ def create_app(
         """Forward a browser funnel transition to Core."""
         try:
             return proxy_response(*gateway.update_status(vacancy_id, request.status))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/vacancies/{vacancy_id}/owner-decision")
+    def patch_owner_decision(vacancy_id: str, request: VacancyOwnerDecisionUpdate) -> JSONResponse:
+        """Forward owner review decision to Core without changing Assessment.verdict."""
+        try:
+            return proxy_response(
+                *gateway.update_owner_decision(vacancy_id, request.owner_decision)
+            )
         except CoreUnavailableError:
             return unavailable_response()
 
