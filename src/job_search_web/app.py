@@ -23,6 +23,7 @@ from job_search_web.schemas import (
     AssessmentCreate,
     DailyMetricUpdate,
     DirectOutreachCreate,
+    EmployerResponseCreate,
     HypothesisClose,
     HypothesisCreate,
     PeopleConfirmRequest,
@@ -569,6 +570,28 @@ def create_app(
         try:
             return proxy_response(
                 *gateway.create_direct_outreach(request.model_dump(mode="json", exclude_none=True))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/employer-responses")
+    def get_employer_responses(request: Request) -> JSONResponse:
+        """Return owner-recorded employer responses from Core."""
+        try:
+            return proxy_response(
+                *gateway.list_employer_responses(list(request.query_params.multi_items()))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/employer-responses")
+    def post_employer_response(request: EmployerResponseCreate) -> JSONResponse:
+        """Record employer reply fact; does not send messages or mutate decisions."""
+        try:
+            return proxy_response(
+                *gateway.create_employer_response(
+                    request.model_dump(mode="json", exclude_none=True)
+                )
             )
         except CoreUnavailableError:
             return unavailable_response()

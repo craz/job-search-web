@@ -35,6 +35,11 @@ const outreachForm = document.querySelector("#outreach-form");
 const outreachFormError = document.querySelector("#outreach-form-error");
 const outreachSubmitButton = document.querySelector("#submit-outreach-form");
 const outreachVacancyTitle = document.querySelector("#outreach-vacancy-title");
+const responseDialog = document.querySelector("#response-dialog");
+const responseForm = document.querySelector("#response-form");
+const responseFormError = document.querySelector("#response-form-error");
+const responseSubmitButton = document.querySelector("#submit-response-form");
+const responseVacancyTitle = document.querySelector("#response-vacancy-title");
 const metricsDashboard = document.querySelector("#metrics");
 const metricCount = document.querySelector("#metric-count");
 const metricDialog = document.querySelector("#metric-dialog");
@@ -60,6 +65,7 @@ let osintReports = [];
 let mirrorReports = [];
 let peopleByVacancyId = new Map();
 let outreachesByVacancyId = new Map();
+let employerResponsesByVacancyId = new Map();
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
@@ -187,6 +193,33 @@ const outreachMethodLabels = {
   telegram: "Telegram",
   phone: "Телефон",
   other: "Другое",
+};
+
+const employerResponseTypeLabels = {
+  replied: "Ответили",
+  invitation: "Приглашение",
+  rejection: "Отказ",
+  question: "Вопрос",
+  interview_request: "Запрос собеседования",
+  test_task: "Тестовое",
+  no_response: "Нет ответа",
+  other: "Другое",
+};
+
+const employerResponseSourceLabels = {
+  hh: "HH",
+  direct: "Прямой",
+};
+
+const suggestedNextActionByResponseType = {
+  invitation: "Согласовать время созвона",
+  question: "Ответить работодателю",
+  test_task: "Сделать тестовое",
+  rejection: "Закрыть вакансию",
+  no_response: "Напомнить / написать повторно",
+  replied: "Продолжить переписку",
+  interview_request: "Согласовать время созвона",
+  other: "",
 };
 
 let applicationsByVacancyId = new Map();
@@ -516,6 +549,43 @@ function renderDirectOsintSection(item) {
   </div>`;
 }
 
+function renderEmployerResponseItem(item) {
+  const typeLabel = employerResponseTypeLabels[item.response_type] || item.response_type;
+  const sourceLabel = employerResponseSourceLabels[item.source] || item.source;
+  const related = item.application
+    ? `отклик ${formatDate(item.application.applied_at)}`
+    : item.direct_outreach
+      ? `контакт ${outreachMethodLabels[item.direct_outreach.method] || item.direct_outreach.method}`
+      : item.person?.full_name
+        ? item.person.full_name
+        : "без привязки";
+  return `<div class="evidence-item">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(typeLabel)}</strong>
+      <span>${escapeHtml(sourceLabel)} · ${escapeHtml(formatDate(item.occurred_at))}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml(item.note || "Заметка не указана")}</p>
+    <div class="evidence-item__foot">${escapeHtml(related)}</div>
+  </div>`;
+}
+
+function renderEmployerResponseSection(item) {
+  const responses = employerResponsesByVacancyId.get(item.id) || [];
+  const responseHtml = responses.length
+    ? responses.map(renderEmployerResponseItem).join("")
+    : inlineState("Ответов работодателя пока нет.");
+  return `<div class="employer-responses" data-response-vacancy="${escapeHtml(item.id)}">
+    <p class="owner-decision__label">Ответы работодателя</p>
+    <div class="action-plan__links">
+      <button class="btn btn--secondary btn--sm" data-record-response type="button">Записать ответ</button>
+    </div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">История ответов · факт владельца</p>
+      ${responseHtml}
+    </div>
+  </div>`;
+}
+
 const sourceStatusLabels = {
   active: "На источнике",
   archived: "В архиве",
@@ -769,6 +839,7 @@ function vacancyRow(item) {
     renderOwnerDecisionControls(item),
     renderActionPlanControls(item),
     renderDirectOsintSection(item),
+    renderEmployerResponseSection(item),
     assessmentDetail,
     `<div class="row-detail__section">
       <p class="row-detail__label">Материал вакансии</p>
@@ -1086,6 +1157,25 @@ async function loadDirectOutreaches() {
     if (knownVacancies?.length) renderVacancyList(knownVacancies);
   } catch (_error) {
     outreachesByVacancyId = new Map();
+  }
+}
+
+async function loadEmployerResponses() {
+  try {
+    const response = await fetch("/api/v1/employer-responses");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить ответы работодателей");
+    employerResponsesByVacancyId = new Map();
+    for (const item of payload.items || []) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      const list = employerResponsesByVacancyId.get(vacancyId) || [];
+      list.push(item);
+      employerResponsesByVacancyId.set(vacancyId, list);
+    }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  } catch (_error) {
+    employerResponsesByVacancyId = new Map();
   }
 }
 
@@ -1893,6 +1983,32 @@ grid.addEventListener("click", async (event) => {
     outreachDialog.showModal();
     return;
   }
+  const recordResponseButton = event.target.closest("[data-record-response]");
+  if (recordResponseButton) {
+    const card = recordResponseButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    if (!vacancy || !responseForm) return;
+    responseForm.reset();
+    responseForm.elements.vacancy_id.value = vacancyId;
+    const channel = vacancyActionChannel(vacancy);
+    responseForm.elements.source.value =
+      channel === "direct" ? "direct" : channel === "hh" ? "hh" : "hh";
+    const typeSelect = responseForm.elements.response_type;
+    typeSelect.value = "replied";
+    responseForm.elements.suggested_next_action.value =
+      suggestedNextActionByResponseType[typeSelect.value] || "";
+    fillResponseRelatedActions(vacancyId, responseForm.elements.source.value);
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    responseForm.elements.occurred_at.value = local;
+    if (responseVacancyTitle) responseVacancyTitle.textContent = vacancy.title;
+    responseFormError.hidden = true;
+    responseDialog.showModal();
+    return;
+  }
   const scoreButton = event.target.closest("[data-score]");
   if (scoreButton) {
     const card = scoreButton.closest("[data-id]");
@@ -2082,6 +2198,95 @@ if (outreachDialog && outreachForm) {
       outreachFormError.hidden = false;
     } finally {
       setButtonProcessing(outreachSubmitButton, false, "Сохраняем…", "Записать контакт");
+    }
+  });
+}
+
+function fillResponseRelatedActions(vacancyId, source) {
+  const related = responseForm?.elements.related_action;
+  if (!related) return;
+  const options = ['<option value="">Без привязки</option>'];
+  if (source === "hh") {
+    for (const app of applicationsByVacancyId.get(vacancyId) || []) {
+      options.push(
+        `<option value="application:${escapeHtml(app.id)}">Отклик · ${escapeHtml(formatDate(app.applied_at))} · ${escapeHtml(app.source)}</option>`,
+      );
+    }
+  } else {
+    for (const outreach of outreachesByVacancyId.get(vacancyId) || []) {
+      const method = outreachMethodLabels[outreach.method] || outreach.method;
+      const who = outreach.person?.full_name || "контакт";
+      options.push(
+        `<option value="outreach:${escapeHtml(outreach.id)}">Контакт · ${escapeHtml(method)} · ${escapeHtml(who)}</option>`,
+      );
+    }
+  }
+  related.innerHTML = options.join("");
+}
+
+if (responseDialog && responseForm) {
+  document.querySelector("#close-response-form")?.addEventListener("click", () => responseDialog.close());
+  document.querySelector("#cancel-response-form")?.addEventListener("click", () => responseDialog.close());
+  responseForm.elements.source?.addEventListener("change", () => {
+    fillResponseRelatedActions(
+      responseForm.elements.vacancy_id.value,
+      responseForm.elements.source.value,
+    );
+  });
+  responseForm.elements.response_type?.addEventListener("change", () => {
+    const suggestion =
+      suggestedNextActionByResponseType[responseForm.elements.response_type.value] || "";
+    responseForm.elements.suggested_next_action.value = suggestion;
+  });
+  responseForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    responseFormError.hidden = true;
+    setButtonProcessing(responseSubmitButton, true, "Сохраняем…", "Записать ответ");
+    const values = Object.fromEntries(new FormData(responseForm));
+    const payload = {
+      vacancy_id: values.vacancy_id,
+      source: values.source,
+      response_type: values.response_type,
+    };
+    if (values.occurred_at) payload.occurred_at = new Date(values.occurred_at).toISOString();
+    if (values.note) payload.note = values.note;
+    const related = String(values.related_action || "");
+    if (related.startsWith("application:")) {
+      payload.application_id = related.slice("application:".length);
+    }
+    if (related.startsWith("outreach:")) {
+      payload.direct_outreach_id = related.slice("outreach:".length);
+    }
+    const suggestedNext = String(values.suggested_next_action || "").trim();
+    try {
+      const response = await fetch("/api/v1/employer-responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Ответ не записан");
+      responseDialog.close();
+      if (suggestedNext) {
+        const setNext = window.confirm(
+          `Ответ записан (ничего не отправлялось).\n\nПоставить следующий шаг «${suggestedNext}»?`,
+        );
+        if (setNext) {
+          await fetch(`/api/v1/vacancies/${payload.vacancy_id}/action-plan`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ next_action: suggestedNext, next_action_done: false }),
+          });
+        }
+      }
+      const typeLabel = employerResponseTypeLabels[body.response_type] || body.response_type;
+      showNotice(`Записан ответ: ${typeLabel}`);
+      await Promise.all([loadEmployerResponses(), loadVacancies()]);
+    } catch (error) {
+      responseFormError.textContent = error.message;
+      responseFormError.hidden = false;
+    } finally {
+      setButtonProcessing(responseSubmitButton, false, "Сохраняем…", "Записать ответ");
     }
   });
 }
@@ -2990,6 +3195,7 @@ void (async () => {
   await loadApplications();
   await loadPeople();
   await loadDirectOutreaches();
+  await loadEmployerResponses();
   await loadVacancies();
 })();
 loadMetrics();

@@ -67,6 +67,24 @@ class DirectOutreachCreate(BaseModel):
     url: HttpUrl | None = None
 
 
+class EmployerResponseCreate(BaseModel):
+    """Browser-submitted employer reply fact (R3.3; no external send)."""
+
+    vacancy_id: UUID
+    source: str = Field(pattern="^(hh|direct)$")
+    response_type: str = Field(
+        pattern=(
+            "^(replied|invitation|rejection|question|interview_request|"
+            "test_task|no_response|other)$"
+        )
+    )
+    occurred_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+    application_id: UUID | None = None
+    direct_outreach_id: UUID | None = None
+    person_id: UUID | None = None
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

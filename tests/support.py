@@ -158,6 +158,7 @@ class StubCore:
         self.items = [vacancy()]
         self.application_items: list[dict[str, Any]] = []
         self.outreach_items: list[dict[str, Any]] = []
+        self.response_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
@@ -353,6 +354,65 @@ class StubCore:
             },
         }
         self.outreach_items.insert(0, created)
+        return 201, created
+
+    def list_employer_responses(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return synthetic employer response history."""
+        self._guard()
+        self.calls.append(("response-list", params))
+        items = list(self.response_items)
+        if params:
+            mapping = (
+                dict(params) if isinstance(params, dict) else {key: value for key, value in params}
+            )
+            vacancy_id = mapping.get("vacancy_id")
+            if vacancy_id:
+                items = [item for item in items if item.get("vacancy", {}).get("id") == vacancy_id]
+        return 200, {"items": items, "total": len(items)}
+
+    def create_employer_response(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record employer reply without mutating Application or DirectOutreach."""
+        self._guard()
+        self.calls.append(("response-create", payload))
+        created = {
+            "id": "00000000-0000-0000-0000-0000000000bb",
+            "source": payload["source"],
+            "response_type": payload["response_type"],
+            "occurred_at": payload.get("occurred_at") or "2026-09-07T15:00:00Z",
+            "note": payload.get("note"),
+            "created_at": "2026-09-07T15:00:00Z",
+            "vacancy": {"id": payload["vacancy_id"], "title": "Backend Engineer", "status": "new"},
+            "application": (
+                {
+                    "id": payload["application_id"],
+                    "source": "manual",
+                    "applied_at": "2026-09-07T12:00:00Z",
+                }
+                if payload.get("application_id")
+                else None
+            ),
+            "direct_outreach": (
+                {
+                    "id": payload["direct_outreach_id"],
+                    "method": "email",
+                    "occurred_at": "2026-09-07T12:00:00Z",
+                }
+                if payload.get("direct_outreach_id")
+                else None
+            ),
+            "person": (
+                {
+                    "id": payload["person_id"],
+                    "full_name": "Alex Example",
+                    "title": "CTO",
+                }
+                if payload.get("person_id")
+                else None
+            ),
+        }
+        self.response_items.insert(0, created)
         return 201, created
 
     def list_metrics(self) -> tuple[int, Any]:

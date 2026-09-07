@@ -64,6 +64,16 @@ class CoreGateway(Protocol):
         """Record one owner-reported contact fact through Core."""
         ...
 
+    def list_employer_responses(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return owner-recorded employer response facts."""
+        ...
+
+    def create_employer_response(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record one owner-reported employer reply through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -203,6 +213,16 @@ class CoreClient:
     def create_direct_outreach(self, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward owner-reported contact fact; does not send messages."""
         return self._request("POST", "/api/v1/direct-outreaches", json=payload)
+
+    def list_employer_responses(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Fetch owner-recorded employer responses from Core."""
+        return self._request("GET", "/api/v1/employer-responses", params=params)
+
+    def create_employer_response(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward owner-reported employer reply; does not send messages."""
+        return self._request("POST", "/api/v1/employer-responses", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

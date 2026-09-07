@@ -440,6 +440,68 @@
       </form>
     </dialog>
 
+    <dialog id="response-dialog" class="dialog" aria-labelledby="response-dialog-title">
+      <form id="response-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ОТВЕТ РАБОТОДАТЕЛЯ · НЕ ОТПРАВКА</p>
+            <h2 id="response-dialog-title">Записать ответ</h2>
+            <p id="response-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-response-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Источник</span>
+              <select class="control control--select" name="source" required>
+                <option value="hh">HH / отклик</option>
+                <option value="direct">Прямой контакт</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Тип ответа</span>
+              <select class="control control--select" name="response_type" required>
+                <option value="replied">Ответили</option>
+                <option value="invitation">Приглашение</option>
+                <option value="rejection">Отказ</option>
+                <option value="question">Вопрос</option>
+                <option value="interview_request">Запрос собеседования</option>
+                <option value="test_task">Тестовое</option>
+                <option value="no_response">Нет ответа</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Связанное действие</span>
+              <select class="control control--select" name="related_action">
+                <option value="">Без привязки</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Когда</span>
+              <input class="control" name="occurred_at" type="datetime-local">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Краткая заметка</span>
+              <textarea class="control control--textarea" name="note" rows="3" maxlength="2000" placeholder="Что ответил работодатель"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Следующий шаг (по подтверждению)</span>
+              <input class="control" name="suggested_next_action" maxlength="500" placeholder="Например: Ответить работодателю">
+            </label>
+          </div>
+          <p class="safety-note">Запись ответа не меняет вердикт AI и решение владельца и ничего не отправляет наружу.</p>
+          <p id="response-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-response-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-response-form" type="submit">Записать ответ</button>
+        </footer>
+      </form>
+    </dialog>
+
     <dialog id="metric-dialog" class="dialog" aria-labelledby="metric-dialog-title">
       <form id="metric-form" class="dialog__form" method="dialog">
         <header class="dialog__header">
