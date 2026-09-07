@@ -32,7 +32,9 @@ def test_osint_section_requires_company_website_url() -> None:
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "item.company.website_url" in js
     assert 'detailParts.push("OSINT и зеркала")' in js
-    assert "if (item.company.website_url || evidenceCount)" in js
+    assert "function renderDirectOsintSection" in js
+    assert "if (!directChannel && (item.company.website_url || evidenceCount))" in js
+    assert "сначала нужен сайт компании" in js
 
 
 def test_vacancy_list_hierarchy_styles_present() -> None:
@@ -84,6 +86,10 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert 'id="vacancy-page-next"' in html
     assert "function renderOwnerDecisionControls" in js
     assert "function renderActionPlanControls" in js
+    assert "function renderDirectOsintSection" in js
+    assert "Подходящие контакты не найдены" in js
+    assert "Выбрать контакт" in js
+    assert "data-suggest-next-action" in js
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

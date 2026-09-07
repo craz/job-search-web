@@ -53,6 +53,8 @@ const hypothesisCloseError = document.querySelector("#hypothesis-close-error");
 let knownVacancies = [];
 let osintReports = [];
 let mirrorReports = [];
+let peopleByVacancyId = new Map();
+let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
 
@@ -355,7 +357,7 @@ function renderActionPlanControls(item) {
   const directHint =
     channel === "direct" || channel === "both"
       ? item.company?.website_url
-        ? `<button class="btn btn--ghost btn--sm" data-research type="button">Найти контакт</button>`
+        ? `<button class="btn btn--secondary btn--sm" data-research type="button">${osintReports.some((r) => r.vacancy_id === item.id) ? "Повторить поиск" : "Найти контакт"}</button>`
         : `<p class="list-row__meta">Прямой путь: сначала нужен сайт компании, затем поиск контакта.</p>`
       : "";
   const apps = applicationsByVacancyId.get(item.id) || [];
@@ -376,6 +378,101 @@ function renderActionPlanControls(item) {
     </div>
     <div class="action-plan__links">${hhOpen}${directHint}</div>
     ${appHistory}
+  </div>`;
+}
+
+function formatConfidence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "неизвестно";
+  return `${Math.round(number * 100)}%`;
+}
+
+function renderEvidencePerson(person, report, { selectLabel = "Выбрать контакт" } = {}) {
+  const proposed = person.status === "proposed" && person.id && report?.report_id;
+  const confirmControl = proposed
+    ? `<button class="btn btn--secondary btn--sm" type="button" data-confirm data-report-id="${escapeHtml(report.report_id)}" data-person-id="${escapeHtml(person.id)}">${escapeHtml(selectLabel)}</button>`
+    : person.status === "confirmed"
+      ? renderBadge("Выбран", "success")
+      : "";
+  const confidence = formatConfidence(person.confidence);
+  return `<div class="evidence-item">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(person.full_name)}</strong>
+      <span>${escapeHtml(person.title || "Роль не определена")} · уверенность ${escapeHtml(confidence)}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
+    <div class="evidence-item__foot">
+      <a class="inline-link" href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
+      ${confirmControl}
+    </div>
+  </div>`;
+}
+
+function renderConfirmedPerson(person) {
+  const profile = person.url
+    ? `<a class="inline-link" href="${escapeHtml(person.url)}" target="_blank" rel="noreferrer">Профиль / источник ↗</a>`
+    : `<span class="list-row__meta">Ссылка на профиль недоступна</span>`;
+  const confidence = person.confidence == null ? "" : ` · уверенность ${escapeHtml(formatConfidence(person.confidence))}`;
+  const roleLabel = personRoleLabels[person.role] || person.role || "контакт";
+  return `<div class="evidence-item evidence-item--selected">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(person.full_name)}</strong>
+      <span>${escapeHtml(roleLabel)}${person.title ? ` · ${escapeHtml(person.title)}` : ""}${confidence}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml(person.notes || "Подтверждённый контакт для этой вакансии")}</p>
+    <div class="evidence-item__foot">
+      ${profile}
+      <button class="btn btn--ghost btn--sm" type="button" data-suggest-next-action="${escapeHtml(person.full_name)}">Поставить шаг: Написать ${escapeHtml(person.full_name)}</button>
+    </div>
+  </div>`;
+}
+
+function renderDirectOsintSection(item) {
+  const channel = vacancyActionChannel(item);
+  if (channel !== "direct" && channel !== "both") return "";
+  const report = osintReports.find((candidate) => candidate.vacancy_id === item.id);
+  const candidates = report?.people || [];
+  const selected = peopleByVacancyId.get(item.id) || [];
+  const hasWebsite = Boolean(item.company?.website_url);
+  let statusLine = "Поиск ещё не запускался";
+  if (osintUnavailable) statusLine = "OSINT недоступен — план вакансии сохранён, повторите позже";
+  else if (!hasWebsite) statusLine = "Нужен сайт компании";
+  else if (report) {
+    const errors = Array.isArray(report.errors) ? report.errors : [];
+    statusLine = `Поиск ${formatDate(report.observed_at)} · кандидатов ${candidates.length}`;
+    if (errors.length) statusLine += ` · замечания: ${errors.length}`;
+  }
+  const researchControl = hasWebsite
+    ? `<button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Повторить поиск" : "Найти контакт"}</button>`
+    : "";
+  let candidatesHtml;
+  if (osintUnavailable && !report) {
+    candidatesHtml = inlineState("Сервис поиска контактов сейчас недоступен.", "error");
+  } else if (!report) {
+    candidatesHtml = inlineState("Кандидаты появятся после поиска.");
+  } else if (!candidates.length) {
+    candidatesHtml = inlineState("Подходящие контакты не найдены");
+  } else {
+    candidatesHtml = candidates
+      .slice(0, 5)
+      .map((person) => renderEvidencePerson(person, report))
+      .join("");
+  }
+  const selectedHtml = selected.length
+    ? selected.map(renderConfirmedPerson).join("")
+    : inlineState("Выбранных контактов пока нет.");
+  return `<div class="direct-osint" data-direct-vacancy="${escapeHtml(item.id)}">
+    <p class="owner-decision__label">Прямой контакт</p>
+    <p class="list-row__meta">${escapeHtml(statusLine)}</p>
+    <div class="action-plan__links">${researchControl}</div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">Кандидаты · не проверено</p>
+      ${candidatesHtml}
+    </div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">Выбранные контакты</p>
+      ${selectedHtml}
+    </div>
   </div>`;
 }
 
@@ -575,26 +672,6 @@ function inlineState(message, variant = "empty") {
   return `<p class="inline-state inline-state--${variant}">${escapeHtml(message)}</p>`;
 }
 
-function renderEvidencePerson(person, report) {
-  const proposed = person.status === "proposed" && person.id && report?.report_id;
-  const confirmControl = proposed
-    ? `<button class="btn btn--secondary btn--sm" type="button" data-confirm data-report-id="${escapeHtml(report.report_id)}" data-person-id="${escapeHtml(person.id)}">Подтвердить в Core</button>`
-    : person.status === "confirmed"
-      ? renderBadge("В Core", "success")
-      : "";
-  return `<div class="evidence-item">
-    <div class="evidence-item__head">
-      <strong>${escapeHtml(person.full_name)}</strong>
-      <span>${escapeHtml(person.title || "Роль не определена")}</span>
-    </div>
-    <p class="evidence-item__excerpt">${escapeHtml(person.evidence_excerpt || "Фрагмент источника недоступен")}</p>
-    <div class="evidence-item__foot">
-      <a class="inline-link" href="${escapeHtml(person.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(person.source)} · ${escapeHtml(formatDate(person.observed_at))} ↗</a>
-      ${confirmControl}
-    </div>
-  </div>`;
-}
-
 function renderMirrorItem(mirror, item) {
   return `<div class="evidence-item">
     <div class="evidence-item__head">
@@ -610,23 +687,28 @@ function vacancyRow(item) {
   const options = Object.entries(statusLabels)
     .map(([value, label]) => `<option value="${value}" ${value === item.status ? "selected" : ""}>${label}</option>`)
     .join("");
+  const channel = vacancyActionChannel(item);
+  const directChannel = channel === "direct" || channel === "both";
   const report = osintReports.find((candidate) => candidate.vacancy_id === item.id);
   const people = report?.people || [];
+  const selectedPeople = peopleByVacancyId.get(item.id) || [];
   const mirrorReport = mirrorReports.find((candidate) => candidate.vacancy_id === item.id);
   const mirrors = mirrorReport?.mirrors || [];
   const peopleHtml = people.length
-    ? people.slice(0, 3).map((person) => renderEvidencePerson(person, report)).join("")
+    ? people.slice(0, 3).map((person) => renderEvidencePerson(person, report, { selectLabel: "Подтвердить в Core" })).join("")
     : inlineState("Непроверенные контакты ещё не найдены.");
   const mirrorsHtml = mirrors.length
     ? mirrors.slice(0, 3).map((mirror) => renderMirrorItem(mirror, item)).join("")
     : inlineState("Зеркала вакансии ещё не найдены.");
   const researchButtons = item.company.website_url
     ? `<div class="row-detail__actions">
-        <button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Обновить контакты" : "Найти контакты"}</button>
+        ${directChannel ? "" : `<button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Обновить контакты" : "Найти контакты"}</button>`}
         <button class="btn btn--ghost btn--sm" data-mirrors type="button">${mirrorReport ? "Обновить зеркала" : "Найти зеркала"}</button>
       </div>`
-    : inlineState("Для поиска контактов и зеркал сначала нужен сайт компании.");
-  const evidenceCount = people.length + mirrors.length;
+    : directChannel
+      ? ""
+      : inlineState("Для поиска контактов и зеркал сначала нужен сайт компании.");
+  const evidenceCount = people.length + mirrors.length + selectedPeople.length;
   const assessment = assessmentsByVacancyId.get(item.id);
   const failure = semanticFailuresByVacancyId.get(item.id);
   const scoringState = vacancyScoringState(item, assessment, failure);
@@ -639,12 +721,14 @@ function vacancyRow(item) {
   const facts = vacancyFactsLine(item);
   const hhId = item.source === "hh" ? item.external_id : "";
   const detailParts = ["Разбор"];
-  if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
+  if (directChannel) detailParts.push("Прямой контакт");
+  else if (evidenceCount) detailParts.push(`Контакты и зеркала · ${evidenceCount}`);
   else if (item.company.website_url) detailParts.push("OSINT и зеркала");
   const detailSummary = detailParts.join(" · ");
   const detailSections = [
     renderOwnerDecisionControls(item),
     renderActionPlanControls(item),
+    renderDirectOsintSection(item),
     assessmentDetail,
     `<div class="row-detail__section">
       <p class="row-detail__label">Материал вакансии</p>
@@ -652,7 +736,7 @@ function vacancyRow(item) {
       <p class="list-row__meta">Источник: <a class="inline-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
     </div>`,
   ];
-  if (item.company.website_url || evidenceCount) {
+  if (!directChannel && (item.company.website_url || evidenceCount)) {
     detailSections.push(
       researchButtons,
       `<div class="row-detail__section">
@@ -662,6 +746,16 @@ function vacancyRow(item) {
       `<div class="row-detail__section">
         <p class="row-detail__label">Контакты · ${people.some((person) => person.status === "proposed") ? "не проверено" : "подтверждено"}</p>
         ${peopleHtml}
+      </div>`,
+    );
+  } else if (directChannel && item.company.website_url) {
+    detailSections.push(
+      `<div class="row-detail__actions">
+        <button class="btn btn--ghost btn--sm" data-mirrors type="button">${mirrorReport ? "Обновить зеркала" : "Найти зеркала"}</button>
+      </div>`,
+      `<div class="row-detail__section">
+        <p class="row-detail__label">Зеркала · не проверено</p>
+        ${mirrorsHtml}
       </div>`,
     );
   }
@@ -815,6 +909,14 @@ async function loadPeople() {
     const response = await fetch("/api/v1/people");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить контакты");
+    peopleByVacancyId = new Map();
+    for (const item of payload.items || []) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      const list = peopleByVacancyId.get(vacancyId) || [];
+      list.push(item);
+      peopleByVacancyId.set(vacancyId, list);
+    }
     setSectionCount(peopleCount, payload.total);
     peopleGrid.innerHTML = payload.total ? payload.items.map(personRow).join("") : "";
     if (!payload.total) {
@@ -823,6 +925,7 @@ async function loadPeople() {
         label: "+ Добавить контакт",
       });
     }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
   } catch (error) {
     setSectionCount(peopleCount, null);
     renderErrorState(peopleGrid, "Не удалось загрузить контакты", error.message, loadPeople);
@@ -1147,6 +1250,7 @@ async function enrichVacancyBoardSecondary() {
     ]);
     const osintPayload = await osintResponse.json().catch(() => ({ items: [] }));
     const mirrorPayload = await mirrorResponse.json().catch(() => ({ items: [] }));
+    osintUnavailable = !osintResponse.ok;
     osintReports = osintResponse.ok ? osintPayload.items || [] : [];
     mirrorReports = mirrorResponse.ok ? mirrorPayload.items || [] : [];
     if (failuresResponse.ok) {
@@ -1155,6 +1259,7 @@ async function enrichVacancyBoardSecondary() {
       semanticFailedIds = [...semanticFailuresByVacancyId.keys()];
     }
   } catch (_error) {
+    osintUnavailable = true;
     // Secondary enrichment must not blank the review queue.
   }
   const failedChanged = semanticFailedIds.join(",") !== previousFailed;
@@ -1658,7 +1763,7 @@ grid.addEventListener("click", async (event) => {
   const confirmButton = event.target.closest("[data-confirm]");
   if (confirmButton) {
     confirmButton.disabled = true;
-    confirmButton.textContent = "Подтверждаем…";
+    confirmButton.textContent = "Сохраняем…";
     try {
       const response = await fetch("/api/v1/osint/people-confirm", {
         method: "POST",
@@ -1671,12 +1776,35 @@ grid.addEventListener("click", async (event) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Подтверждение не выполнено");
       const name = payload.person?.full_name || payload.core_person?.full_name || "контакт";
-      showNotice(`В Core: ${name}`);
-      await Promise.all([loadVacancies(), loadPeople()]);
+      showNotice(`Контакт выбран: ${name}. Можно поставить следующий шаг.`);
+      await Promise.all([loadPeople(), loadVacancies()]);
     } catch (error) {
       showNotice(error.message, "error");
       confirmButton.disabled = false;
-      confirmButton.textContent = "Подтвердить в Core";
+      confirmButton.textContent = "Выбрать контакт";
+    }
+    return;
+  }
+  const suggestNextButton = event.target.closest("[data-suggest-next-action]");
+  if (suggestNextButton) {
+    const card = suggestNextButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const fullName = suggestNextButton.dataset.suggestNextAction;
+    if (!vacancyId || !fullName) return;
+    suggestNextButton.disabled = true;
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ next_action: `Написать ${fullName}`, next_action_done: false }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Шаг не сохранён");
+      showNotice(`Следующий шаг: ${payload.next_action}`);
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      suggestNextButton.disabled = false;
     }
     return;
   }
@@ -1772,8 +1900,12 @@ grid.addEventListener("click", async (event) => {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Поиск контактов не выполнен");
-      showNotice(`Поиск завершён: ${payload.people.length} контактов`);
-      await loadVacancies();
+      showNotice(
+        payload.people?.length
+          ? `Поиск завершён: ${payload.people.length} кандидатов`
+          : "Подходящие контакты не найдены",
+      );
+      await Promise.all([loadVacancies(), loadPeople()]);
     } catch (error) {
       showNotice(error.message, "error");
       researchButton.disabled = false;
@@ -2729,9 +2861,9 @@ loadHhConnection();
 initVacancySearch();
 void (async () => {
   await loadApplications();
+  await loadPeople();
   await loadVacancies();
 })();
 loadMetrics();
-loadPeople();
 loadHypotheses();
 startLiveReload();

@@ -26,14 +26,25 @@ class OsintGateway(Protocol):
 class OsintClient:
     """Bounded HTTP client without access to OSINT storage or providers."""
 
-    def __init__(self, base_url: str, timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float = 20.0,
+        research_timeout_seconds: float = 180.0,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.research_timeout_seconds = research_timeout_seconds
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> tuple[int, Any]:
+    def _request(
+        self, method: str, path: str, *, timeout: float | None = None, **kwargs: Any
+    ) -> tuple[int, Any]:
         try:
             response = httpx.request(
-                method, f"{self.base_url}{path}", timeout=self.timeout_seconds, **kwargs
+                method,
+                f"{self.base_url}{path}",
+                timeout=self.timeout_seconds if timeout is None else timeout,
+                **kwargs,
             )
             return response.status_code, response.json()
         except (httpx.RequestError, ValueError) as error:
@@ -43,7 +54,12 @@ class OsintClient:
         return self._request("GET", "/api/v1/people-proposals")
 
     def research_people(self, payload: dict[str, Any]) -> tuple[int, Any]:
-        return self._request("POST", "/api/v1/people-research", json=payload)
+        return self._request(
+            "POST",
+            "/api/v1/people-research",
+            json=payload,
+            timeout=self.research_timeout_seconds,
+        )
 
     def confirm_person(self, payload: dict[str, Any]) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/people-confirm", json=payload)
