@@ -24,6 +24,8 @@ from job_search_web.schemas import (
     DailyMetricUpdate,
     DirectOutreachCreate,
     EmployerResponseCreate,
+    HiringActivityCreate,
+    HiringActivityUpdate,
     HiringProcessCreate,
     HiringProcessStatusUpdate,
     HiringStageTransition,
@@ -638,6 +640,30 @@ def create_app(
             return proxy_response(
                 *gateway.update_hiring_process(
                     process_id, request.model_dump(mode="json", exclude_none=True)
+                )
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hiring-processes/{process_id}/activities")
+    def post_hiring_activity(process_id: str, request: HiringActivityCreate) -> JSONResponse:
+        """Create hiring activity through Core; does not advance stage."""
+        try:
+            return proxy_response(
+                *gateway.create_hiring_activity(
+                    process_id, request.model_dump(mode="json", exclude_none=True)
+                )
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/hiring-activities/{activity_id}")
+    def patch_hiring_activity(activity_id: str, request: HiringActivityUpdate) -> JSONResponse:
+        """Update hiring activity through Core."""
+        try:
+            return proxy_response(
+                *gateway.update_hiring_activity(
+                    activity_id, request.model_dump(mode="json", exclude_none=True)
                 )
             )
         except CoreUnavailableError:

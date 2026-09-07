@@ -607,6 +607,98 @@
       </form>
     </dialog>
 
+    <dialog id="hiring-activity-dialog" class="dialog" aria-labelledby="hiring-activity-dialog-title">
+      <form id="hiring-activity-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">АКТИВНОСТЬ · R4.1</p>
+            <h2 id="hiring-activity-dialog-title">Добавить активность</h2>
+            <p id="hiring-activity-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hiring-activity-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="process_id" type="hidden">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Тип</span>
+              <select class="control control--select" name="activity_type" required>
+                <option value="interview">Интервью</option>
+                <option value="screening">Скрининг</option>
+                <option value="test_task">Тестовое</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Название</span>
+              <input class="control" name="title" maxlength="500" placeholder="Например, интервью с CTO">
+            </label>
+            <label class="field">
+              <span class="field__label">Дата/время</span>
+              <input class="control" name="scheduled_at" type="datetime-local">
+            </label>
+            <label class="field">
+              <span class="field__label">Срок (deadline)</span>
+              <input class="control" name="due_at" type="datetime-local">
+            </label>
+            <label class="field">
+              <span class="field__label">Участник</span>
+              <input class="control" name="participant" maxlength="500" placeholder="Имя / роль">
+            </label>
+            <label class="field">
+              <span class="field__label">Ссылка / материал</span>
+              <input class="control" name="url" type="url" maxlength="2048" placeholder="https://…">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Заметка / подготовка</span>
+              <textarea class="control control--textarea" name="note" rows="2" maxlength="2000"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Активность не меняет этап найма автоматически.</p>
+          <p id="hiring-activity-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hiring-activity-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hiring-activity-form" type="submit">Сохранить</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="hiring-activity-complete-dialog" class="dialog" aria-labelledby="hiring-activity-complete-dialog-title">
+      <form id="hiring-activity-complete-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">РЕЗУЛЬТАТ</p>
+            <h2 id="hiring-activity-complete-dialog-title">Завершить активность</h2>
+            <p id="hiring-activity-complete-context" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hiring-activity-complete-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="activity_id" type="hidden">
+          <input name="vacancy_id" type="hidden">
+          <input name="activity_type" type="hidden">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Результат</span>
+              <textarea class="control control--textarea" name="result" rows="3" maxlength="2000" required></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Следующий шаг (по подтверждению)</span>
+              <input class="control" name="suggested_next_action" maxlength="500">
+            </label>
+          </div>
+          <p class="safety-note">Завершение активности не меняет этап. next_action — только после вашего подтверждения.</p>
+          <p id="hiring-activity-complete-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hiring-activity-complete-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hiring-activity-complete-form" type="submit">Завершить</button>
+        </footer>
+      </form>
+    </dialog>
+
     <dialog id="metric-dialog" class="dialog" aria-labelledby="metric-dialog-title">
       <form id="metric-form" class="dialog__form" method="dialog">
         <header class="dialog__header">

@@ -469,6 +469,7 @@ class StubCore:
                     "created_at": "2026-09-07T16:00:00Z",
                 }
             ],
+            "activities": [],
         }
         self.hiring_items.insert(0, created)
         return 201, created
@@ -494,6 +495,7 @@ class StubCore:
                 }
             )
             updated["stage_events"] = events
+            updated["activities"] = list(updated.get("activities") or [])
             self.hiring_items[index] = updated
             return 200, updated
         return 404, {"code": "hiring_process_not_found", "message": "HiringProcess does not exist"}
@@ -509,6 +511,68 @@ class StubCore:
             self.hiring_items[index] = updated
             return 200, updated
         return 404, {"code": "hiring_process_not_found", "message": "HiringProcess does not exist"}
+
+    def create_hiring_activity(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Create synthetic hiring activity without changing stage."""
+        self._guard()
+        self.calls.append(("hiring-activity-create", (process_id, payload)))
+        for index, item in enumerate(self.hiring_items):
+            if item["id"] != process_id:
+                continue
+            if item.get("status") != "active":
+                return 409, {
+                    "code": "hiring_process_not_active",
+                    "message": "Only active hiring processes accept activities",
+                }
+            updated = dict(item)
+            activities = list(updated.get("activities") or [])
+            activity = {
+                "id": f"00000000-0000-0000-0000-0000000000a{len(activities)}",
+                "activity_type": payload["activity_type"],
+                "status": payload.get("status") or "planned",
+                "title": payload.get("title"),
+                "scheduled_at": payload.get("scheduled_at"),
+                "due_at": payload.get("due_at"),
+                "completed_at": payload.get("completed_at"),
+                "participant": payload.get("participant"),
+                "person_id": payload.get("person_id"),
+                "note": payload.get("note"),
+                "result": payload.get("result"),
+                "url": payload.get("url"),
+                "created_at": "2026-09-07T19:00:00Z",
+                "updated_at": "2026-09-07T19:00:00Z",
+            }
+            activities.append(activity)
+            updated["activities"] = activities
+            updated["updated_at"] = "2026-09-07T19:00:00Z"
+            self.hiring_items[index] = updated
+            return 201, updated
+        return 404, {"code": "hiring_process_not_found", "message": "HiringProcess does not exist"}
+
+    def update_hiring_activity(self, activity_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update synthetic hiring activity; stage stays unchanged."""
+        self._guard()
+        self.calls.append(("hiring-activity-update", (activity_id, payload)))
+        for index, item in enumerate(self.hiring_items):
+            activities = list(item.get("activities") or [])
+            for activity_index, activity in enumerate(activities):
+                if activity.get("id") != activity_id:
+                    continue
+                updated_activity = {**activity, **payload, "updated_at": "2026-09-07T20:00:00Z"}
+                if payload.get("status") == "completed" and not updated_activity.get(
+                    "completed_at"
+                ):
+                    updated_activity["completed_at"] = "2026-09-07T20:00:00Z"
+                activities[activity_index] = updated_activity
+                updated = dict(item)
+                updated["activities"] = activities
+                updated["updated_at"] = "2026-09-07T20:00:00Z"
+                self.hiring_items[index] = updated
+                return 200, updated
+        return 404, {
+            "code": "hiring_activity_not_found",
+            "message": "HiringActivity does not exist",
+        }
 
     def list_metrics(self) -> tuple[int, Any]:
         """Return the current synthetic Daily Metric history."""

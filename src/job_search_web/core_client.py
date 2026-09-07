@@ -92,6 +92,14 @@ class CoreGateway(Protocol):
         """Update hiring process status through Core."""
         ...
 
+    def create_hiring_activity(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Create a hiring activity under a process."""
+        ...
+
+    def update_hiring_activity(self, activity_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update a hiring activity."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -259,6 +267,16 @@ class CoreClient:
     def update_hiring_process(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward hiring process status update."""
         return self._request("PATCH", f"/api/v1/hiring-processes/{process_id}", json=payload)
+
+    def create_hiring_activity(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward hiring activity create; does not advance stage."""
+        return self._request(
+            "POST", f"/api/v1/hiring-processes/{process_id}/activities", json=payload
+        )
+
+    def update_hiring_activity(self, activity_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward hiring activity update."""
+        return self._request("PATCH", f"/api/v1/hiring-activities/{activity_id}", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

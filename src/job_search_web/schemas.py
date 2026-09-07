@@ -111,6 +111,40 @@ class HiringProcessStatusUpdate(BaseModel):
     status: str = Field(pattern="^(active|completed|cancelled)$")
 
 
+class HiringActivityCreate(BaseModel):
+    """Browser-submitted hiring activity (R4.1)."""
+
+    activity_type: str = Field(pattern="^(screening|interview|test_task|other)$")
+    status: str | None = Field(default=None, pattern="^(planned|completed|cancelled)$")
+    title: str | None = Field(default=None, max_length=500)
+    scheduled_at: datetime | None = None
+    due_at: datetime | None = None
+    completed_at: datetime | None = None
+    participant: str | None = Field(default=None, max_length=500)
+    person_id: UUID | None = None
+    note: str | None = Field(default=None, max_length=2000)
+    result: str | None = Field(default=None, max_length=2000)
+    url: HttpUrl | None = None
+
+
+class HiringActivityUpdate(BaseModel):
+    """Browser-submitted hiring activity update."""
+
+    activity_type: str | None = Field(
+        default=None, pattern="^(screening|interview|test_task|other)$"
+    )
+    status: str | None = Field(default=None, pattern="^(planned|completed|cancelled)$")
+    title: str | None = Field(default=None, max_length=500)
+    scheduled_at: datetime | None = None
+    due_at: datetime | None = None
+    completed_at: datetime | None = None
+    participant: str | None = Field(default=None, max_length=500)
+    person_id: UUID | None = None
+    note: str | None = Field(default=None, max_length=2000)
+    result: str | None = Field(default=None, max_length=2000)
+    url: HttpUrl | None = None
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

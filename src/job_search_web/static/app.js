@@ -52,6 +52,16 @@ const hiringStageForm = document.querySelector("#hiring-stage-form");
 const hiringStageFormError = document.querySelector("#hiring-stage-form-error");
 const hiringStageSubmitButton = document.querySelector("#submit-hiring-stage-form");
 const hiringStageVacancyTitle = document.querySelector("#hiring-stage-vacancy-title");
+const hiringActivityDialog = document.querySelector("#hiring-activity-dialog");
+const hiringActivityForm = document.querySelector("#hiring-activity-form");
+const hiringActivityFormError = document.querySelector("#hiring-activity-form-error");
+const hiringActivitySubmitButton = document.querySelector("#submit-hiring-activity-form");
+const hiringActivityVacancyTitle = document.querySelector("#hiring-activity-vacancy-title");
+const hiringActivityCompleteDialog = document.querySelector("#hiring-activity-complete-dialog");
+const hiringActivityCompleteForm = document.querySelector("#hiring-activity-complete-form");
+const hiringActivityCompleteFormError = document.querySelector("#hiring-activity-complete-form-error");
+const hiringActivityCompleteSubmitButton = document.querySelector("#submit-hiring-activity-complete-form");
+const hiringActivityCompleteContext = document.querySelector("#hiring-activity-complete-context");
 const metricsDashboard = document.querySelector("#metrics");
 const metricCount = document.querySelector("#metric-count");
 const metricDialog = document.querySelector("#metric-dialog");
@@ -642,6 +652,97 @@ function renderHiringStageHistory(events) {
     .join("");
 }
 
+const hiringActivityTypeLabels = {
+  screening: "Скрининг",
+  interview: "Интервью",
+  test_task: "Тестовое",
+  other: "Другое",
+};
+
+const hiringActivityStatusLabels = {
+  planned: "Запланировано",
+  completed: "Завершено",
+  cancelled: "Отменено",
+};
+
+const suggestedNextActionByActivityType = {
+  screening: "Ждать обратную связь",
+  interview: "Отправить материалы",
+  test_task: "Отправлено, ждать результат",
+  other: "Уточнить следующий шаг",
+};
+
+function activityAttentionAt(activity) {
+  if (!activity || activity.status !== "planned") return null;
+  return activity.scheduled_at || activity.due_at || null;
+}
+
+function activityDeadlineState(activity) {
+  const stamp = activityAttentionAt(activity);
+  if (!stamp) return "";
+  const when = Date.parse(stamp);
+  if (Number.isNaN(when)) return "";
+  return when <= Date.now() ? "overdue" : "upcoming";
+}
+
+function sortHiringActivities(activities) {
+  const items = [...(activities || [])];
+  const rank = { planned: 0, completed: 1, cancelled: 2 };
+  items.sort((left, right) => {
+    const leftRank = rank[left.status] ?? 9;
+    const rightRank = rank[right.status] ?? 9;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    const leftAt = Date.parse(activityAttentionAt(left) || left.created_at || 0);
+    const rightAt = Date.parse(activityAttentionAt(right) || right.created_at || 0);
+    return leftAt - rightAt;
+  });
+  return items;
+}
+
+function nearestPlannedActivity(process) {
+  const planned = (process?.activities || []).filter((item) => activityAttentionAt(item));
+  if (!planned.length) return null;
+  return planned.reduce((best, item) => {
+    const bestAt = Date.parse(activityAttentionAt(best));
+    const itemAt = Date.parse(activityAttentionAt(item));
+    return itemAt < bestAt ? item : best;
+  });
+}
+
+function renderHiringActivities(process) {
+  const activities = sortHiringActivities(process.activities || []);
+  if (!activities.length) {
+    return `<p class="list-row__meta">Активностей пока нет.</p>`;
+  }
+  return `<ul class="detail-list">${activities
+    .map((activity) => {
+      const typeLabel = hiringActivityTypeLabels[activity.activity_type] || activity.activity_type;
+      const statusLabel = hiringActivityStatusLabels[activity.status] || activity.status;
+      const title = activity.title || typeLabel;
+      const when = activityAttentionAt(activity);
+      const state = activityDeadlineState(activity);
+      const whenLabel = when
+        ? `${state === "overdue" ? "Просрочено" : state === "upcoming" ? "Срок" : "Дата"} · ${formatDate(when)}`
+        : "Без даты";
+      const note = activity.result || activity.note || "";
+      const compact = note ? excerpt(note, 80) : "";
+      const actions =
+        activity.status === "planned"
+          ? `<div class="action-plan__links">
+              <button class="btn btn--secondary btn--sm" data-complete-hiring-activity="${escapeHtml(activity.id)}" type="button">Завершить</button>
+              <button class="btn btn--ghost btn--sm" data-cancel-hiring-activity="${escapeHtml(activity.id)}" type="button">Отменить</button>
+            </div>`
+          : "";
+      return `<li>
+        <strong>${escapeHtml(title)}</strong>
+        <span class="list-row__meta">${escapeHtml(typeLabel)} · ${escapeHtml(statusLabel)} · ${escapeHtml(whenLabel)}</span>
+        ${compact ? `<span class="list-row__meta">${escapeHtml(compact)}</span>` : ""}
+        ${actions}
+      </li>`;
+    })
+    .join("")}</ul>`;
+}
+
 function renderHiringProcessSection(item) {
   const process = hiringProcessByVacancyId.get(item.id);
   if (!process || process.status !== "active") {
@@ -659,6 +760,11 @@ function renderHiringProcessSection(item) {
     <p class="list-row__meta">Этап · ${escapeHtml(stageLabel)} · с ${escapeHtml(formatDate(process.started_at))}</p>
     <div class="action-plan__links">
       <button class="btn btn--secondary btn--sm" data-transition-hiring type="button">Перейти к этапу</button>
+      <button class="btn btn--secondary btn--sm" data-add-hiring-activity type="button">Добавить активность</button>
+    </div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">Активности</p>
+      ${renderHiringActivities(process)}
     </div>
     <div class="row-detail__section">
       <p class="row-detail__label">История этапов</p>
@@ -1265,10 +1371,18 @@ function hiringProcessRow(item) {
   const stageLabel = hiringStageLabels[item.current_stage] || item.current_stage;
   const company = item.vacancy?.company?.name || "—";
   const next = item.vacancy?.next_action || "Шаг не указан";
+  const nearest = nearestPlannedActivity(item);
+  const state = nearest ? activityDeadlineState(nearest) : "";
+  const attentionLabel = nearest
+    ? `${state === "overdue" ? "Просрочено" : "Ближайшее"} · ${
+        hiringActivityTypeLabels[nearest.activity_type] || nearest.activity_type
+      } · ${formatDate(activityAttentionAt(nearest))}`
+    : "Плановых активностей нет";
   return `<article class="list-row" data-hiring-id="${escapeHtml(item.id)}">
     <div class="list-row__primary">
       <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
       <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(stageLabel)}</p>
+      <p class="list-row__meta">${escapeHtml(attentionLabel)}</p>
       <p class="list-row__meta">Следующий шаг: ${escapeHtml(next)} · обновлено ${escapeHtml(formatDate(item.updated_at))}</p>
     </div>
   </article>`;
@@ -2176,6 +2290,65 @@ grid.addEventListener("click", async (event) => {
     hiringStageDialog.showModal();
     return;
   }
+  const addHiringActivityButton = event.target.closest("[data-add-hiring-activity]");
+  if (addHiringActivityButton) {
+    const card = addHiringActivityButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    if (!vacancy || !process || !hiringActivityForm) return;
+    hiringActivityForm.reset();
+    hiringActivityForm.elements.process_id.value = process.id;
+    hiringActivityForm.elements.vacancy_id.value = vacancyId;
+    hiringActivityForm.elements.activity_type.value = "interview";
+    if (hiringActivityVacancyTitle) hiringActivityVacancyTitle.textContent = vacancy.title;
+    hiringActivityFormError.hidden = true;
+    hiringActivityDialog.showModal();
+    return;
+  }
+  const completeHiringActivityButton = event.target.closest("[data-complete-hiring-activity]");
+  if (completeHiringActivityButton) {
+    const card = completeHiringActivityButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    const activityId = completeHiringActivityButton.getAttribute("data-complete-hiring-activity");
+    const activity = (process?.activities || []).find((item) => item.id === activityId);
+    if (!process || !activity || !hiringActivityCompleteForm) return;
+    hiringActivityCompleteForm.reset();
+    hiringActivityCompleteForm.elements.activity_id.value = activity.id;
+    hiringActivityCompleteForm.elements.vacancy_id.value = vacancyId;
+    hiringActivityCompleteForm.elements.activity_type.value = activity.activity_type;
+    hiringActivityCompleteForm.elements.suggested_next_action.value =
+      suggestedNextActionByActivityType[activity.activity_type] || "";
+    if (hiringActivityCompleteContext) {
+      hiringActivityCompleteContext.textContent =
+        activity.title || hiringActivityTypeLabels[activity.activity_type] || activity.activity_type;
+    }
+    hiringActivityCompleteFormError.hidden = true;
+    hiringActivityCompleteDialog.showModal();
+    return;
+  }
+  const cancelHiringActivityButton = event.target.closest("[data-cancel-hiring-activity]");
+  if (cancelHiringActivityButton) {
+    const activityId = cancelHiringActivityButton.getAttribute("data-cancel-hiring-activity");
+    if (!activityId) return;
+    const confirmed = window.confirm("Отменить эту активность?");
+    if (!confirmed) return;
+    try {
+      const response = await fetch(`/api/v1/hiring-activities/${activityId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Не удалось отменить");
+      showNotice("Активность отменена");
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      showNotice(error.message, "warning");
+    }
+    return;
+  }
   const scoreButton = event.target.closest("[data-score]");
   if (scoreButton) {
     const card = scoreButton.closest("[data-id]");
@@ -2572,6 +2745,92 @@ if (hiringStageDialog && hiringStageForm) {
       hiringStageFormError.hidden = false;
     } finally {
       setButtonProcessing(hiringStageSubmitButton, false, "Сохраняем…", "Сохранить этап");
+    }
+  });
+}
+
+if (hiringActivityDialog && hiringActivityForm) {
+  document.querySelector("#close-hiring-activity-form")?.addEventListener("click", () =>
+    hiringActivityDialog.close(),
+  );
+  document.querySelector("#cancel-hiring-activity-form")?.addEventListener("click", () =>
+    hiringActivityDialog.close(),
+  );
+  hiringActivityForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hiringActivityFormError.hidden = true;
+    setButtonProcessing(hiringActivitySubmitButton, true, "Сохраняем…", "Сохранить");
+    const values = Object.fromEntries(new FormData(hiringActivityForm));
+    const payload = { activity_type: values.activity_type };
+    if (values.title) payload.title = values.title;
+    if (values.participant) payload.participant = values.participant;
+    if (values.note) payload.note = values.note;
+    if (values.url) payload.url = values.url;
+    if (values.scheduled_at) payload.scheduled_at = new Date(values.scheduled_at).toISOString();
+    if (values.due_at) payload.due_at = new Date(values.due_at).toISOString();
+    try {
+      const response = await fetch(`/api/v1/hiring-processes/${values.process_id}/activities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Активность не создана");
+      hiringActivityDialog.close();
+      showNotice(
+        `Активность: ${hiringActivityTypeLabels[payload.activity_type] || payload.activity_type}`,
+      );
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      hiringActivityFormError.textContent = error.message;
+      hiringActivityFormError.hidden = false;
+    } finally {
+      setButtonProcessing(hiringActivitySubmitButton, false, "Сохраняем…", "Сохранить");
+    }
+  });
+}
+
+if (hiringActivityCompleteDialog && hiringActivityCompleteForm) {
+  document.querySelector("#close-hiring-activity-complete-form")?.addEventListener("click", () =>
+    hiringActivityCompleteDialog.close(),
+  );
+  document.querySelector("#cancel-hiring-activity-complete-form")?.addEventListener("click", () =>
+    hiringActivityCompleteDialog.close(),
+  );
+  hiringActivityCompleteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hiringActivityCompleteFormError.hidden = true;
+    setButtonProcessing(hiringActivityCompleteSubmitButton, true, "Сохраняем…", "Завершить");
+    const values = Object.fromEntries(new FormData(hiringActivityCompleteForm));
+    const suggestedNext = String(values.suggested_next_action || "").trim();
+    try {
+      const response = await fetch(`/api/v1/hiring-activities/${values.activity_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed", result: values.result }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Не удалось завершить");
+      hiringActivityCompleteDialog.close();
+      if (suggestedNext) {
+        const setNext = window.confirm(
+          `Активность завершена.\n\nПоставить следующий шаг «${suggestedNext}»?`,
+        );
+        if (setNext) {
+          await fetch(`/api/v1/vacancies/${values.vacancy_id}/action-plan`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ next_action: suggestedNext, next_action_done: false }),
+          });
+        }
+      }
+      showNotice("Активность завершена");
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      hiringActivityCompleteFormError.textContent = error.message;
+      hiringActivityCompleteFormError.hidden = false;
+    } finally {
+      setButtonProcessing(hiringActivityCompleteSubmitButton, false, "Сохраняем…", "Завершить");
     }
   });
 }
