@@ -98,6 +98,10 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "Записать ответ" in js
     assert "История ответов" in js
     assert "/api/v1/employer-responses" in js
+    assert "function renderHiringProcessSection" in js
+    assert "data-start-hiring" in js
+    assert "Начать процесс" in js
+    assert "/api/v1/hiring-processes" in js
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

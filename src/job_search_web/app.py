@@ -24,6 +24,9 @@ from job_search_web.schemas import (
     DailyMetricUpdate,
     DirectOutreachCreate,
     EmployerResponseCreate,
+    HiringProcessCreate,
+    HiringProcessStatusUpdate,
+    HiringStageTransition,
     HypothesisClose,
     HypothesisCreate,
     PeopleConfirmRequest,
@@ -591,6 +594,50 @@ def create_app(
             return proxy_response(
                 *gateway.create_employer_response(
                     request.model_dump(mode="json", exclude_none=True)
+                )
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/hiring-processes")
+    def get_hiring_processes(request: Request) -> JSONResponse:
+        """Return hiring processes from Core."""
+        try:
+            return proxy_response(
+                *gateway.list_hiring_processes(list(request.query_params.multi_items()))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hiring-processes")
+    def post_hiring_process(request: HiringProcessCreate) -> JSONResponse:
+        """Start owner-explicit hiring process; does not send messages."""
+        try:
+            return proxy_response(
+                *gateway.create_hiring_process(request.model_dump(mode="json", exclude_none=True))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/hiring-processes/{process_id}/stages")
+    def post_hiring_stage(process_id: str, request: HiringStageTransition) -> JSONResponse:
+        """Append hiring stage transition through Core."""
+        try:
+            return proxy_response(
+                *gateway.transition_hiring_stage(
+                    process_id, request.model_dump(mode="json", exclude_none=True)
+                )
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/hiring-processes/{process_id}")
+    def patch_hiring_process(process_id: str, request: HiringProcessStatusUpdate) -> JSONResponse:
+        """Update hiring process status through Core."""
+        try:
+            return proxy_response(
+                *gateway.update_hiring_process(
+                    process_id, request.model_dump(mode="json", exclude_none=True)
                 )
             )
         except CoreUnavailableError:

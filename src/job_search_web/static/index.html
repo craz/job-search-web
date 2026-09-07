@@ -74,6 +74,7 @@
         <nav class="app-nav" aria-label="Основные разделы">
           <ul class="app-nav__list">
             <li><a class="app-nav__link" href="#vacancies" data-nav="vacancies" aria-current="page">Вакансии</a></li>
+            <li><a class="app-nav__link" href="#hiring" data-nav="hiring">Найм</a></li>
             <li><a class="app-nav__link" href="#journal" data-nav="journal">Журнал</a></li>
             <li><a class="app-nav__link" href="#metrics" data-nav="metrics">Метрики</a></li>
             <li><a class="app-nav__link" href="#people" data-nav="people">Люди</a></li>
@@ -220,6 +221,26 @@
               </select>
             </label>
           </nav>
+
+          </div>
+
+          <div class="section-view" id="section-hiring" data-section="hiring" role="region" aria-labelledby="hiring-title" hidden>
+          <section class="toolbar" aria-labelledby="hiring-title">
+            <div>
+              <h2 id="hiring-title">Активный найм <span class="section-count" id="hiring-count">—</span></h2>
+            </div>
+            <p class="toolbar-note">Только процессы, которые вы явно начали. Без автозапуска из ответа работодателя.</p>
+          </section>
+
+          <section id="hiring-processes" class="list-rows" aria-live="polite" aria-busy="true">
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем процессы найма</h3>
+                <p class="state__detail">Web запрашивает активные процессы у Core API.</p>
+              </div>
+            </article>
+          </section>
 
           </div>
 
@@ -498,6 +519,90 @@
         <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-response-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-response-form" type="submit">Записать ответ</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="hiring-start-dialog" class="dialog" aria-labelledby="hiring-start-dialog-title">
+      <form id="hiring-start-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ПРОЦЕСС НАЙМА · R4.0</p>
+            <h2 id="hiring-start-dialog-title">Начать процесс</h2>
+            <p id="hiring-start-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hiring-start-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Стартовый этап</span>
+              <select class="control control--select" name="initial_stage" required>
+                <option value="screening">Скрининг</option>
+                <option value="interview">Интервью</option>
+                <option value="test_task">Тестовое</option>
+                <option value="final_interview">Финальное интервью</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Заметка</span>
+              <textarea class="control control--textarea" name="note" rows="2" maxlength="2000" placeholder="Необязательно"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Следующий шаг (по подтверждению)</span>
+              <input class="control" name="suggested_next_action" maxlength="500" value="Подготовиться к скринингу">
+            </label>
+          </div>
+          <p class="safety-note">Старт процесса не меняет вердикт AI, решение владельца и факты R3.</p>
+          <p id="hiring-start-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hiring-start-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hiring-start-form" type="submit">Начать процесс</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="hiring-stage-dialog" class="dialog" aria-labelledby="hiring-stage-dialog-title">
+      <form id="hiring-stage-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">СМЕНА ЭТАПА</p>
+            <h2 id="hiring-stage-dialog-title">Перейти к этапу</h2>
+            <p id="hiring-stage-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-hiring-stage-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="process_id" type="hidden">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Новый этап</span>
+              <select class="control control--select" name="stage" required>
+                <option value="screening">Скрининг</option>
+                <option value="interview">Интервью</option>
+                <option value="test_task">Тестовое</option>
+                <option value="final_interview">Финальное интервью</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Заметка</span>
+              <textarea class="control control--textarea" name="note" rows="2" maxlength="2000"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Следующий шаг (по подтверждению)</span>
+              <input class="control" name="suggested_next_action" maxlength="500">
+            </label>
+          </div>
+          <p id="hiring-stage-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-hiring-stage-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-hiring-stage-form" type="submit">Сохранить этап</button>
         </footer>
       </form>
     </dialog>

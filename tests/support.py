@@ -159,6 +159,7 @@ class StubCore:
         self.application_items: list[dict[str, Any]] = []
         self.outreach_items: list[dict[str, Any]] = []
         self.response_items: list[dict[str, Any]] = []
+        self.hiring_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
@@ -414,6 +415,100 @@ class StubCore:
         }
         self.response_items.insert(0, created)
         return 201, created
+
+    def list_hiring_processes(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return synthetic hiring processes."""
+        self._guard()
+        self.calls.append(("hiring-list", params))
+        items = list(self.hiring_items)
+        if params:
+            mapping = (
+                dict(params) if isinstance(params, dict) else {key: value for key, value in params}
+            )
+            vacancy_id = mapping.get("vacancy_id")
+            status = mapping.get("status")
+            if vacancy_id:
+                items = [item for item in items if item.get("vacancy", {}).get("id") == vacancy_id]
+            if status:
+                items = [item for item in items if item.get("status") == status]
+        return 200, {"items": items, "total": len(items)}
+
+    def create_hiring_process(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Start synthetic hiring process without mutating R3 facts."""
+        self._guard()
+        self.calls.append(("hiring-create", payload))
+        stage = payload.get("initial_stage") or "screening"
+        vacancy = next((item for item in self.items if item["id"] == payload["vacancy_id"]), None)
+        created = {
+            "id": "00000000-0000-0000-0000-0000000000cc",
+            "started_at": payload.get("started_at") or "2026-09-07T16:00:00Z",
+            "current_stage": stage,
+            "status": "active",
+            "created_at": "2026-09-07T16:00:00Z",
+            "updated_at": "2026-09-07T16:00:00Z",
+            "vacancy": {
+                "id": payload["vacancy_id"],
+                "title": (vacancy or {}).get("title") or "Backend Engineer",
+                "status": (vacancy or {}).get("status") or "new",
+                "next_action": (vacancy or {}).get("next_action"),
+                "next_action_done": bool((vacancy or {}).get("next_action_done")),
+                "company": {
+                    "id": ((vacancy or {}).get("company") or {}).get("id")
+                    or "00000000-0000-0000-0000-000000000001",
+                    "name": ((vacancy or {}).get("company") or {}).get("name") or "Example Co",
+                },
+            },
+            "stage_events": [
+                {
+                    "id": "00000000-0000-0000-0000-0000000000cd",
+                    "stage": stage,
+                    "occurred_at": payload.get("started_at") or "2026-09-07T16:00:00Z",
+                    "note": payload.get("note"),
+                    "created_at": "2026-09-07T16:00:00Z",
+                }
+            ],
+        }
+        self.hiring_items.insert(0, created)
+        return 201, created
+
+    def transition_hiring_stage(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Append synthetic stage transition."""
+        self._guard()
+        self.calls.append(("hiring-stage", (process_id, payload)))
+        for index, item in enumerate(self.hiring_items):
+            if item["id"] != process_id:
+                continue
+            updated = dict(item)
+            updated["current_stage"] = payload["stage"]
+            updated["updated_at"] = "2026-09-07T17:00:00Z"
+            events = list(updated.get("stage_events") or [])
+            events.append(
+                {
+                    "id": "00000000-0000-0000-0000-0000000000ce",
+                    "stage": payload["stage"],
+                    "occurred_at": payload.get("occurred_at") or "2026-09-07T17:00:00Z",
+                    "note": payload.get("note"),
+                    "created_at": "2026-09-07T17:00:00Z",
+                }
+            )
+            updated["stage_events"] = events
+            self.hiring_items[index] = updated
+            return 200, updated
+        return 404, {"code": "hiring_process_not_found", "message": "HiringProcess does not exist"}
+
+    def update_hiring_process(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update synthetic hiring process status."""
+        self._guard()
+        self.calls.append(("hiring-status", (process_id, payload)))
+        for index, item in enumerate(self.hiring_items):
+            if item["id"] != process_id:
+                continue
+            updated = {**item, "status": payload["status"], "updated_at": "2026-09-07T18:00:00Z"}
+            self.hiring_items[index] = updated
+            return 200, updated
+        return 404, {"code": "hiring_process_not_found", "message": "HiringProcess does not exist"}
 
     def list_metrics(self) -> tuple[int, Any]:
         """Return the current synthetic Daily Metric history."""

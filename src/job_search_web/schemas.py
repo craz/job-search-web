@@ -85,6 +85,32 @@ class EmployerResponseCreate(BaseModel):
     person_id: UUID | None = None
 
 
+class HiringProcessCreate(BaseModel):
+    """Browser-submitted explicit hiring process start (R4.0)."""
+
+    vacancy_id: UUID
+    initial_stage: str | None = Field(
+        default=None,
+        pattern="^(screening|interview|test_task|final_interview|other)$",
+    )
+    started_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class HiringStageTransition(BaseModel):
+    """Browser-submitted hiring stage change."""
+
+    stage: str = Field(pattern="^(screening|interview|test_task|final_interview|other)$")
+    occurred_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class HiringProcessStatusUpdate(BaseModel):
+    """Browser-submitted hiring process status change."""
+
+    status: str = Field(pattern="^(active|completed|cancelled)$")
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

@@ -74,6 +74,24 @@ class CoreGateway(Protocol):
         """Record one owner-reported employer reply through Core."""
         ...
 
+    def list_hiring_processes(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return hiring processes from Core."""
+        ...
+
+    def create_hiring_process(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Start one owner-explicit hiring process through Core."""
+        ...
+
+    def transition_hiring_stage(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Append a stage transition through Core."""
+        ...
+
+    def update_hiring_process(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update hiring process status through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -223,6 +241,24 @@ class CoreClient:
     def create_employer_response(self, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward owner-reported employer reply; does not send messages."""
         return self._request("POST", "/api/v1/employer-responses", json=payload)
+
+    def list_hiring_processes(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Fetch hiring processes from Core."""
+        return self._request("GET", "/api/v1/hiring-processes", params=params)
+
+    def create_hiring_process(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward owner-explicit hiring process start."""
+        return self._request("POST", "/api/v1/hiring-processes", json=payload)
+
+    def transition_hiring_stage(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward stage transition for an active hiring process."""
+        return self._request("POST", f"/api/v1/hiring-processes/{process_id}/stages", json=payload)
+
+    def update_hiring_process(self, process_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward hiring process status update."""
+        return self._request("PATCH", f"/api/v1/hiring-processes/{process_id}", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

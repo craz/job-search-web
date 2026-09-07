@@ -40,6 +40,18 @@ const responseForm = document.querySelector("#response-form");
 const responseFormError = document.querySelector("#response-form-error");
 const responseSubmitButton = document.querySelector("#submit-response-form");
 const responseVacancyTitle = document.querySelector("#response-vacancy-title");
+const hiringList = document.querySelector("#hiring-processes");
+const hiringCount = document.querySelector("#hiring-count");
+const hiringStartDialog = document.querySelector("#hiring-start-dialog");
+const hiringStartForm = document.querySelector("#hiring-start-form");
+const hiringStartFormError = document.querySelector("#hiring-start-form-error");
+const hiringStartSubmitButton = document.querySelector("#submit-hiring-start-form");
+const hiringStartVacancyTitle = document.querySelector("#hiring-start-vacancy-title");
+const hiringStageDialog = document.querySelector("#hiring-stage-dialog");
+const hiringStageForm = document.querySelector("#hiring-stage-form");
+const hiringStageFormError = document.querySelector("#hiring-stage-form-error");
+const hiringStageSubmitButton = document.querySelector("#submit-hiring-stage-form");
+const hiringStageVacancyTitle = document.querySelector("#hiring-stage-vacancy-title");
 const metricsDashboard = document.querySelector("#metrics");
 const metricCount = document.querySelector("#metric-count");
 const metricDialog = document.querySelector("#metric-dialog");
@@ -66,12 +78,15 @@ let mirrorReports = [];
 let peopleByVacancyId = new Map();
 let outreachesByVacancyId = new Map();
 let employerResponsesByVacancyId = new Map();
+let hiringProcessByVacancyId = new Map();
+let activeHiringProcesses = [];
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
 
 const NAV_SECTIONS = [
   "vacancies",
+  "hiring",
   "journal",
   "metrics",
   "people",
@@ -220,6 +235,22 @@ const suggestedNextActionByResponseType = {
   replied: "Продолжить переписку",
   interview_request: "Согласовать время созвона",
   other: "",
+};
+
+const hiringStageLabels = {
+  screening: "Скрининг",
+  interview: "Интервью",
+  test_task: "Тестовое",
+  final_interview: "Финальное интервью",
+  other: "Другое",
+};
+
+const suggestedNextActionByHiringStage = {
+  screening: "Подготовиться к скринингу",
+  interview: "Подготовиться к интервью",
+  test_task: "Выполнить тестовое",
+  final_interview: "Подготовиться к финальному интервью",
+  other: "Уточнить следующий шаг найма",
 };
 
 let applicationsByVacancyId = new Map();
@@ -574,14 +605,64 @@ function renderEmployerResponseSection(item) {
   const responseHtml = responses.length
     ? responses.map(renderEmployerResponseItem).join("")
     : inlineState("Ответов работодателя пока нет.");
+  const suggestHiring = responses.some((response) =>
+    ["invitation", "interview_request"].includes(response.response_type),
+  );
+  const activeHiring = hiringProcessByVacancyId.get(item.id);
+  const suggestControl =
+    suggestHiring && !activeHiring
+      ? `<button class="btn btn--ghost btn--sm" data-start-hiring type="button">Начать процесс найма</button>`
+      : "";
   return `<div class="employer-responses" data-response-vacancy="${escapeHtml(item.id)}">
     <p class="owner-decision__label">Ответы работодателя</p>
     <div class="action-plan__links">
       <button class="btn btn--secondary btn--sm" data-record-response type="button">Записать ответ</button>
+      ${suggestControl}
     </div>
     <div class="row-detail__section">
       <p class="row-detail__label">История ответов · факт владельца</p>
       ${responseHtml}
+    </div>
+  </div>`;
+}
+
+function renderHiringStageHistory(events) {
+  if (!events?.length) return inlineState("Истории этапов пока нет.");
+  return events
+    .map((event) => {
+      const label = hiringStageLabels[event.stage] || event.stage;
+      return `<div class="evidence-item">
+        <div class="evidence-item__head">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(formatDate(event.occurred_at))}</span>
+        </div>
+        <p class="evidence-item__excerpt">${escapeHtml(event.note || "Заметка не указана")}</p>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderHiringProcessSection(item) {
+  const process = hiringProcessByVacancyId.get(item.id);
+  if (!process || process.status !== "active") {
+    return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}">
+      <p class="owner-decision__label">Процесс найма</p>
+      <p class="list-row__meta">Активного процесса нет.</p>
+      <div class="action-plan__links">
+        <button class="btn btn--secondary btn--sm" data-start-hiring type="button">Начать процесс</button>
+      </div>
+    </div>`;
+  }
+  const stageLabel = hiringStageLabels[process.current_stage] || process.current_stage;
+  return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}" data-hiring-process="${escapeHtml(process.id)}">
+    <p class="owner-decision__label">Процесс найма</p>
+    <p class="list-row__meta">Этап · ${escapeHtml(stageLabel)} · с ${escapeHtml(formatDate(process.started_at))}</p>
+    <div class="action-plan__links">
+      <button class="btn btn--secondary btn--sm" data-transition-hiring type="button">Перейти к этапу</button>
+    </div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">История этапов</p>
+      ${renderHiringStageHistory(process.stage_events)}
     </div>
   </div>`;
 }
@@ -840,6 +921,7 @@ function vacancyRow(item) {
     renderActionPlanControls(item),
     renderDirectOsintSection(item),
     renderEmployerResponseSection(item),
+    renderHiringProcessSection(item),
     assessmentDetail,
     `<div class="row-detail__section">
       <p class="row-detail__label">Материал вакансии</p>
@@ -1176,6 +1258,57 @@ async function loadEmployerResponses() {
     if (knownVacancies?.length) renderVacancyList(knownVacancies);
   } catch (_error) {
     employerResponsesByVacancyId = new Map();
+  }
+}
+
+function hiringProcessRow(item) {
+  const stageLabel = hiringStageLabels[item.current_stage] || item.current_stage;
+  const company = item.vacancy?.company?.name || "—";
+  const next = item.vacancy?.next_action || "Шаг не указан";
+  return `<article class="list-row" data-hiring-id="${escapeHtml(item.id)}">
+    <div class="list-row__primary">
+      <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
+      <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(stageLabel)}</p>
+      <p class="list-row__meta">Следующий шаг: ${escapeHtml(next)} · обновлено ${escapeHtml(formatDate(item.updated_at))}</p>
+    </div>
+  </article>`;
+}
+
+async function loadHiringProcesses() {
+  if (hiringList) hiringList.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/hiring-processes?status=active");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить процессы найма");
+    activeHiringProcesses = payload.items || [];
+    hiringProcessByVacancyId = new Map();
+    for (const item of activeHiringProcesses) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      hiringProcessByVacancyId.set(vacancyId, item);
+    }
+    if (hiringCount) setSectionCount(hiringCount, payload.total);
+    if (hiringList) {
+      if (payload.total) hiringList.innerHTML = activeHiringProcesses.map(hiringProcessRow).join("");
+      else {
+        hiringList.innerHTML = "";
+        renderEmptyState(
+          hiringList,
+          "Активных процессов нет",
+          "Начните процесс из карточки вакансии после ответа работодателя.",
+        );
+      }
+    }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  } catch (error) {
+    hiringProcessByVacancyId = new Map();
+    activeHiringProcesses = [];
+    if (hiringCount) setSectionCount(hiringCount, null);
+    if (hiringList) {
+      renderErrorState(hiringList, "Не удалось загрузить процессы найма", error.message, loadHiringProcesses);
+    }
+  } finally {
+    if (hiringList) hiringList.setAttribute("aria-busy", "false");
   }
 }
 
@@ -2009,6 +2142,40 @@ grid.addEventListener("click", async (event) => {
     responseDialog.showModal();
     return;
   }
+  const startHiringButton = event.target.closest("[data-start-hiring]");
+  if (startHiringButton) {
+    const card = startHiringButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    if (!vacancy || !hiringStartForm) return;
+    hiringStartForm.reset();
+    hiringStartForm.elements.vacancy_id.value = vacancyId;
+    hiringStartForm.elements.initial_stage.value = "screening";
+    hiringStartForm.elements.suggested_next_action.value =
+      suggestedNextActionByHiringStage.screening;
+    if (hiringStartVacancyTitle) hiringStartVacancyTitle.textContent = vacancy.title;
+    hiringStartFormError.hidden = true;
+    hiringStartDialog.showModal();
+    return;
+  }
+  const transitionHiringButton = event.target.closest("[data-transition-hiring]");
+  if (transitionHiringButton) {
+    const card = transitionHiringButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    if (!vacancy || !process || !hiringStageForm) return;
+    hiringStageForm.reset();
+    hiringStageForm.elements.process_id.value = process.id;
+    hiringStageForm.elements.vacancy_id.value = vacancyId;
+    hiringStageForm.elements.stage.value = "interview";
+    hiringStageForm.elements.suggested_next_action.value =
+      suggestedNextActionByHiringStage.interview;
+    if (hiringStageVacancyTitle) hiringStageVacancyTitle.textContent = vacancy.title;
+    hiringStageFormError.hidden = true;
+    hiringStageDialog.showModal();
+    return;
+  }
   const scoreButton = event.target.closest("[data-score]");
   if (scoreButton) {
     const card = scoreButton.closest("[data-id]");
@@ -2282,11 +2449,129 @@ if (responseDialog && responseForm) {
       const typeLabel = employerResponseTypeLabels[body.response_type] || body.response_type;
       showNotice(`Записан ответ: ${typeLabel}`);
       await Promise.all([loadEmployerResponses(), loadVacancies()]);
+      if (
+        ["invitation", "interview_request"].includes(body.response_type) &&
+        !hiringProcessByVacancyId.get(payload.vacancy_id)
+      ) {
+        const startHiring = window.confirm(
+          "Ответ предполагает найм.\n\nНачать процесс найма сейчас? (не автоматически)",
+        );
+        if (startHiring && hiringStartForm) {
+          hiringStartForm.reset();
+          hiringStartForm.elements.vacancy_id.value = payload.vacancy_id;
+          hiringStartForm.elements.initial_stage.value = "screening";
+          hiringStartForm.elements.suggested_next_action.value =
+            suggestedNextActionByHiringStage.screening;
+          const vacancy = knownVacancies.find((item) => item.id === payload.vacancy_id);
+          if (hiringStartVacancyTitle) {
+            hiringStartVacancyTitle.textContent = vacancy?.title || "";
+          }
+          hiringStartFormError.hidden = true;
+          hiringStartDialog.showModal();
+        }
+      }
     } catch (error) {
       responseFormError.textContent = error.message;
       responseFormError.hidden = false;
     } finally {
       setButtonProcessing(responseSubmitButton, false, "Сохраняем…", "Записать ответ");
+    }
+  });
+}
+
+if (hiringStartDialog && hiringStartForm) {
+  document.querySelector("#close-hiring-start-form")?.addEventListener("click", () => hiringStartDialog.close());
+  document.querySelector("#cancel-hiring-start-form")?.addEventListener("click", () => hiringStartDialog.close());
+  hiringStartForm.elements.initial_stage?.addEventListener("change", () => {
+    hiringStartForm.elements.suggested_next_action.value =
+      suggestedNextActionByHiringStage[hiringStartForm.elements.initial_stage.value] || "";
+  });
+  hiringStartForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hiringStartFormError.hidden = true;
+    setButtonProcessing(hiringStartSubmitButton, true, "Сохраняем…", "Начать процесс");
+    const values = Object.fromEntries(new FormData(hiringStartForm));
+    const payload = {
+      vacancy_id: values.vacancy_id,
+      initial_stage: values.initial_stage,
+    };
+    if (values.note) payload.note = values.note;
+    const suggestedNext = String(values.suggested_next_action || "").trim();
+    try {
+      const response = await fetch("/api/v1/hiring-processes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Процесс не создан");
+      hiringStartDialog.close();
+      if (suggestedNext) {
+        const setNext = window.confirm(
+          `Процесс найма начат.\n\nПоставить следующий шаг «${suggestedNext}»?`,
+        );
+        if (setNext) {
+          await fetch(`/api/v1/vacancies/${payload.vacancy_id}/action-plan`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ next_action: suggestedNext, next_action_done: false }),
+          });
+        }
+      }
+      showNotice(`Процесс найма: ${hiringStageLabels[body.current_stage] || body.current_stage}`);
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      hiringStartFormError.textContent = error.message;
+      hiringStartFormError.hidden = false;
+    } finally {
+      setButtonProcessing(hiringStartSubmitButton, false, "Сохраняем…", "Начать процесс");
+    }
+  });
+}
+
+if (hiringStageDialog && hiringStageForm) {
+  document.querySelector("#close-hiring-stage-form")?.addEventListener("click", () => hiringStageDialog.close());
+  document.querySelector("#cancel-hiring-stage-form")?.addEventListener("click", () => hiringStageDialog.close());
+  hiringStageForm.elements.stage?.addEventListener("change", () => {
+    hiringStageForm.elements.suggested_next_action.value =
+      suggestedNextActionByHiringStage[hiringStageForm.elements.stage.value] || "";
+  });
+  hiringStageForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    hiringStageFormError.hidden = true;
+    setButtonProcessing(hiringStageSubmitButton, true, "Сохраняем…", "Сохранить этап");
+    const values = Object.fromEntries(new FormData(hiringStageForm));
+    const payload = { stage: values.stage };
+    if (values.note) payload.note = values.note;
+    const suggestedNext = String(values.suggested_next_action || "").trim();
+    try {
+      const response = await fetch(`/api/v1/hiring-processes/${values.process_id}/stages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Этап не сохранён");
+      hiringStageDialog.close();
+      if (suggestedNext) {
+        const setNext = window.confirm(
+          `Этап обновлён.\n\nПоставить следующий шаг «${suggestedNext}»?`,
+        );
+        if (setNext) {
+          await fetch(`/api/v1/vacancies/${values.vacancy_id}/action-plan`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ next_action: suggestedNext, next_action_done: false }),
+          });
+        }
+      }
+      showNotice(`Этап: ${hiringStageLabels[body.current_stage] || body.current_stage}`);
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      hiringStageFormError.textContent = error.message;
+      hiringStageFormError.hidden = false;
+    } finally {
+      setButtonProcessing(hiringStageSubmitButton, false, "Сохраняем…", "Сохранить этап");
     }
   });
 }
@@ -3196,6 +3481,7 @@ void (async () => {
   await loadPeople();
   await loadDirectOutreaches();
   await loadEmployerResponses();
+  await loadHiringProcesses();
   await loadVacancies();
 })();
 loadMetrics();
