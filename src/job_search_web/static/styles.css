@@ -1337,6 +1337,40 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-semibold);
 }
 
+.action-plan {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.action-plan__next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  align-items: center;
+}
+
+.action-plan__field {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.action-plan__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  align-items: center;
+}
+
+.action-channel-btn.is-active {
+  border-color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
 .vacancy-pagination {
   display: flex;
   flex-wrap: wrap;

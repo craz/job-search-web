@@ -30,6 +30,17 @@ class VacancyOwnerDecisionUpdate(BaseModel):
     owner_decision: str = Field(pattern="^(unreviewed|interested|deferred|skipped|applied)$")
 
 
+class VacancyActionPlanUpdate(BaseModel):
+    """Browser-requested intended channel/next action (R3.0; no Application create)."""
+
+    action_channel: str | None = Field(default=None, pattern="^(hh|direct|both)$")
+    next_action: str | None = Field(default=None, max_length=500)
+    next_action_at: datetime | None = None
+    next_action_done: bool | None = None
+    clear_action_channel: bool = False
+    clear_next_action: bool = False
+
+
 class ApplicationCreate(BaseModel):
     """Browser-submitted local Application fields forwarded to Core."""
 

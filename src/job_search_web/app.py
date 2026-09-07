@@ -28,6 +28,7 @@ from job_search_web.schemas import (
     PeopleResearchRequest,
     PersonCreate,
     PersonStatusUpdate,
+    VacancyActionPlanUpdate,
     VacancyCreate,
     VacancyMirrorRequest,
     VacancyOwnerDecisionUpdate,
@@ -514,6 +515,18 @@ def create_app(
         try:
             return proxy_response(
                 *gateway.update_owner_decision(vacancy_id, request.owner_decision)
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/vacancies/{vacancy_id}/action-plan")
+    def patch_action_plan(vacancy_id: str, request: VacancyActionPlanUpdate) -> JSONResponse:
+        """Forward intended channel/next action; does not create Application."""
+        try:
+            return proxy_response(
+                *gateway.update_action_plan(
+                    vacancy_id, request.model_dump(mode="json", exclude_none=True)
+                )
             )
         except CoreUnavailableError:
             return unavailable_response()

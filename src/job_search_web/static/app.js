@@ -161,6 +161,20 @@ const ownerDecisionBadge = {
   applied: "info",
 };
 
+const actionChannelLabels = {
+  hh: "HH",
+  direct: "Напрямую",
+  both: "Оба",
+};
+
+const actionChannelDefaults = {
+  hh: "Откликнуться на HH",
+  direct: "Найти контакт",
+  both: "Откликнуться на HH и найти контакт",
+};
+
+let applicationsByVacancyId = new Map();
+
 function normalizeVerdict(verdict) {
   return String(verdict || "").trim().toLowerCase();
 }
@@ -203,6 +217,23 @@ function vacancyScoringState(item, assessment, failure) {
 function vacancyOwnerDecision(item) {
   const value = String(item?.owner_decision || "unreviewed").trim().toLowerCase();
   return ownerDecisionLabels[value] ? value : "unreviewed";
+}
+
+function vacancyActionChannel(item) {
+  const value = String(item?.action_channel || "").trim().toLowerCase();
+  return actionChannelLabels[value] ? value : "";
+}
+
+function vacancyActionQueueLabel(item) {
+  const decision = vacancyOwnerDecision(item);
+  if (decision === "applied") return "";
+  if (decision !== "interested") return "";
+  const channel = vacancyActionChannel(item);
+  const nextAction = String(item?.next_action || "").trim();
+  const done = Boolean(item?.next_action_done);
+  if (!channel && !nextAction) return "нужен шаг";
+  if (done) return "шаг закрыт";
+  return "план";
 }
 
 function vacancyFactsLine(item) {
@@ -294,6 +325,57 @@ function renderOwnerDecisionControls(item) {
   return `<div class="owner-decision" data-owner-current="${escapeHtml(current)}">
     <p class="owner-decision__label">Моё решение · ${escapeHtml(ownerDecisionLabels[current])}</p>
     <div class="owner-decision__actions">${buttons}${reset}</div>
+  </div>`;
+}
+
+function renderActionPlanControls(item) {
+  const decision = vacancyOwnerDecision(item);
+  if (decision !== "interested" && decision !== "applied") return "";
+  const channel = vacancyActionChannel(item);
+  const channels = [
+    ["hh", "HH"],
+    ["direct", "Напрямую"],
+    ["both", "Оба"],
+  ];
+  const channelButtons = channels
+    .map(([value, label]) => {
+      const active = channel === value ? " is-active" : "";
+      return `<button class="btn btn--ghost btn--sm action-channel-btn${active}" type="button" data-action-channel="${value}" ${channel === value ? "aria-pressed=\"true\"" : "aria-pressed=\"false\""}>${label}</button>`;
+    })
+    .join("");
+  const clearChannel = channel
+    ? `<button class="btn btn--ghost btn--sm" type="button" data-clear-action-channel>Сбросить канал</button>`
+    : "";
+  const nextAction = String(item?.next_action || "");
+  const nextDone = Boolean(item?.next_action_done);
+  const hhOpen =
+    channel === "hh" || channel === "both"
+      ? `<a class="btn btn--secondary btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть вакансию на HH ↗</a>`
+      : "";
+  const directHint =
+    channel === "direct" || channel === "both"
+      ? item.company?.website_url
+        ? `<button class="btn btn--ghost btn--sm" data-research type="button">Найти контакт</button>`
+        : `<p class="list-row__meta">Прямой путь: сначала нужен сайт компании, затем поиск контакта.</p>`
+      : "";
+  const apps = applicationsByVacancyId.get(item.id) || [];
+  const appHistory = apps.length
+    ? `<p class="list-row__meta">В журнале откликов: ${escapeHtml(String(apps.length))} · ${escapeHtml(formatDate(apps[0].applied_at))}</p>`
+    : `<p class="list-row__meta">Факт отклика ещё не записан в журнал.</p>`;
+  return `<div class="action-plan" data-action-channel="${escapeHtml(channel)}">
+    <p class="owner-decision__label">Следующий шаг</p>
+    <p class="list-row__meta">Канал · ${escapeHtml(channel ? actionChannelLabels[channel] : "не выбран")}${nextDone ? " · шаг закрыт" : ""}</p>
+    <div class="owner-decision__actions">${channelButtons}${clearChannel}</div>
+    <div class="action-plan__next">
+      <label class="list-row__control action-plan__field">
+        <span class="sr-only">Следующее действие</span>
+        <input class="control" type="text" data-next-action-input maxlength="500" value="${escapeHtml(nextAction)}" placeholder="Например: Откликнуться на HH">
+      </label>
+      <button class="btn btn--ghost btn--sm" type="button" data-save-next-action>Сохранить шаг</button>
+      <button class="btn btn--ghost btn--sm" type="button" data-toggle-next-done>${nextDone ? "Открыть снова" : "Закрыть шаг"}</button>
+    </div>
+    <div class="action-plan__links">${hhOpen}${directHint}</div>
+    ${appHistory}
   </div>`;
 }
 
@@ -549,6 +631,7 @@ function vacancyRow(item) {
   const failure = semanticFailuresByVacancyId.get(item.id);
   const scoringState = vacancyScoringState(item, assessment, failure);
   const ownerDecision = vacancyOwnerDecision(item);
+  const actionQueueLabel = vacancyActionQueueLabel(item);
   const assessmentSummary = renderVacancyAssessmentSummary(assessment, failure);
   const assessmentDetail = renderVacancyAssessmentDetail(assessment, failure);
   const scoreAction = vacancyScoreActionHtml(item, assessment, failure);
@@ -560,8 +643,9 @@ function vacancyRow(item) {
   else if (item.company.website_url) detailParts.push("OSINT и зеркала");
   const detailSummary = detailParts.join(" · ");
   const detailSections = [
-    assessmentDetail,
     renderOwnerDecisionControls(item),
+    renderActionPlanControls(item),
+    assessmentDetail,
     `<div class="row-detail__section">
       <p class="row-detail__label">Материал вакансии</p>
       <p class="assessment-detail__reason">${escapeHtml(excerpt(item.description, 600))}</p>
@@ -587,13 +671,14 @@ function vacancyRow(item) {
           ${detailSections.join("")}
         </div>
       </details>`;
-  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}" data-source-status="${escapeHtml(vacancySourceStatus(item))}" data-scoring-state="${escapeHtml(scoringState)}" data-owner-decision="${escapeHtml(ownerDecision)}" data-verdict="${escapeHtml(normalizeVerdict(assessment?.verdict) || "")}">
+  return `<article class="list-row-group list-row-group--vacancy" data-id="${escapeHtml(item.id)}" data-status="${escapeHtml(item.status)}" data-source-status="${escapeHtml(vacancySourceStatus(item))}" data-scoring-state="${escapeHtml(scoringState)}" data-owner-decision="${escapeHtml(ownerDecision)}" data-action-channel="${escapeHtml(vacancyActionChannel(item))}" data-verdict="${escapeHtml(normalizeVerdict(assessment?.verdict) || "")}">
     <div class="list-row">
       <div class="list-row__primary">
         <div class="list-row__identity">
           <h3 class="list-row__title">${escapeHtml(item.title)}</h3>
           <div class="list-row__badges">
             ${renderBadge(ownerDecisionLabels[ownerDecision], ownerDecisionBadge[ownerDecision] || "neutral")}
+            ${actionQueueLabel ? renderBadge(actionQueueLabel, actionQueueLabel === "план" ? "info" : "warning") : ""}
             ${sourceSignals}
             ${renderBadge(statusLabels[item.status] || item.status, vacancyStatusBadge[item.status] || "neutral")}
           </div>
@@ -819,6 +904,14 @@ async function loadApplications() {
     const response = await fetch("/api/v1/applications");
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Не удалось получить отклики");
+    applicationsByVacancyId = new Map();
+    for (const item of payload.items || []) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      const list = applicationsByVacancyId.get(vacancyId) || [];
+      list.push(item);
+      applicationsByVacancyId.set(vacancyId, list);
+    }
     setSectionCount(applicationCount, payload.total);
     if (payload.total) {
       applicationList.innerHTML = payload.items.map(applicationRow).join("");
@@ -1458,6 +1551,107 @@ grid.addEventListener("click", async (event) => {
     } catch (error) {
       showNotice(error.message, "error");
       decisionButton.disabled = false;
+    }
+    return;
+  }
+  const channelButton = event.target.closest("[data-action-channel]");
+  if (channelButton) {
+    const card = channelButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const actionChannel = channelButton.dataset.actionChannel;
+    if (!vacancyId || !actionChannel) return;
+    channelButton.disabled = true;
+    const input = card.querySelector("[data-next-action-input]");
+    const currentNext = String(input?.value || "").trim();
+    const body = { action_channel: actionChannel };
+    if (!currentNext && actionChannelDefaults[actionChannel]) {
+      body.next_action = actionChannelDefaults[actionChannel];
+    }
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Канал не сохранён");
+      showNotice(`Канал: ${actionChannelLabels[payload.action_channel] || payload.action_channel}`);
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      channelButton.disabled = false;
+    }
+    return;
+  }
+  const clearChannelButton = event.target.closest("[data-clear-action-channel]");
+  if (clearChannelButton) {
+    const card = clearChannelButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    if (!vacancyId) return;
+    clearChannelButton.disabled = true;
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear_action_channel: true }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Канал не сброшен");
+      showNotice("Канал сброшен");
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      clearChannelButton.disabled = false;
+    }
+    return;
+  }
+  const saveNextButton = event.target.closest("[data-save-next-action]");
+  if (saveNextButton) {
+    const card = saveNextButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const input = card?.querySelector("[data-next-action-input]");
+    if (!vacancyId || !input) return;
+    saveNextButton.disabled = true;
+    const nextAction = String(input.value || "").trim();
+    const body = nextAction
+      ? { next_action: nextAction, next_action_done: false }
+      : { clear_next_action: true };
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Шаг не сохранён");
+      showNotice(payload.next_action ? "Следующий шаг сохранён" : "Следующий шаг очищен");
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      saveNextButton.disabled = false;
+    }
+    return;
+  }
+  const toggleDoneButton = event.target.closest("[data-toggle-next-done]");
+  if (toggleDoneButton) {
+    const card = toggleDoneButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    if (!vacancyId) return;
+    const currentlyDone = toggleDoneButton.textContent.includes("Открыть");
+    toggleDoneButton.disabled = true;
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ next_action_done: !currentlyDone }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Статус шага не изменён");
+      showNotice(payload.next_action_done ? "Шаг закрыт" : "Шаг снова открыт");
+      await loadVacancies();
+    } catch (error) {
+      showNotice(error.message, "error");
+      toggleDoneButton.disabled = false;
     }
     return;
   }
@@ -2533,8 +2727,10 @@ clearNotice();
 initNavigation();
 loadHhConnection();
 initVacancySearch();
-loadVacancies();
-loadApplications();
+void (async () => {
+  await loadApplications();
+  await loadVacancies();
+})();
 loadMetrics();
 loadPeople();
 loadHypotheses();

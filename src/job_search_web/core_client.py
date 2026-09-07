@@ -36,6 +36,10 @@ class CoreGateway(Protocol):
         """Update owner review decision through Core (not Assessment.verdict)."""
         ...
 
+    def update_action_plan(self, vacancy_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update intended action channel / next action through Core."""
+        ...
+
     def post_vacancy_source_status(
         self, vacancy_id: str, payload: dict[str, Any]
     ) -> tuple[int, Any]:
@@ -147,6 +151,14 @@ class CoreClient:
             "PATCH",
             f"/api/v1/vacancies/{vacancy_id}/owner-decision",
             json={"owner_decision": owner_decision},
+        )
+
+    def update_action_plan(self, vacancy_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward intended action channel / next action to Core."""
+        return self._request(
+            "PATCH",
+            f"/api/v1/vacancies/{vacancy_id}/action-plan",
+            json=payload,
         )
 
     def post_vacancy_source_status(

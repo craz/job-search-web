@@ -23,6 +23,11 @@ def vacancy(status: str = "new") -> dict[str, Any]:
         "status": status,
         "owner_decision": "unreviewed",
         "owner_decision_at": None,
+        "action_channel": None,
+        "action_channel_at": None,
+        "next_action": None,
+        "next_action_at": None,
+        "next_action_done": False,
         "salary_text": None,
         "area_text": None,
         "work_format_text": None,
@@ -234,6 +239,35 @@ class StubCore:
                 if owner_decision == "unreviewed"
                 else "2026-09-06T12:00:00Z",
             }
+            self.items[index] = updated
+            return 200, updated
+        return 404, {"code": "vacancy_not_found", "message": "Vacancy does not exist"}
+
+    def update_action_plan(self, vacancy_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record intended channel/next action without creating Application."""
+        self._guard()
+        self.calls.append(("action-plan", (vacancy_id, payload)))
+        for index, item in enumerate(self.items):
+            if item["id"] != vacancy_id:
+                continue
+            updated = dict(item)
+            if payload.get("clear_action_channel"):
+                updated["action_channel"] = None
+                updated["action_channel_at"] = None
+            elif "action_channel" in payload and payload["action_channel"] is not None:
+                updated["action_channel"] = payload["action_channel"]
+                updated["action_channel_at"] = "2026-09-07T12:00:00Z"
+            if payload.get("clear_next_action"):
+                updated["next_action"] = None
+                updated["next_action_at"] = None
+                updated["next_action_done"] = False
+            else:
+                if "next_action" in payload:
+                    updated["next_action"] = payload["next_action"]
+                if "next_action_at" in payload:
+                    updated["next_action_at"] = payload["next_action_at"]
+                if "next_action_done" in payload:
+                    updated["next_action_done"] = payload["next_action_done"]
             self.items[index] = updated
             return 200, updated
         return 404, {"code": "vacancy_not_found", "message": "Vacancy does not exist"}

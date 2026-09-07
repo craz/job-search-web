@@ -70,7 +70,22 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     )
     assert owner.status_code == 200
     assert owner.json()["owner_decision"] == "interested"
-    assert [call[0] for call in core.calls] == ["list", "create", "update", "owner-decision"]
+    plan = client.request(
+        "PATCH",
+        "/api/v1/vacancies/00000000-0000-0000-0000-000000000042/action-plan",
+        json={"action_channel": "hh", "next_action": "Откликнуться на HH"},
+    )
+    assert plan.status_code == 200
+    assert plan.json()["action_channel"] == "hh"
+    assert plan.json()["next_action"] == "Откликнуться на HH"
+    assert plan.json()["owner_decision"] == "interested"
+    assert [call[0] for call in core.calls] == [
+        "list",
+        "create",
+        "update",
+        "owner-decision",
+        "action-plan",
+    ]
 
 
 def test_vacancy_list_forwards_pagination_query() -> None:

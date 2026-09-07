@@ -83,6 +83,11 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert 'id="vacancy-page-prev"' in html
     assert 'id="vacancy-page-next"' in html
     assert "function renderOwnerDecisionControls" in js
+    assert "function renderActionPlanControls" in js
+    assert "data-action-channel=" in js
+    assert "Следующий шаг" in js
+    assert "Открыть вакансию на HH" in js
+    assert "нужен шаг" in js
     assert 'interested: "Интересно"' in js
     assert 'deferred: "Отложено"' in js
     assert "resetOffset" in js
