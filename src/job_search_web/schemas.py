@@ -56,6 +56,17 @@ class ApplicationCreate(BaseModel):
     next_action_at: datetime | None = None
 
 
+class DirectOutreachCreate(BaseModel):
+    """Browser-submitted owner-reported contact fact (R3.2; no external send)."""
+
+    vacancy_id: UUID
+    person_id: UUID
+    method: str = Field(pattern="^(email|linkedin|telegram|phone|other)$")
+    occurred_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+    url: HttpUrl | None = None
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

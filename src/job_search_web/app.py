@@ -22,6 +22,7 @@ from job_search_web.schemas import (
     ApplicationCreate,
     AssessmentCreate,
     DailyMetricUpdate,
+    DirectOutreachCreate,
     HypothesisClose,
     HypothesisCreate,
     PeopleConfirmRequest,
@@ -548,6 +549,26 @@ def create_app(
         try:
             return proxy_response(
                 *gateway.create_application(request.model_dump(mode="json"), idempotency_key)
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/direct-outreaches")
+    def get_direct_outreaches(request: Request) -> JSONResponse:
+        """Return owner-recorded direct outreach facts from Core."""
+        try:
+            return proxy_response(
+                *gateway.list_direct_outreaches(list(request.query_params.multi_items()))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/direct-outreaches")
+    def post_direct_outreach(request: DirectOutreachCreate) -> JSONResponse:
+        """Record owner-reported contact fact; does not send any external message."""
+        try:
+            return proxy_response(
+                *gateway.create_direct_outreach(request.model_dump(mode="json", exclude_none=True))
             )
         except CoreUnavailableError:
             return unavailable_response()

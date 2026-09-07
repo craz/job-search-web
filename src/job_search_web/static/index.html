@@ -394,6 +394,52 @@
       </form>
     </dialog>
 
+    <dialog id="outreach-dialog" class="dialog" aria-labelledby="outreach-dialog-title">
+      <form id="outreach-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ФАКТ КОНТАКТА · НЕ ОТПРАВКА</p>
+            <h2 id="outreach-dialog-title">Записать контакт</h2>
+            <p id="outreach-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-outreach-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Кому написали</span>
+              <select class="control control--select" name="person_id" required></select>
+            </label>
+            <label class="field">
+              <span class="field__label">Как связались</span>
+              <select class="control control--select" name="method" required>
+                <option value="linkedin">LinkedIn</option>
+                <option value="email">Email</option>
+                <option value="telegram">Telegram</option>
+                <option value="phone">Телефон</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Когда</span>
+              <input class="control" name="occurred_at" type="datetime-local">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Краткая заметка</span>
+              <textarea class="control control--textarea" name="note" rows="3" maxlength="2000" placeholder="Например: написал в LinkedIn про вакансию"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Форма только записывает, что вы уже связались снаружи. Job Search ничего не отправляет.</p>
+          <p id="outreach-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-outreach-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-outreach-form" type="submit">Записать контакт</button>
+        </footer>
+      </form>
+    </dialog>
+
     <dialog id="metric-dialog" class="dialog" aria-labelledby="metric-dialog-title">
       <form id="metric-form" class="dialog__form" method="dialog">
         <header class="dialog__header">

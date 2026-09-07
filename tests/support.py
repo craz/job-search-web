@@ -157,6 +157,7 @@ class StubCore:
         self.unavailable = unavailable
         self.items = [vacancy()]
         self.application_items: list[dict[str, Any]] = []
+        self.outreach_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
@@ -314,6 +315,44 @@ class StubCore:
         created["source"] = payload["source"]
         created["external_id"] = payload["external_id"]
         self.application_items.insert(0, created)
+        return 201, created
+
+    def list_direct_outreaches(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return synthetic direct outreach history."""
+        self._guard()
+        self.calls.append(("outreach-list", params))
+        items = list(self.outreach_items)
+        if params:
+            mapping = (
+                dict(params) if isinstance(params, dict) else {key: value for key, value in params}
+            )
+            vacancy_id = mapping.get("vacancy_id")
+            if vacancy_id:
+                items = [item for item in items if item.get("vacancy", {}).get("id") == vacancy_id]
+        return 200, {"items": items, "total": len(items)}
+
+    def create_direct_outreach(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record owner-reported contact fact without Application."""
+        self._guard()
+        self.calls.append(("outreach-create", payload))
+        created = {
+            "id": "00000000-0000-0000-0000-0000000000aa",
+            "occurred_at": payload.get("occurred_at") or "2026-09-07T12:00:00Z",
+            "method": payload["method"],
+            "note": payload.get("note"),
+            "url": payload.get("url"),
+            "created_at": "2026-09-07T12:00:00Z",
+            "vacancy": {"id": payload["vacancy_id"], "title": "Backend Engineer", "status": "new"},
+            "person": {
+                "id": payload["person_id"],
+                "full_name": "Alex Example",
+                "title": "CTO",
+                "url": "https://example.test/team/alex",
+            },
+        }
+        self.outreach_items.insert(0, created)
         return 201, created
 
     def list_metrics(self) -> tuple[int, Any]:

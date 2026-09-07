@@ -90,6 +90,9 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "Подходящие контакты не найдены" in js
     assert "Выбрать контакт" in js
     assert "data-suggest-next-action" in js
+    assert "data-record-outreach" in js
+    assert "Записать контакт" in js
+    assert "История контактов" in js
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

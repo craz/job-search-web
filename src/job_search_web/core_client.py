@@ -54,6 +54,16 @@ class CoreGateway(Protocol):
         """Create or replay one local Application record through Core."""
         ...
 
+    def list_direct_outreaches(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return owner-recorded direct outreach facts."""
+        ...
+
+    def create_direct_outreach(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record one owner-reported contact fact through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -183,6 +193,16 @@ class CoreClient:
             json=payload,
             headers={"Idempotency-Key": key},
         )
+
+    def list_direct_outreaches(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Fetch owner-recorded direct outreach facts from Core."""
+        return self._request("GET", "/api/v1/direct-outreaches", params=params)
+
+    def create_direct_outreach(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward owner-reported contact fact; does not send messages."""
+        return self._request("POST", "/api/v1/direct-outreaches", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

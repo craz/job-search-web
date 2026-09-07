@@ -30,6 +30,11 @@ const applicationForm = document.querySelector("#application-form");
 const applicationFormError = document.querySelector("#application-form-error");
 const applicationSubmitButton = document.querySelector("#submit-application-form");
 const applicationVacancyTitle = document.querySelector("#application-vacancy-title");
+const outreachDialog = document.querySelector("#outreach-dialog");
+const outreachForm = document.querySelector("#outreach-form");
+const outreachFormError = document.querySelector("#outreach-form-error");
+const outreachSubmitButton = document.querySelector("#submit-outreach-form");
+const outreachVacancyTitle = document.querySelector("#outreach-vacancy-title");
 const metricsDashboard = document.querySelector("#metrics");
 const metricCount = document.querySelector("#metric-count");
 const metricDialog = document.querySelector("#metric-dialog");
@@ -54,6 +59,7 @@ let knownVacancies = [];
 let osintReports = [];
 let mirrorReports = [];
 let peopleByVacancyId = new Map();
+let outreachesByVacancyId = new Map();
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
@@ -173,6 +179,14 @@ const actionChannelDefaults = {
   hh: "Откликнуться на HH",
   direct: "Найти контакт",
   both: "Откликнуться на HH и найти контакт",
+};
+
+const outreachMethodLabels = {
+  email: "Email",
+  linkedin: "LinkedIn",
+  telegram: "Telegram",
+  phone: "Телефон",
+  other: "Другое",
 };
 
 let applicationsByVacancyId = new Map();
@@ -427,12 +441,28 @@ function renderConfirmedPerson(person) {
   </div>`;
 }
 
+function renderOutreachHistoryItem(item) {
+  const method = outreachMethodLabels[item.method] || item.method;
+  const profile = item.url
+    ? `<a class="inline-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Источник ↗</a>`
+    : "";
+  return `<div class="evidence-item">
+    <div class="evidence-item__head">
+      <strong>${escapeHtml(item.person?.full_name || "Контакт")}</strong>
+      <span>${escapeHtml(method)} · ${escapeHtml(formatDate(item.occurred_at))}</span>
+    </div>
+    <p class="evidence-item__excerpt">${escapeHtml(item.note || "Заметка не указана")}</p>
+    <div class="evidence-item__foot">${profile}</div>
+  </div>`;
+}
+
 function renderDirectOsintSection(item) {
   const channel = vacancyActionChannel(item);
   if (channel !== "direct" && channel !== "both") return "";
   const report = osintReports.find((candidate) => candidate.vacancy_id === item.id);
   const candidates = report?.people || [];
   const selected = peopleByVacancyId.get(item.id) || [];
+  const outreaches = outreachesByVacancyId.get(item.id) || [];
   const hasWebsite = Boolean(item.company?.website_url);
   let statusLine = "Поиск ещё не запускался";
   if (osintUnavailable) statusLine = "OSINT недоступен — план вакансии сохранён, повторите позже";
@@ -444,6 +474,9 @@ function renderDirectOsintSection(item) {
   }
   const researchControl = hasWebsite
     ? `<button class="btn btn--ghost btn--sm" data-research type="button">${report ? "Повторить поиск" : "Найти контакт"}</button>`
+    : "";
+  const recordControl = selected.length
+    ? `<button class="btn btn--secondary btn--sm" data-record-outreach type="button">Записать контакт</button>`
     : "";
   let candidatesHtml;
   if (osintUnavailable && !report) {
@@ -461,10 +494,13 @@ function renderDirectOsintSection(item) {
   const selectedHtml = selected.length
     ? selected.map(renderConfirmedPerson).join("")
     : inlineState("Выбранных контактов пока нет.");
+  const outreachHtml = outreaches.length
+    ? outreaches.map(renderOutreachHistoryItem).join("")
+    : inlineState("Записей о контакте пока нет.");
   return `<div class="direct-osint" data-direct-vacancy="${escapeHtml(item.id)}">
     <p class="owner-decision__label">Прямой контакт</p>
     <p class="list-row__meta">${escapeHtml(statusLine)}</p>
-    <div class="action-plan__links">${researchControl}</div>
+    <div class="action-plan__links">${researchControl}${recordControl}</div>
     <div class="row-detail__section">
       <p class="row-detail__label">Кандидаты · не проверено</p>
       ${candidatesHtml}
@@ -472,6 +508,10 @@ function renderDirectOsintSection(item) {
     <div class="row-detail__section">
       <p class="row-detail__label">Выбранные контакты</p>
       ${selectedHtml}
+    </div>
+    <div class="row-detail__section">
+      <p class="row-detail__label">История контактов · факт владельца</p>
+      ${outreachHtml}
     </div>
   </div>`;
 }
@@ -1027,6 +1067,25 @@ async function loadApplications() {
     renderErrorState(applicationList, "Не удалось загрузить отклики", error.message, loadApplications);
   } finally {
     applicationList.setAttribute("aria-busy", "false");
+  }
+}
+
+async function loadDirectOutreaches() {
+  try {
+    const response = await fetch("/api/v1/direct-outreaches");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить историю контактов");
+    outreachesByVacancyId = new Map();
+    for (const item of payload.items || []) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      const list = outreachesByVacancyId.get(vacancyId) || [];
+      list.push(item);
+      outreachesByVacancyId.set(vacancyId, list);
+    }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  } catch (_error) {
+    outreachesByVacancyId = new Map();
   }
 }
 
@@ -1808,6 +1867,32 @@ grid.addEventListener("click", async (event) => {
     }
     return;
   }
+  const recordOutreachButton = event.target.closest("[data-record-outreach]");
+  if (recordOutreachButton) {
+    const card = recordOutreachButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    const selected = peopleByVacancyId.get(vacancyId) || [];
+    if (!vacancy || !selected.length || !outreachForm) return;
+    outreachForm.reset();
+    outreachForm.elements.vacancy_id.value = vacancyId;
+    const personSelect = outreachForm.elements.person_id;
+    personSelect.innerHTML = selected
+      .map(
+        (person) =>
+          `<option value="${escapeHtml(person.id)}">${escapeHtml(person.full_name)}${person.title ? ` · ${escapeHtml(person.title)}` : ""}</option>`,
+      )
+      .join("");
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+    outreachForm.elements.occurred_at.value = local;
+    if (outreachVacancyTitle) outreachVacancyTitle.textContent = vacancy.title;
+    outreachFormError.hidden = true;
+    outreachDialog.showModal();
+    return;
+  }
   const scoreButton = event.target.closest("[data-score]");
   if (scoreButton) {
     const card = scoreButton.closest("[data-id]");
@@ -1958,6 +2043,48 @@ grid.addEventListener("click", async (event) => {
 
 document.querySelector("#close-application-form").addEventListener("click", () => applicationDialog.close());
 document.querySelector("#cancel-application-form").addEventListener("click", () => applicationDialog.close());
+
+if (outreachDialog && outreachForm) {
+  document.querySelector("#close-outreach-form")?.addEventListener("click", () => outreachDialog.close());
+  document.querySelector("#cancel-outreach-form")?.addEventListener("click", () => outreachDialog.close());
+  outreachForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    outreachFormError.hidden = true;
+    setButtonProcessing(outreachSubmitButton, true, "Сохраняем…", "Записать контакт");
+    const values = Object.fromEntries(new FormData(outreachForm));
+    if (values.occurred_at) values.occurred_at = new Date(values.occurred_at).toISOString();
+    else delete values.occurred_at;
+    if (!values.note) delete values.note;
+    try {
+      const response = await fetch("/api/v1/direct-outreaches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Контакт не записан");
+      outreachDialog.close();
+      const name = payload.person?.full_name || "контакт";
+      const setWait = window.confirm(
+        `Контакт с ${name} записан (ничего не отправлялось).\n\nПоставить следующий шаг «Ждать ответ»?`,
+      );
+      if (setWait) {
+        await fetch(`/api/v1/vacancies/${values.vacancy_id}/action-plan`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ next_action: "Ждать ответ", next_action_done: false }),
+        });
+      }
+      showNotice(`Записан контакт: ${name}`);
+      await Promise.all([loadDirectOutreaches(), loadVacancies()]);
+    } catch (error) {
+      outreachFormError.textContent = error.message;
+      outreachFormError.hidden = false;
+    } finally {
+      setButtonProcessing(outreachSubmitButton, false, "Сохраняем…", "Записать контакт");
+    }
+  });
+}
 
 applicationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -2862,6 +2989,7 @@ initVacancySearch();
 void (async () => {
   await loadApplications();
   await loadPeople();
+  await loadDirectOutreaches();
   await loadVacancies();
 })();
 loadMetrics();
