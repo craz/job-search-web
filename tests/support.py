@@ -266,8 +266,14 @@ class StubCore:
                 updated["next_action_done"] = False
             else:
                 if "next_action" in payload:
-                    updated["next_action"] = payload["next_action"]
-                if "next_action_at" in payload:
+                    cleaned = payload["next_action"]
+                    updated["next_action"] = cleaned
+                    if cleaned in (None, ""):
+                        updated["next_action_at"] = None
+                        updated["next_action_done"] = False
+                if payload.get("clear_next_action_at"):
+                    updated["next_action_at"] = None
+                elif "next_action_at" in payload:
                     updated["next_action_at"] = payload["next_action_at"]
                 if "next_action_done" in payload:
                     updated["next_action_done"] = payload["next_action_done"]
@@ -454,6 +460,7 @@ class StubCore:
                 "status": (vacancy or {}).get("status") or "new",
                 "next_action": (vacancy or {}).get("next_action"),
                 "next_action_done": bool((vacancy or {}).get("next_action_done")),
+                "next_action_at": (vacancy or {}).get("next_action_at"),
                 "company": {
                     "id": ((vacancy or {}).get("company") or {}).get("id")
                     or "00000000-0000-0000-0000-000000000001",

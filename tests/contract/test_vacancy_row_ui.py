@@ -106,6 +106,11 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "data-add-hiring-activity" in js
     assert "/api/v1/hiring-activities/" in js
     assert "nearestPlannedActivity" in js
+    assert "data-next-action-due-input" in js
+    assert "clear_next_action_at" in js
+    assert "processAttentionState" in js
+    assert "data-complete-hiring-process" in js
+    assert "data-cancel-hiring-process" in js
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

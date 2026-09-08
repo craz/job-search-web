@@ -418,6 +418,46 @@ function renderOwnerDecisionControls(item) {
   </div>`;
 }
 
+function toDatetimeLocalValue(raw) {
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+function deadlineStateFromStamp(raw) {
+  if (!raw) return "";
+  const when = Date.parse(raw);
+  if (Number.isNaN(when)) return "";
+  return when <= Date.now() ? "overdue" : "upcoming";
+}
+
+function nextActionAttentionAt(source) {
+  const vacancy = source?.vacancy || source;
+  if (!vacancy?.next_action || vacancy.next_action_done) return null;
+  return vacancy.next_action_at || null;
+}
+
+function processAttentionStamp(process) {
+  const stamps = [];
+  for (const activity of process?.activities || []) {
+    const stamp = activityAttentionAt(activity);
+    if (stamp) stamps.push(Date.parse(stamp));
+  }
+  const nextAt = nextActionAttentionAt(process);
+  if (nextAt) stamps.push(Date.parse(nextAt));
+  const valid = stamps.filter((value) => !Number.isNaN(value));
+  if (!valid.length) return null;
+  return new Date(Math.min(...valid)).toISOString();
+}
+
+function processAttentionState(process) {
+  const stamp = processAttentionStamp(process);
+  if (stamp) return deadlineStateFromStamp(stamp);
+  if (process?.vacancy?.next_action && !process.vacancy.next_action_done) return "undated";
+  return "none";
+}
+
 function renderActionPlanControls(item) {
   const decision = vacancyOwnerDecision(item);
   if (decision !== "interested" && decision !== "applied") return "";
@@ -438,6 +478,13 @@ function renderActionPlanControls(item) {
     : "";
   const nextAction = String(item?.next_action || "");
   const nextDone = Boolean(item?.next_action_done);
+  const nextDue = item?.next_action_at || "";
+  const dueState = nextAction && !nextDone ? deadlineStateFromStamp(nextDue) : "";
+  const dueHint = nextDue
+    ? `${dueState === "overdue" ? "Просрочено" : "Срок"} · ${formatDate(nextDue)}`
+    : nextAction && !nextDone
+      ? "Срок не указан"
+      : "";
   const hhOpen =
     channel === "hh" || channel === "both"
       ? `<a class="btn btn--secondary btn--sm" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">Открыть вакансию на HH ↗</a>`
@@ -459,11 +506,16 @@ function renderActionPlanControls(item) {
     <div class="action-plan__next">
       <label class="list-row__control action-plan__field">
         <span class="sr-only">Следующее действие</span>
-        <input class="control" type="text" data-next-action-input maxlength="500" value="${escapeHtml(nextAction)}" placeholder="Например: Откликнуться на HH">
+        <input class="control" type="text" data-next-action-input maxlength="500" value="${escapeHtml(nextAction)}" placeholder="Например: Отправить тестовое">
+      </label>
+      <label class="list-row__control action-plan__field">
+        <span class="list-row__meta">Срок</span>
+        <input class="control" type="datetime-local" data-next-action-due-input value="${escapeHtml(toDatetimeLocalValue(nextDue))}">
       </label>
       <button class="btn btn--ghost btn--sm" type="button" data-save-next-action>Сохранить шаг</button>
       <button class="btn btn--ghost btn--sm" type="button" data-toggle-next-done>${nextDone ? "Открыть снова" : "Закрыть шаг"}</button>
     </div>
+    ${dueHint ? `<p class="list-row__meta">${escapeHtml(dueHint)}</p>` : ""}
     <div class="action-plan__links">${hhOpen}${directHint}</div>
     ${appHistory}
   </div>`;
@@ -745,7 +797,7 @@ function renderHiringActivities(process) {
 
 function renderHiringProcessSection(item) {
   const process = hiringProcessByVacancyId.get(item.id);
-  if (!process || process.status !== "active") {
+  if (!process) {
     return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}">
       <p class="owner-decision__label">Процесс найма</p>
       <p class="list-row__meta">Активного процесса нет.</p>
@@ -755,12 +807,32 @@ function renderHiringProcessSection(item) {
     </div>`;
   }
   const stageLabel = hiringStageLabels[process.current_stage] || process.current_stage;
+  if (process.status !== "active") {
+    const statusLabel = process.status === "completed" ? "Завершён" : "Отменён";
+    return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}" data-hiring-process="${escapeHtml(process.id)}">
+      <p class="owner-decision__label">Процесс найма</p>
+      <p class="list-row__meta">${escapeHtml(statusLabel)} · этап · ${escapeHtml(stageLabel)} · с ${escapeHtml(formatDate(process.started_at))}</p>
+      <div class="action-plan__links">
+        <button class="btn btn--secondary btn--sm" data-start-hiring type="button">Начать новый процесс</button>
+      </div>
+      <div class="row-detail__section">
+        <p class="row-detail__label">Активности</p>
+        ${renderHiringActivities(process)}
+      </div>
+      <div class="row-detail__section">
+        <p class="row-detail__label">История этапов</p>
+        ${renderHiringStageHistory(process.stage_events)}
+      </div>
+    </div>`;
+  }
   return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}" data-hiring-process="${escapeHtml(process.id)}">
     <p class="owner-decision__label">Процесс найма</p>
     <p class="list-row__meta">Этап · ${escapeHtml(stageLabel)} · с ${escapeHtml(formatDate(process.started_at))}</p>
     <div class="action-plan__links">
       <button class="btn btn--secondary btn--sm" data-transition-hiring type="button">Перейти к этапу</button>
       <button class="btn btn--secondary btn--sm" data-add-hiring-activity type="button">Добавить активность</button>
+      <button class="btn btn--ghost btn--sm" data-complete-hiring-process type="button">Завершить процесс</button>
+      <button class="btn btn--ghost btn--sm" data-cancel-hiring-process type="button">Отменить процесс</button>
     </div>
     <div class="row-detail__section">
       <p class="row-detail__label">Активности</p>
@@ -1371,19 +1443,36 @@ function hiringProcessRow(item) {
   const stageLabel = hiringStageLabels[item.current_stage] || item.current_stage;
   const company = item.vacancy?.company?.name || "—";
   const next = item.vacancy?.next_action || "Шаг не указан";
+  const nextDue = nextActionAttentionAt(item);
+  const nextDueState = deadlineStateFromStamp(nextDue);
+  const nextDueLabel = nextDue
+    ? `${nextDueState === "overdue" ? "Просрочено" : "Срок шага"} · ${formatDate(nextDue)}`
+    : item.vacancy?.next_action && !item.vacancy?.next_action_done
+      ? "Срок шага не указан"
+      : "";
   const nearest = nearestPlannedActivity(item);
-  const state = nearest ? activityDeadlineState(nearest) : "";
-  const attentionLabel = nearest
-    ? `${state === "overdue" ? "Просрочено" : "Ближайшее"} · ${
+  const activityState = nearest ? activityDeadlineState(nearest) : "";
+  const activityLabel = nearest
+    ? `${activityState === "overdue" ? "Просрочено" : "Активность"} · ${
         hiringActivityTypeLabels[nearest.activity_type] || nearest.activity_type
       } · ${formatDate(activityAttentionAt(nearest))}`
     : "Плановых активностей нет";
+  const attention = processAttentionState(item);
+  const attentionBadge =
+    attention === "overdue"
+      ? "Требует внимания · просрочено"
+      : attention === "upcoming"
+        ? "Ближайший срок"
+        : attention === "undated"
+          ? "Есть шаг без срока"
+          : "Нет датированной работы";
   return `<article class="list-row" data-hiring-id="${escapeHtml(item.id)}">
     <div class="list-row__primary">
       <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
       <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(stageLabel)}</p>
-      <p class="list-row__meta">${escapeHtml(attentionLabel)}</p>
-      <p class="list-row__meta">Следующий шаг: ${escapeHtml(next)} · обновлено ${escapeHtml(formatDate(item.updated_at))}</p>
+      <p class="list-row__meta">${escapeHtml(attentionBadge)}</p>
+      <p class="list-row__meta">Следующий шаг: ${escapeHtml(next)}${nextDueLabel ? ` · ${escapeHtml(nextDueLabel)}` : ""}</p>
+      <p class="list-row__meta">${escapeHtml(activityLabel)}</p>
     </div>
   </article>`;
 }
@@ -1391,19 +1480,34 @@ function hiringProcessRow(item) {
 async function loadHiringProcesses() {
   if (hiringList) hiringList.setAttribute("aria-busy", "true");
   try {
-    const response = await fetch("/api/v1/hiring-processes?status=active");
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || "Не удалось получить процессы найма");
-    activeHiringProcesses = payload.items || [];
+    const [activeResponse, allResponse] = await Promise.all([
+      fetch("/api/v1/hiring-processes?status=active"),
+      fetch("/api/v1/hiring-processes"),
+    ]);
+    const activePayload = await activeResponse.json();
+    const allPayload = await allResponse.json();
+    if (!activeResponse.ok) {
+      throw new Error(activePayload.message || "Не удалось получить процессы найма");
+    }
+    if (!allResponse.ok) {
+      throw new Error(allPayload.message || "Не удалось получить историю найма");
+    }
+    activeHiringProcesses = activePayload.items || [];
     hiringProcessByVacancyId = new Map();
-    for (const item of activeHiringProcesses) {
+    const ranked = [...(allPayload.items || [])].sort((left, right) => {
+      const leftActive = left.status === "active" ? 0 : 1;
+      const rightActive = right.status === "active" ? 0 : 1;
+      if (leftActive !== rightActive) return leftActive - rightActive;
+      return String(right.updated_at || "").localeCompare(String(left.updated_at || ""));
+    });
+    for (const item of ranked) {
       const vacancyId = item?.vacancy?.id;
-      if (!vacancyId) continue;
+      if (!vacancyId || hiringProcessByVacancyId.has(vacancyId)) continue;
       hiringProcessByVacancyId.set(vacancyId, item);
     }
-    if (hiringCount) setSectionCount(hiringCount, payload.total);
+    if (hiringCount) setSectionCount(hiringCount, activePayload.total);
     if (hiringList) {
-      if (payload.total) hiringList.innerHTML = activeHiringProcesses.map(hiringProcessRow).join("");
+      if (activePayload.total) hiringList.innerHTML = activeHiringProcesses.map(hiringProcessRow).join("");
       else {
         hiringList.innerHTML = "";
         renderEmptyState(
@@ -2111,12 +2215,19 @@ grid.addEventListener("click", async (event) => {
     const card = saveNextButton.closest("[data-id]");
     const vacancyId = card?.dataset.id;
     const input = card?.querySelector("[data-next-action-input]");
+    const dueInput = card?.querySelector("[data-next-action-due-input]");
     if (!vacancyId || !input) return;
     saveNextButton.disabled = true;
     const nextAction = String(input.value || "").trim();
-    const body = nextAction
-      ? { next_action: nextAction, next_action_done: false }
-      : { clear_next_action: true };
+    const dueRaw = String(dueInput?.value || "").trim();
+    let body;
+    if (!nextAction) {
+      body = { clear_next_action: true };
+    } else {
+      body = { next_action: nextAction, next_action_done: false };
+      if (dueRaw) body.next_action_at = new Date(dueRaw).toISOString();
+      else body.clear_next_action_at = true;
+    }
     try {
       const response = await fetch(`/api/v1/vacancies/${vacancyId}/action-plan`, {
         method: "PATCH",
@@ -2126,7 +2237,7 @@ grid.addEventListener("click", async (event) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Шаг не сохранён");
       showNotice(payload.next_action ? "Следующий шаг сохранён" : "Следующий шаг очищен");
-      await loadVacancies();
+      await Promise.all([loadVacancies(), loadHiringProcesses()]);
     } catch (error) {
       showNotice(error.message, "error");
       saveNextButton.disabled = false;
@@ -2296,7 +2407,7 @@ grid.addEventListener("click", async (event) => {
     const vacancyId = card?.dataset.id;
     const vacancy = knownVacancies.find((item) => item.id === vacancyId);
     const process = hiringProcessByVacancyId.get(vacancyId);
-    if (!vacancy || !process || !hiringActivityForm) return;
+    if (!vacancy || !process || process.status !== "active" || !hiringActivityForm) return;
     hiringActivityForm.reset();
     hiringActivityForm.elements.process_id.value = process.id;
     hiringActivityForm.elements.vacancy_id.value = vacancyId;
@@ -2304,6 +2415,56 @@ grid.addEventListener("click", async (event) => {
     if (hiringActivityVacancyTitle) hiringActivityVacancyTitle.textContent = vacancy.title;
     hiringActivityFormError.hidden = true;
     hiringActivityDialog.showModal();
+    return;
+  }
+  const completeHiringProcessButton = event.target.closest("[data-complete-hiring-process]");
+  if (completeHiringProcessButton) {
+    const card = completeHiringProcessButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    if (!process || process.status !== "active") return;
+    const confirmed = window.confirm(
+      "Завершить процесс найма? Он исчезнет из активного списка, история останется в карточке вакансии.",
+    );
+    if (!confirmed) return;
+    try {
+      const response = await fetch(`/api/v1/hiring-processes/${process.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Не удалось завершить процесс");
+      showNotice("Процесс найма завершён");
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      showNotice(error.message, "warning");
+    }
+    return;
+  }
+  const cancelHiringProcessButton = event.target.closest("[data-cancel-hiring-process]");
+  if (cancelHiringProcessButton) {
+    const card = cancelHiringProcessButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    if (!process || process.status !== "active") return;
+    const confirmed = window.confirm(
+      "Отменить процесс найма? Он исчезнет из активного списка, история останется в карточке вакансии.",
+    );
+    if (!confirmed) return;
+    try {
+      const response = await fetch(`/api/v1/hiring-processes/${process.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Не удалось отменить процесс");
+      showNotice("Процесс найма отменён");
+      await Promise.all([loadHiringProcesses(), loadVacancies()]);
+    } catch (error) {
+      showNotice(error.message, "warning");
+    }
     return;
   }
   const completeHiringActivityButton = event.target.closest("[data-complete-hiring-activity]");

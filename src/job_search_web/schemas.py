@@ -31,7 +31,7 @@ class VacancyOwnerDecisionUpdate(BaseModel):
 
 
 class VacancyActionPlanUpdate(BaseModel):
-    """Browser-requested intended channel/next action (R3.0; no Application create)."""
+    """Browser-requested intended channel/next action (R3.0/R4.2; no Application create)."""
 
     action_channel: str | None = Field(default=None, pattern="^(hh|direct|both)$")
     next_action: str | None = Field(default=None, max_length=500)
@@ -39,6 +39,7 @@ class VacancyActionPlanUpdate(BaseModel):
     next_action_done: bool | None = None
     clear_action_channel: bool = False
     clear_next_action: bool = False
+    clear_next_action_at: bool = False
 
 
 class ApplicationCreate(BaseModel):
