@@ -161,6 +161,7 @@ class StubCore:
         self.response_items: list[dict[str, Any]] = []
         self.hiring_items: list[dict[str, Any]] = []
         self.offer_items: list[dict[str, Any]] = []
+        self.search_cycle: dict[str, Any] | None = None
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
@@ -627,7 +628,7 @@ class StubCore:
                 "message": "HiringProcess already has an Offer",
             }
         created = {
-            "id": f"00000000-0000-0000-0000-0000000000o{len(self.offer_items)}",
+            "id": f"00000000-0000-0000-0000-{len(self.offer_items):012d}",
             "received_at": payload.get("received_at") or "2026-09-09T12:00:00Z",
             "position_title": payload.get("position_title"),
             "compensation_amount": payload.get("compensation_amount"),
@@ -701,6 +702,59 @@ class StubCore:
             self.offer_items[index] = updated
             return 200, updated
         return 404, {"code": "offer_not_found", "message": "Offer does not exist"}
+
+    def get_search_cycle(self) -> tuple[int, Any]:
+        """Return synthetic overall search cycle."""
+        self._guard()
+        self.calls.append(("search-cycle-get", None))
+        if not hasattr(self, "search_cycle") or self.search_cycle is None:
+            self.search_cycle = {
+                "id": "00000000-0000-0000-0000-00000000sc01",
+                "status": "active",
+                "started_at": "2026-09-01T00:00:00Z",
+                "closed_at": None,
+                "accepted_offer_id": None,
+                "outcome": None,
+                "close_note": None,
+                "created_at": "2026-09-01T00:00:00Z",
+                "updated_at": "2026-09-01T00:00:00Z",
+                "accepted_offer": None,
+            }
+        return 200, dict(self.search_cycle)
+
+    def close_search_cycle(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Close synthetic search cycle without mutating sibling offers."""
+        self._guard()
+        self.calls.append(("search-cycle-close", payload))
+        self.get_search_cycle()
+        assert self.search_cycle is not None
+        if self.search_cycle.get("status") == "closed":
+            return 409, {
+                "code": "search_cycle_already_closed",
+                "message": "Search cycle is already closed",
+            }
+        offer = next(
+            (item for item in self.offer_items if item["id"] == payload.get("accepted_offer_id")),
+            None,
+        )
+        if offer is None:
+            return 404, {"code": "offer_not_found", "message": "Offer does not exist"}
+        if offer.get("status") != "accepted":
+            return 400, {
+                "code": "offer_not_accepted",
+                "message": "Offer must be accepted before closing search",
+            }
+        self.search_cycle = {
+            **self.search_cycle,
+            "status": "closed",
+            "closed_at": "2026-09-09T15:00:00Z",
+            "accepted_offer_id": offer["id"],
+            "outcome": "offer_accepted",
+            "close_note": payload.get("close_note"),
+            "updated_at": "2026-09-09T15:00:00Z",
+            "accepted_offer": offer,
+        }
+        return 200, dict(self.search_cycle)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Return the current synthetic Daily Metric history."""

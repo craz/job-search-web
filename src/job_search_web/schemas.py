@@ -178,6 +178,13 @@ class OfferComparisonUpdate(BaseModel):
     owner_preference_rank: int | None = Field(default=None, ge=1, le=99)
 
 
+class SearchCycleClose(BaseModel):
+    """Browser-submitted explicit search close after accepted Offer (R5.2)."""
+
+    accepted_offer_id: UUID
+    close_note: str | None = Field(default=None, max_length=2000)
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

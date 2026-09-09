@@ -1888,3 +1888,19 @@ label.wide {
   align-items: flex-start;
   padding-top: 0.35rem;
 }
+
+/* R5.2 search cycle closed banner */
+.search-cycle-banner {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.14));
+  background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+}
+.search-cycle-banner[hidden] { display: none !important; }
+.search-cycle-banner__title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+}
+.search-cycle-banner p {
+  margin: 0.15rem 0;
+}

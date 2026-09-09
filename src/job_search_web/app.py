@@ -38,6 +38,7 @@ from job_search_web.schemas import (
     PeopleResearchRequest,
     PersonCreate,
     PersonStatusUpdate,
+    SearchCycleClose,
     VacancyActionPlanUpdate,
     VacancyCreate,
     VacancyMirrorRequest,
@@ -469,6 +470,23 @@ def create_app(
                 status_code=400,
                 content={"code": "invalid_request", "message": "enabled must be a boolean"},
             )
+        if enabled:
+            try:
+                cycle_status, cycle_body = gateway.get_search_cycle()
+                if (
+                    cycle_status == 200
+                    and isinstance(cycle_body, dict)
+                    and cycle_body.get("status") == "closed"
+                ):
+                    return JSONResponse(
+                        status_code=409,
+                        content={
+                            "code": "search_cycle_closed",
+                            "message": "Cannot enable automation while search cycle is closed",
+                        },
+                    )
+            except CoreUnavailableError:
+                return unavailable_response()
         try:
             return proxy_response(*automation_gateway.set_enabled(enabled))
         except AutomationUnavailableError:
@@ -477,6 +495,22 @@ def create_app(
     @application.post("/api/v1/automation/run-now")
     def post_automation_run_now() -> JSONResponse:
         """Trigger one automation cycle through the same path as the scheduler."""
+        try:
+            cycle_status, cycle_body = gateway.get_search_cycle()
+            if (
+                cycle_status == 200
+                and isinstance(cycle_body, dict)
+                and cycle_body.get("status") == "closed"
+            ):
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "code": "search_cycle_closed",
+                        "message": "Cannot run automation while search cycle is closed",
+                    },
+                )
+        except CoreUnavailableError:
+            return unavailable_response()
         try:
             return proxy_response(*automation_gateway.run_now())
         except AutomationUnavailableError:
@@ -711,6 +745,40 @@ def create_app(
             )
         except CoreUnavailableError:
             return unavailable_response()
+
+    @application.get("/api/v1/search-cycle")
+    def get_search_cycle() -> JSONResponse:
+        """Return current overall search cycle from Core."""
+        try:
+            return proxy_response(*gateway.get_search_cycle())
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/search-cycle/close")
+    def post_search_cycle_close(request: SearchCycleClose) -> JSONResponse:
+        """Close search after accepted Offer and disable vacancy automation."""
+        try:
+            status_code, body = gateway.close_search_cycle(
+                request.model_dump(mode="json", exclude_none=True)
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+        if status_code >= 400:
+            return proxy_response(status_code, body)
+        automation_warning = None
+        try:
+            auto_status, auto_body = automation_gateway.set_enabled(False)
+            if auto_status >= 400:
+                automation_warning = (
+                    auto_body.get("message")
+                    if isinstance(auto_body, dict)
+                    else "automation disable failed"
+                )
+        except AutomationUnavailableError:
+            automation_warning = "automation unavailable"
+        if isinstance(body, dict) and automation_warning:
+            body = {**body, "automation_disable_warning": automation_warning}
+        return proxy_response(status_code, body)
 
     @application.get("/api/v1/metrics")
     def get_metrics() -> JSONResponse:

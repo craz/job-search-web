@@ -120,6 +120,9 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "/api/v1/offers" in js and "comparison" in js
     assert "compare-offers" in html
     assert "offer-compare-panel" in html
+    assert "data-close-search" in js
+    assert "/api/v1/search-cycle/close" in js
+    assert "search-cycle-banner" in html
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

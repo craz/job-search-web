@@ -118,6 +118,14 @@ class CoreGateway(Protocol):
         """Update owner comparison note/rank through Core."""
         ...
 
+    def get_search_cycle(self) -> tuple[int, Any]:
+        """Return current overall search cycle from Core."""
+        ...
+
+    def close_search_cycle(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Close the active search cycle through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -313,6 +321,14 @@ class CoreClient:
     def update_offer_comparison(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward owner comparison note/rank update."""
         return self._request("PATCH", f"/api/v1/offers/{offer_id}/comparison", json=payload)
+
+    def get_search_cycle(self) -> tuple[int, Any]:
+        """Fetch current overall search cycle from Core."""
+        return self._request("GET", "/api/v1/search-cycle")
+
+    def close_search_cycle(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward explicit search-cycle close."""
+        return self._request("POST", "/api/v1/search-cycle/close", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

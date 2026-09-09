@@ -60,6 +60,12 @@ const offerComparePanel = document.querySelector("#offer-compare-panel");
 const offerCompareTable = document.querySelector("#offer-compare-table");
 const offerCompareDisclaimer = document.querySelector("#offer-compare-disclaimer");
 const closeOfferCompareButton = document.querySelector("#close-offer-compare");
+const searchCycleBanner = document.querySelector("#search-cycle-banner");
+const searchCycleCloseDialog = document.querySelector("#search-cycle-close-dialog");
+const searchCycleCloseForm = document.querySelector("#search-cycle-close-form");
+const searchCycleCloseFormError = document.querySelector("#search-cycle-close-form-error");
+const searchCycleCloseSubmitButton = document.querySelector("#submit-search-cycle-close-form");
+const searchCycleCloseSummary = document.querySelector("#search-cycle-close-summary");
 const hiringStartDialog = document.querySelector("#hiring-start-dialog");
 const hiringStartForm = document.querySelector("#hiring-start-form");
 const hiringStartFormError = document.querySelector("#hiring-start-form-error");
@@ -111,6 +117,7 @@ let activeHiringProcesses = [];
 let offersByVacancyId = new Map();
 let knownOffers = [];
 let selectedOfferIds = new Set();
+let currentSearchCycle = null;
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
@@ -1009,13 +1016,20 @@ function renderOfferCompare(offers) {
     .join("");
   const ownerCells = offers
     .map((o) => {
+      const closeSearch =
+        o.status === "accepted" && currentSearchCycle?.status === "active"
+          ? `<button class="btn btn--primary btn--sm" data-close-search="${escapeHtml(o.id)}" type="button">Завершить поиск</button>`
+          : "";
       const actions =
         o.status === "pending"
           ? `<div class="offer-compare-actions">
               <button class="btn btn--secondary btn--sm" data-accept-offer="${escapeHtml(o.id)}" type="button">Принять</button>
               <button class="btn btn--ghost btn--sm" data-decline-offer="${escapeHtml(o.id)}" type="button">Отклонить</button>
             </div>`
-          : `<p class="list-row__meta">Решение · ${escapeHtml(formatDate(o.decided_at))}</p>`;
+          : `<div class="offer-compare-actions">
+              <p class="list-row__meta">Решение · ${escapeHtml(formatDate(o.decided_at))}</p>
+              ${closeSearch}
+            </div>`;
       return `<td>
         <label class="field">
           <span class="field__label">Заметка владельца</span>
@@ -1084,6 +1098,67 @@ async function loadOffers() {
   }
 }
 
+function renderSearchCycleBanner() {
+  if (!searchCycleBanner) return;
+  if (!currentSearchCycle || currentSearchCycle.status !== "closed") {
+    searchCycleBanner.hidden = true;
+    searchCycleBanner.innerHTML = "";
+    return;
+  }
+  const offer = currentSearchCycle.accepted_offer;
+  const company = offer?.vacancy?.company?.name || "—";
+  const role = offer?.position_title || offer?.vacancy?.title || "—";
+  searchCycleBanner.hidden = false;
+  searchCycleBanner.innerHTML = `
+    <p class="search-cycle-banner__title">Поиск завершён</p>
+    <p>Победивший оффер · ${escapeHtml(company)} · ${escapeHtml(role)}</p>
+    <p>${escapeHtml(formatCompensation(offer || {}))}${
+      offer?.proposed_start_date ? ` · выход ${escapeHtml(offer.proposed_start_date)}` : ""
+    }</p>
+    <p>Закрыт · ${escapeHtml(formatDate(currentSearchCycle.closed_at))}</p>
+    <p class="list-row__meta">История вакансий, R3/R4 и офферов доступна для просмотра. Автоматизация остановлена.</p>
+  `;
+}
+
+async function loadSearchCycle() {
+  try {
+    const response = await fetch("/api/v1/search-cycle");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить цикл поиска");
+    currentSearchCycle = payload;
+  } catch (error) {
+    currentSearchCycle = null;
+    showNotice(error.message, "warning");
+  }
+  renderSearchCycleBanner();
+  const toggle = document.querySelector("#automation-toggle");
+  const runNow = document.querySelector("#automation-run-now");
+  const closed = currentSearchCycle?.status === "closed";
+  if (toggle) toggle.disabled = Boolean(closed);
+  if (runNow) runNow.disabled = Boolean(closed);
+}
+
+function openSearchCycleClose(offer) {
+  if (!offer || !searchCycleCloseForm || !searchCycleCloseDialog) return;
+  searchCycleCloseForm.reset();
+  searchCycleCloseForm.elements.accepted_offer_id.value = offer.id;
+  const company = offer.vacancy?.company?.name || "—";
+  const role = offer.position_title || offer.vacancy?.title || "—";
+  if (searchCycleCloseSummary) {
+    searchCycleCloseSummary.innerHTML = `
+      <p><strong>${escapeHtml(company)}</strong> · ${escapeHtml(role)}</p>
+      <p>${escapeHtml(formatCompensation(offer))}</p>
+      <p>${escapeHtml(offer.work_format || "формат н/д")} · ${escapeHtml(offer.location || "локация н/д")}${
+        offer.proposed_start_date ? ` · выход ${escapeHtml(offer.proposed_start_date)}` : ""
+      }</p>
+      <p><strong>Будет:</strong> цикл поиска → closed; автоматизация выключена и останется выключенной после restart.</p>
+      <p><strong>Не будет:</strong> писем/откликов наружу; удаления истории; авто-decline других офферов; отмены других процессов найма.</p>
+    `;
+  }
+  if (searchCycleCloseFormError) searchCycleCloseFormError.hidden = true;
+  searchCycleCloseDialog.showModal();
+}
+
 /* --- Vacancy search (R2.2.5 corrected: resume_suitable primary) --- */
 
 function renderOfferSection(item) {
@@ -1095,15 +1170,22 @@ function renderOfferSection(item) {
     </div>`;
   }
   const status = offerStatusLabels[offer.status] || offer.status;
+  const closeSearchButton =
+    offer.status === "accepted" && currentSearchCycle?.status === "active"
+      ? `<button class="btn btn--primary btn--sm" data-close-search="${escapeHtml(offer.id)}" type="button">Завершить поиск</button>`
+      : "";
   const actions =
     offer.status === "pending"
       ? `<div class="action-plan__links">
           <button class="btn btn--secondary btn--sm" data-accept-offer="${escapeHtml(offer.id)}" type="button">Принять</button>
           <button class="btn btn--ghost btn--sm" data-decline-offer="${escapeHtml(offer.id)}" type="button">Отклонить</button>
         </div>`
-      : `<p class="list-row__meta">Решение · ${escapeHtml(formatDate(offer.decided_at))}${
-          offer.decision_note ? ` · ${escapeHtml(excerpt(offer.decision_note, 80))}` : ""
-        }</p>`;
+      : `<div class="action-plan__links">
+          <p class="list-row__meta">Решение · ${escapeHtml(formatDate(offer.decided_at))}${
+            offer.decision_note ? ` · ${escapeHtml(excerpt(offer.decision_note, 80))}` : ""
+          }</p>
+          ${closeSearchButton}
+        </div>`;
   return `<div class="offer-section" data-offer-vacancy="${escapeHtml(item.id)}" data-offer-id="${escapeHtml(offer.id)}">
     <p class="owner-decision__label">Оффер</p>
     <p class="list-row__meta">${escapeHtml(status)} · получен ${escapeHtml(formatDate(offer.received_at))}</p>
@@ -2779,6 +2861,13 @@ grid.addEventListener("click", async (event) => {
     openOfferDecision(offer, "declined");
     return;
   }
+  const closeSearchButton = event.target.closest("[data-close-search]");
+  if (closeSearchButton) {
+    const offerId = closeSearchButton.getAttribute("data-close-search");
+    const offer = knownOffers.find((item) => item.id === offerId);
+    openSearchCycleClose(offer);
+    return;
+  }
   const completeHiringActivityButton = event.target.closest("[data-complete-hiring-activity]");
   if (completeHiringActivityButton) {
     const card = completeHiringActivityButton.closest("[data-id]");
@@ -3376,12 +3465,68 @@ if (offerDecisionDialog && offerDecisionForm) {
       if (!response.ok) throw new Error(body.message || "Решение не сохранено");
       offerDecisionDialog.close();
       showNotice(payload.status === "accepted" ? "Оффер принят" : "Оффер отклонён");
-      await Promise.all([loadOffers(), loadVacancies(), loadHiringProcesses()]);
+      await Promise.all([loadOffers(), loadVacancies(), loadHiringProcesses(), loadSearchCycle()]);
     } catch (error) {
       offerDecisionFormError.textContent = error.message;
       offerDecisionFormError.hidden = false;
     } finally {
       setButtonProcessing(offerDecisionSubmitButton, false, "Сохраняем…", "Подтвердить");
+    }
+  });
+}
+
+if (searchCycleCloseDialog && searchCycleCloseForm) {
+  document.querySelector("#close-search-cycle-close-form")?.addEventListener("click", () =>
+    searchCycleCloseDialog.close(),
+  );
+  document.querySelector("#cancel-search-cycle-close-form")?.addEventListener("click", () =>
+    searchCycleCloseDialog.close(),
+  );
+  searchCycleCloseForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (searchCycleCloseFormError) searchCycleCloseFormError.hidden = true;
+    setButtonProcessing(
+      searchCycleCloseSubmitButton,
+      true,
+      "Завершаем…",
+      "Подтвердить завершение",
+    );
+    const values = Object.fromEntries(new FormData(searchCycleCloseForm));
+    const payload = { accepted_offer_id: values.accepted_offer_id };
+    if (values.close_note) payload.close_note = values.close_note;
+    try {
+      const response = await fetch("/api/v1/search-cycle/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Не удалось завершить поиск");
+      searchCycleCloseDialog.close();
+      showNotice(
+        body.automation_disable_warning
+          ? `Поиск завершён (автоматизация: ${body.automation_disable_warning})`
+          : "Поиск завершён · автоматизация выключена",
+      );
+      await Promise.all([
+        loadSearchCycle(),
+        loadOffers(),
+        loadVacancies(),
+        loadHiringProcesses(),
+        loadAutomationStatus(),
+      ]);
+    } catch (error) {
+      if (searchCycleCloseFormError) {
+        searchCycleCloseFormError.textContent = error.message;
+        searchCycleCloseFormError.hidden = false;
+      }
+    } finally {
+      setButtonProcessing(
+        searchCycleCloseSubmitButton,
+        false,
+        "Завершаем…",
+        "Подтвердить завершение",
+      );
     }
   });
 }
@@ -3409,6 +3554,14 @@ document.querySelector("#section-offers")?.addEventListener("click", async (even
       (item) => item.id === declineOfferButton.getAttribute("data-decline-offer"),
     );
     openOfferDecision(offer, "declined");
+    return;
+  }
+  const closeSearchButton = event.target.closest("[data-close-search]");
+  if (closeSearchButton) {
+    const offer = knownOffers.find(
+      (item) => item.id === closeSearchButton.getAttribute("data-close-search"),
+    );
+    openSearchCycleClose(offer);
     return;
   }
   const saveButton = event.target.closest("[data-save-offer-comparison]");
@@ -4351,6 +4504,7 @@ initNavigation();
 loadHhConnection();
 initVacancySearch();
 void (async () => {
+  await loadSearchCycle();
   await loadApplications();
   await loadPeople();
   await loadDirectOutreaches();

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260909-r51">
-    <script src="/assets/app.js?v=20260909-r51" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260909-r52">
+    <script src="/assets/app.js?v=20260909-r52" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -85,6 +85,7 @@
 
         <main class="app-main" id="main-content">
           <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+          <div id="search-cycle-banner" class="search-cycle-banner" role="status" hidden></div>
 
           <div class="section-view" id="section-vacancies" data-section="vacancies" role="region" aria-labelledby="board-title">
           <section class="toolbar" aria-labelledby="board-title">
@@ -829,6 +830,35 @@
         <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-offer-decision-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-offer-decision-form" type="submit">Подтвердить</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="search-cycle-close-dialog" class="dialog" aria-labelledby="search-cycle-close-dialog-title">
+      <form id="search-cycle-close-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ЗАВЕРШЕНИЕ ПОИСКА</p>
+            <h2 id="search-cycle-close-dialog-title">Завершить поиск</h2>
+            <p class="dialog-context">Явное закрытие цикла после принятого оффера.</p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-search-cycle-close-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="accepted_offer_id" type="hidden">
+          <div id="search-cycle-close-summary" class="offer-decision-summary"></div>
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Заметка (необязательно)</span>
+              <textarea class="control control--textarea" name="close_note" rows="3" maxlength="2000"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Ничего не отправляется работодателю или в HH. История вакансий и других офферов сохраняется.</p>
+          <p id="search-cycle-close-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-search-cycle-close-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-search-cycle-close-form" type="submit">Подтвердить завершение</button>
         </footer>
       </form>
     </dialog>
