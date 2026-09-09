@@ -75,6 +75,7 @@
           <ul class="app-nav__list">
             <li><a class="app-nav__link" href="#vacancies" data-nav="vacancies" aria-current="page">Вакансии</a></li>
             <li><a class="app-nav__link" href="#hiring" data-nav="hiring">Найм</a></li>
+            <li><a class="app-nav__link" href="#offers" data-nav="offers">Офферы</a></li>
             <li><a class="app-nav__link" href="#journal" data-nav="journal">Журнал</a></li>
             <li><a class="app-nav__link" href="#metrics" data-nav="metrics">Метрики</a></li>
             <li><a class="app-nav__link" href="#people" data-nav="people">Люди</a></li>
@@ -238,6 +239,26 @@
               <div class="state__content">
                 <h3 class="state__title">Загружаем процессы найма</h3>
                 <p class="state__detail">Web запрашивает активные процессы у Core API.</p>
+              </div>
+            </article>
+          </section>
+
+          </div>
+
+          <div class="section-view" id="section-offers" data-section="offers" role="region" aria-labelledby="offers-title" hidden>
+          <section class="toolbar" aria-labelledby="offers-title">
+            <div>
+              <h2 id="offers-title">Офферы <span class="section-count" id="offers-count">—</span></h2>
+            </div>
+            <p class="toolbar-note">Зафиксированные условия. Accept/Decline не закрывает поиск и ничего не отправляет.</p>
+          </section>
+
+          <section id="offers-list" class="list-rows" aria-live="polite" aria-busy="true">
+            <article class="state state--loading" aria-busy="true">
+              <span class="loader state__loader" aria-hidden="true"></span>
+              <div class="state__content">
+                <h3 class="state__title">Загружаем офферы</h3>
+                <p class="state__detail">Web запрашивает офферы у Core API.</p>
               </div>
             </article>
           </section>
@@ -695,6 +716,108 @@
         <footer class="dialog__actions">
           <button class="btn btn--ghost" id="cancel-hiring-activity-complete-form" type="button">Отмена</button>
           <button class="btn btn--primary" id="submit-hiring-activity-complete-form" type="submit">Завершить</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="offer-dialog" class="dialog" aria-labelledby="offer-dialog-title">
+      <form id="offer-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">ОФФЕР · R5.0</p>
+            <h2 id="offer-dialog-title">Записать оффер</h2>
+            <p id="offer-vacancy-title" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-offer-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="hiring_process_id" type="hidden">
+          <input name="vacancy_id" type="hidden">
+          <div class="form-grid">
+            <label class="field">
+              <span class="field__label">Получен</span>
+              <input class="control" name="received_at" type="datetime-local">
+            </label>
+            <label class="field">
+              <span class="field__label">Должность в оффере</span>
+              <input class="control" name="position_title" maxlength="500">
+            </label>
+            <label class="field">
+              <span class="field__label">Компенсация</span>
+              <input class="control" name="compensation_amount" type="number" min="0" step="1">
+            </label>
+            <label class="field">
+              <span class="field__label">Валюта</span>
+              <input class="control" name="compensation_currency" maxlength="16" placeholder="RUB" value="RUB">
+            </label>
+            <label class="field">
+              <span class="field__label">База</span>
+              <select class="control control--select" name="compensation_basis">
+                <option value="unknown">Неизвестно</option>
+                <option value="gross">Gross</option>
+                <option value="net">Net</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Формат</span>
+              <input class="control" name="work_format" maxlength="255" placeholder="remote / hybrid / office">
+            </label>
+            <label class="field">
+              <span class="field__label">Локация</span>
+              <input class="control" name="location" maxlength="500">
+            </label>
+            <label class="field">
+              <span class="field__label">Дата выхода</span>
+              <input class="control" name="proposed_start_date" type="date">
+            </label>
+            <label class="field wide">
+              <span class="field__label">Бонус / переменная часть</span>
+              <textarea class="control control--textarea" name="bonus_text" rows="2" maxlength="2000"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Льготы</span>
+              <textarea class="control control--textarea" name="benefits_text" rows="2" maxlength="2000"></textarea>
+            </label>
+            <label class="field wide">
+              <span class="field__label">Прочие условия</span>
+              <textarea class="control control--textarea" name="note" rows="2" maxlength="2000"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Запись оффера не закрывает поиск и ничего не отправляет работодателю.</p>
+          <p id="offer-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-offer-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-offer-form" type="submit">Сохранить оффер</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="offer-decision-dialog" class="dialog" aria-labelledby="offer-decision-dialog-title">
+      <form id="offer-decision-form" class="dialog__form" method="dialog">
+        <header class="dialog__header">
+          <div>
+            <p class="section-number">РЕШЕНИЕ</p>
+            <h2 id="offer-decision-dialog-title">Решение по офферу</h2>
+            <p id="offer-decision-context" class="dialog-context"></p>
+          </div>
+          <button class="btn btn--ghost btn--icon" id="close-offer-decision-form" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="dialog__body">
+          <input name="offer_id" type="hidden">
+          <input name="status" type="hidden">
+          <div class="form-grid">
+            <label class="field wide">
+              <span class="field__label">Причина / заметка</span>
+              <textarea class="control control--textarea" name="decision_note" rows="3" maxlength="2000"></textarea>
+            </label>
+          </div>
+          <p class="safety-note">Решение локальное: другие процессы и search cycle не закрываются автоматически.</p>
+          <p id="offer-decision-form-error" class="field__error form-error" role="alert" hidden></p>
+        </div>
+        <footer class="dialog__actions">
+          <button class="btn btn--ghost" id="cancel-offer-decision-form" type="button">Отмена</button>
+          <button class="btn btn--primary" id="submit-offer-decision-form" type="submit">Подтвердить</button>
         </footer>
       </form>
     </dialog>

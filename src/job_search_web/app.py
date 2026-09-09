@@ -31,6 +31,8 @@ from job_search_web.schemas import (
     HiringStageTransition,
     HypothesisClose,
     HypothesisCreate,
+    OfferCreate,
+    OfferDecisionUpdate,
     PeopleConfirmRequest,
     PeopleResearchRequest,
     PersonCreate,
@@ -665,6 +667,34 @@ def create_app(
                 *gateway.update_hiring_activity(
                     activity_id, request.model_dump(mode="json", exclude_none=True)
                 )
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.get("/api/v1/offers")
+    def get_offers(request: Request) -> JSONResponse:
+        """Return offers from Core."""
+        try:
+            return proxy_response(*gateway.list_offers(list(request.query_params.multi_items())))
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.post("/api/v1/offers")
+    def post_offer(request: OfferCreate) -> JSONResponse:
+        """Record owner Offer; does not close search cycle or send messages."""
+        try:
+            return proxy_response(
+                *gateway.create_offer(request.model_dump(mode="json", exclude_none=True))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/offers/{offer_id}/decision")
+    def patch_offer_decision(offer_id: str, request: OfferDecisionUpdate) -> JSONResponse:
+        """Accept or decline Offer through Core."""
+        try:
+            return proxy_response(
+                *gateway.decide_offer(offer_id, request.model_dump(mode="json", exclude_none=True))
             )
         except CoreUnavailableError:
             return unavailable_response()

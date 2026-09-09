@@ -100,6 +100,20 @@ class CoreGateway(Protocol):
         """Update a hiring activity."""
         ...
 
+    def list_offers(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return offers from Core."""
+        ...
+
+    def create_offer(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Record one Offer through Core."""
+        ...
+
+    def decide_offer(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Accept or decline an Offer through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -277,6 +291,20 @@ class CoreClient:
     def update_hiring_activity(self, activity_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward hiring activity update."""
         return self._request("PATCH", f"/api/v1/hiring-activities/{activity_id}", json=payload)
+
+    def list_offers(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Fetch offers from Core."""
+        return self._request("GET", "/api/v1/offers", params=params)
+
+    def create_offer(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward owner-recorded Offer create."""
+        return self._request("POST", "/api/v1/offers", json=payload)
+
+    def decide_offer(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward Offer accept/decline."""
+        return self._request("PATCH", f"/api/v1/offers/{offer_id}/decision", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

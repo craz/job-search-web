@@ -160,6 +160,7 @@ class StubCore:
         self.outreach_items: list[dict[str, Any]] = []
         self.response_items: list[dict[str, Any]] = []
         self.hiring_items: list[dict[str, Any]] = []
+        self.offer_items: list[dict[str, Any]] = []
         self.metric_items: list[dict[str, Any]] = []
         self.person_items: list[dict[str, Any]] = []
         self.hypothesis_items: list[dict[str, Any]] = []
@@ -580,6 +581,105 @@ class StubCore:
             "code": "hiring_activity_not_found",
             "message": "HiringActivity does not exist",
         }
+
+    def list_offers(
+        self, params: list[tuple[str, str]] | dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        """Return synthetic offers."""
+        self._guard()
+        self.calls.append(("offer-list", params))
+        items = list(self.offer_items)
+        if params:
+            mapping = (
+                dict(params) if isinstance(params, dict) else {key: value for key, value in params}
+            )
+            vacancy_id = mapping.get("vacancy_id")
+            process_id = mapping.get("hiring_process_id")
+            status = mapping.get("status")
+            if vacancy_id:
+                items = [item for item in items if item.get("vacancy", {}).get("id") == vacancy_id]
+            if process_id:
+                items = [
+                    item for item in items if item.get("hiring_process", {}).get("id") == process_id
+                ]
+            if status:
+                items = [item for item in items if item.get("status") == status]
+        return 200, {"items": items, "total": len(items)}
+
+    def create_offer(self, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Create synthetic Offer without mutating R3/hiring status."""
+        self._guard()
+        self.calls.append(("offer-create", payload))
+        process = next(
+            (item for item in self.hiring_items if item["id"] == payload["hiring_process_id"]),
+            None,
+        )
+        if process is None:
+            return 404, {
+                "code": "hiring_process_not_found",
+                "message": "HiringProcess does not exist",
+            }
+        if any(
+            item.get("hiring_process", {}).get("id") == process["id"] for item in self.offer_items
+        ):
+            return 409, {
+                "code": "offer_already_exists",
+                "message": "HiringProcess already has an Offer",
+            }
+        created = {
+            "id": f"00000000-0000-0000-0000-0000000000o{len(self.offer_items)}",
+            "received_at": payload.get("received_at") or "2026-09-09T12:00:00Z",
+            "position_title": payload.get("position_title"),
+            "compensation_amount": payload.get("compensation_amount"),
+            "compensation_currency": (
+                str(payload["compensation_currency"]).upper()
+                if payload.get("compensation_currency")
+                else None
+            ),
+            "compensation_basis": payload.get("compensation_basis") or "unknown",
+            "work_format": payload.get("work_format"),
+            "location": payload.get("location"),
+            "bonus_text": payload.get("bonus_text"),
+            "benefits_text": payload.get("benefits_text"),
+            "proposed_start_date": payload.get("proposed_start_date"),
+            "note": payload.get("note"),
+            "status": "pending",
+            "decided_at": None,
+            "decision_note": None,
+            "created_at": "2026-09-09T12:00:00Z",
+            "updated_at": "2026-09-09T12:00:00Z",
+            "vacancy": process.get("vacancy"),
+            "hiring_process": {
+                "id": process["id"],
+                "current_stage": process.get("current_stage"),
+                "status": process.get("status"),
+            },
+        }
+        self.offer_items.insert(0, created)
+        return 201, created
+
+    def decide_offer(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Accept or decline synthetic Offer."""
+        self._guard()
+        self.calls.append(("offer-decide", (offer_id, payload)))
+        for index, item in enumerate(self.offer_items):
+            if item["id"] != offer_id:
+                continue
+            if payload.get("status") not in {"accepted", "declined"}:
+                return 400, {
+                    "code": "invalid_offer_decision",
+                    "message": "Decision must be accepted or declined",
+                }
+            updated = {
+                **item,
+                "status": payload["status"],
+                "decided_at": payload.get("decided_at") or "2026-09-09T13:00:00Z",
+                "decision_note": payload.get("decision_note"),
+                "updated_at": "2026-09-09T13:00:00Z",
+            }
+            self.offer_items[index] = updated
+            return 200, updated
+        return 404, {"code": "offer_not_found", "message": "Offer does not exist"}
 
     def list_metrics(self) -> tuple[int, Any]:
         """Return the current synthetic Daily Metric history."""

@@ -146,6 +146,31 @@ class HiringActivityUpdate(BaseModel):
     url: HttpUrl | None = None
 
 
+class OfferCreate(BaseModel):
+    """Browser-submitted Offer (R5.0)."""
+
+    hiring_process_id: UUID
+    received_at: datetime | None = None
+    position_title: str | None = Field(default=None, max_length=500)
+    compensation_amount: int | None = Field(default=None, ge=0)
+    compensation_currency: str | None = Field(default=None, max_length=16)
+    compensation_basis: str | None = Field(default=None, pattern="^(gross|net|unknown)$")
+    work_format: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=500)
+    bonus_text: str | None = Field(default=None, max_length=2000)
+    benefits_text: str | None = Field(default=None, max_length=2000)
+    proposed_start_date: date | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class OfferDecisionUpdate(BaseModel):
+    """Browser-submitted Offer accept/decline."""
+
+    status: str = Field(pattern="^(accepted|declined)$")
+    decided_at: datetime | None = None
+    decision_note: str | None = Field(default=None, max_length=2000)
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

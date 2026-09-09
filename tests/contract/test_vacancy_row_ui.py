@@ -111,6 +111,10 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "processAttentionState" in js
     assert "data-complete-hiring-process" in js
     assert "data-cancel-hiring-process" in js
+    assert "function renderOfferSection" in js
+    assert "data-record-offer" in js
+    assert "/api/v1/offers" in js
+    assert "data-accept-offer" in js
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

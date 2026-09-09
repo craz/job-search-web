@@ -42,6 +42,18 @@ const responseSubmitButton = document.querySelector("#submit-response-form");
 const responseVacancyTitle = document.querySelector("#response-vacancy-title");
 const hiringList = document.querySelector("#hiring-processes");
 const hiringCount = document.querySelector("#hiring-count");
+const offersList = document.querySelector("#offers-list");
+const offersCount = document.querySelector("#offers-count");
+const offerDialog = document.querySelector("#offer-dialog");
+const offerForm = document.querySelector("#offer-form");
+const offerFormError = document.querySelector("#offer-form-error");
+const offerSubmitButton = document.querySelector("#submit-offer-form");
+const offerVacancyTitle = document.querySelector("#offer-vacancy-title");
+const offerDecisionDialog = document.querySelector("#offer-decision-dialog");
+const offerDecisionForm = document.querySelector("#offer-decision-form");
+const offerDecisionFormError = document.querySelector("#offer-decision-form-error");
+const offerDecisionSubmitButton = document.querySelector("#submit-offer-decision-form");
+const offerDecisionContext = document.querySelector("#offer-decision-context");
 const hiringStartDialog = document.querySelector("#hiring-start-dialog");
 const hiringStartForm = document.querySelector("#hiring-start-form");
 const hiringStartFormError = document.querySelector("#hiring-start-form-error");
@@ -90,6 +102,8 @@ let outreachesByVacancyId = new Map();
 let employerResponsesByVacancyId = new Map();
 let hiringProcessByVacancyId = new Map();
 let activeHiringProcesses = [];
+let offersByVacancyId = new Map();
+let knownOffers = [];
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
@@ -97,6 +111,7 @@ let semanticFailuresByVacancyId = new Map();
 const NAV_SECTIONS = [
   "vacancies",
   "hiring",
+  "offers",
   "journal",
   "metrics",
   "people",
@@ -807,6 +822,10 @@ function renderHiringProcessSection(item) {
     </div>`;
   }
   const stageLabel = hiringStageLabels[process.current_stage] || process.current_stage;
+  const offerButton =
+    !offersByVacancyId.get(item.id)
+      ? `<button class="btn btn--secondary btn--sm" data-record-offer type="button">Записать оффер</button>`
+      : "";
   if (process.status !== "active") {
     const statusLabel = process.status === "completed" ? "Завершён" : "Отменён";
     return `<div class="hiring-process" data-hiring-vacancy="${escapeHtml(item.id)}" data-hiring-process="${escapeHtml(process.id)}">
@@ -814,6 +833,7 @@ function renderHiringProcessSection(item) {
       <p class="list-row__meta">${escapeHtml(statusLabel)} · этап · ${escapeHtml(stageLabel)} · с ${escapeHtml(formatDate(process.started_at))}</p>
       <div class="action-plan__links">
         <button class="btn btn--secondary btn--sm" data-start-hiring type="button">Начать новый процесс</button>
+        ${offerButton}
       </div>
       <div class="row-detail__section">
         <p class="row-detail__label">Активности</p>
@@ -831,6 +851,7 @@ function renderHiringProcessSection(item) {
     <div class="action-plan__links">
       <button class="btn btn--secondary btn--sm" data-transition-hiring type="button">Перейти к этапу</button>
       <button class="btn btn--secondary btn--sm" data-add-hiring-activity type="button">Добавить активность</button>
+      ${offerButton}
       <button class="btn btn--ghost btn--sm" data-complete-hiring-process type="button">Завершить процесс</button>
       <button class="btn btn--ghost btn--sm" data-cancel-hiring-process type="button">Отменить процесс</button>
     </div>
@@ -842,6 +863,57 @@ function renderHiringProcessSection(item) {
       <p class="row-detail__label">История этапов</p>
       ${renderHiringStageHistory(process.stage_events)}
     </div>
+  </div>`;
+}
+
+const offerStatusLabels = {
+  pending: "Ожидает решения",
+  accepted: "Принят",
+  declined: "Отклонён",
+};
+
+const compensationBasisLabels = {
+  gross: "gross",
+  net: "net",
+  unknown: "неизвестно",
+};
+
+function formatCompensation(offer) {
+  if (offer?.compensation_amount == null) return "Сумма не указана";
+  const currency = offer.compensation_currency || "";
+  const basis = compensationBasisLabels[offer.compensation_basis] || offer.compensation_basis || "неизвестно";
+  return `${offer.compensation_amount} ${currency} (${basis})`.trim();
+}
+
+function renderOfferSection(item) {
+  const offer = offersByVacancyId.get(item.id);
+  if (!offer) {
+    return `<div class="offer-section" data-offer-vacancy="${escapeHtml(item.id)}">
+      <p class="owner-decision__label">Оффер</p>
+      <p class="list-row__meta">Оффер ещё не записан. Кнопка «Записать оффер» — в блоке процесса найма.</p>
+    </div>`;
+  }
+  const status = offerStatusLabels[offer.status] || offer.status;
+  const actions =
+    offer.status === "pending"
+      ? `<div class="action-plan__links">
+          <button class="btn btn--secondary btn--sm" data-accept-offer="${escapeHtml(offer.id)}" type="button">Принять</button>
+          <button class="btn btn--ghost btn--sm" data-decline-offer="${escapeHtml(offer.id)}" type="button">Отклонить</button>
+        </div>`
+      : `<p class="list-row__meta">Решение · ${escapeHtml(formatDate(offer.decided_at))}${
+          offer.decision_note ? ` · ${escapeHtml(excerpt(offer.decision_note, 80))}` : ""
+        }</p>`;
+  return `<div class="offer-section" data-offer-vacancy="${escapeHtml(item.id)}" data-offer-id="${escapeHtml(offer.id)}">
+    <p class="owner-decision__label">Оффер</p>
+    <p class="list-row__meta">${escapeHtml(status)} · получен ${escapeHtml(formatDate(offer.received_at))}</p>
+    <p class="list-row__meta">${escapeHtml(formatCompensation(offer))}</p>
+    <p class="list-row__meta">${escapeHtml(offer.work_format || "формат н/д")} · ${escapeHtml(offer.location || "локация н/д")}${
+      offer.proposed_start_date ? ` · выход ${escapeHtml(offer.proposed_start_date)}` : ""
+    }</p>
+    ${offer.bonus_text ? `<p class="list-row__meta">Бонус · ${escapeHtml(excerpt(offer.bonus_text, 100))}</p>` : ""}
+    ${offer.benefits_text ? `<p class="list-row__meta">Льготы · ${escapeHtml(excerpt(offer.benefits_text, 100))}</p>` : ""}
+    ${offer.note ? `<p class="list-row__meta">${escapeHtml(excerpt(offer.note, 120))}</p>` : ""}
+    ${actions}
   </div>`;
 }
 
@@ -1100,6 +1172,7 @@ function vacancyRow(item) {
     renderDirectOsintSection(item),
     renderEmployerResponseSection(item),
     renderHiringProcessSection(item),
+    renderOfferSection(item),
     assessmentDetail,
     `<div class="row-detail__section">
       <p class="row-detail__label">Материал вакансии</p>
@@ -1527,6 +1600,56 @@ async function loadHiringProcesses() {
     }
   } finally {
     if (hiringList) hiringList.setAttribute("aria-busy", "false");
+  }
+}
+
+function offerRow(item) {
+  const company = item.vacancy?.company?.name || "—";
+  const status = offerStatusLabels[item.status] || item.status;
+  const pending = item.status === "pending" ? " · требует решения" : "";
+  return `<article class="list-row" data-offer-id="${escapeHtml(item.id)}">
+    <div class="list-row__primary">
+      <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
+      <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(status)}${escapeHtml(pending)}</p>
+      <p class="list-row__meta">${escapeHtml(formatCompensation(item))}</p>
+      <p class="list-row__meta">${escapeHtml(item.work_format || "формат н/д")} · ${escapeHtml(item.location || "локация н/д")}${
+        item.proposed_start_date ? ` · выход ${escapeHtml(item.proposed_start_date)}` : ""
+      }</p>
+    </div>
+  </article>`;
+}
+
+async function loadOffers() {
+  if (offersList) offersList.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/offers");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить офферы");
+    knownOffers = payload.items || [];
+    offersByVacancyId = new Map();
+    for (const item of knownOffers) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      if (!offersByVacancyId.has(vacancyId)) offersByVacancyId.set(vacancyId, item);
+    }
+    if (offersCount) setSectionCount(offersCount, payload.total);
+    if (offersList) {
+      if (payload.total) offersList.innerHTML = knownOffers.map(offerRow).join("");
+      else {
+        offersList.innerHTML = "";
+        renderEmptyState(offersList, "Офферов нет", "Запишите оффер из карточки вакансии с процессом найма.");
+      }
+    }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  } catch (error) {
+    knownOffers = [];
+    offersByVacancyId = new Map();
+    if (offersCount) setSectionCount(offersCount, null);
+    if (offersList) {
+      renderErrorState(offersList, "Не удалось загрузить офферы", error.message, loadOffers);
+    }
+  } finally {
+    if (offersList) offersList.setAttribute("aria-busy", "false");
   }
 }
 
@@ -2467,6 +2590,59 @@ grid.addEventListener("click", async (event) => {
     }
     return;
   }
+  const recordOfferButton = event.target.closest("[data-record-offer]");
+  if (recordOfferButton) {
+    const card = recordOfferButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    const vacancy = knownVacancies.find((item) => item.id === vacancyId);
+    const process = hiringProcessByVacancyId.get(vacancyId);
+    if (!vacancy || !process || !offerForm) return;
+    offerForm.reset();
+    offerForm.elements.hiring_process_id.value = process.id;
+    offerForm.elements.vacancy_id.value = vacancyId;
+    offerForm.elements.compensation_currency.value = "RUB";
+    offerForm.elements.compensation_basis.value = "unknown";
+    const now = new Date();
+    offerForm.elements.received_at.value = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000,
+    )
+      .toISOString()
+      .slice(0, 16);
+    if (offerVacancyTitle) offerVacancyTitle.textContent = vacancy.title;
+    offerFormError.hidden = true;
+    offerDialog.showModal();
+    return;
+  }
+  const acceptOfferButton = event.target.closest("[data-accept-offer]");
+  if (acceptOfferButton) {
+    const offerId = acceptOfferButton.getAttribute("data-accept-offer");
+    const offer = knownOffers.find((item) => item.id === offerId);
+    if (!offer || !offerDecisionForm) return;
+    offerDecisionForm.reset();
+    offerDecisionForm.elements.offer_id.value = offerId;
+    offerDecisionForm.elements.status.value = "accepted";
+    if (offerDecisionContext) {
+      offerDecisionContext.textContent = `${offer.vacancy?.title || "Оффер"} · ${formatCompensation(offer)}`;
+    }
+    offerDecisionFormError.hidden = true;
+    offerDecisionDialog.showModal();
+    return;
+  }
+  const declineOfferButton = event.target.closest("[data-decline-offer]");
+  if (declineOfferButton) {
+    const offerId = declineOfferButton.getAttribute("data-decline-offer");
+    const offer = knownOffers.find((item) => item.id === offerId);
+    if (!offer || !offerDecisionForm) return;
+    offerDecisionForm.reset();
+    offerDecisionForm.elements.offer_id.value = offerId;
+    offerDecisionForm.elements.status.value = "declined";
+    if (offerDecisionContext) {
+      offerDecisionContext.textContent = `${offer.vacancy?.title || "Оффер"} · ${formatCompensation(offer)}`;
+    }
+    offerDecisionFormError.hidden = true;
+    offerDecisionDialog.showModal();
+    return;
+  }
   const completeHiringActivityButton = event.target.closest("[data-complete-hiring-activity]");
   if (completeHiringActivityButton) {
     const card = completeHiringActivityButton.closest("[data-id]");
@@ -2992,6 +3168,84 @@ if (hiringActivityCompleteDialog && hiringActivityCompleteForm) {
       hiringActivityCompleteFormError.hidden = false;
     } finally {
       setButtonProcessing(hiringActivityCompleteSubmitButton, false, "Сохраняем…", "Завершить");
+    }
+  });
+}
+
+if (offerDialog && offerForm) {
+  document.querySelector("#close-offer-form")?.addEventListener("click", () => offerDialog.close());
+  document.querySelector("#cancel-offer-form")?.addEventListener("click", () => offerDialog.close());
+  offerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    offerFormError.hidden = true;
+    setButtonProcessing(offerSubmitButton, true, "Сохраняем…", "Сохранить оффер");
+    const values = Object.fromEntries(new FormData(offerForm));
+    const payload = { hiring_process_id: values.hiring_process_id };
+    for (const key of [
+      "position_title",
+      "compensation_currency",
+      "compensation_basis",
+      "work_format",
+      "location",
+      "bonus_text",
+      "benefits_text",
+      "note",
+      "proposed_start_date",
+    ]) {
+      if (values[key]) payload[key] = values[key];
+    }
+    if (values.compensation_amount) payload.compensation_amount = Number(values.compensation_amount);
+    if (values.received_at) payload.received_at = new Date(values.received_at).toISOString();
+    try {
+      const response = await fetch("/api/v1/offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Оффер не сохранён");
+      offerDialog.close();
+      showNotice("Оффер записан");
+      await Promise.all([loadOffers(), loadVacancies(), loadHiringProcesses()]);
+    } catch (error) {
+      offerFormError.textContent = error.message;
+      offerFormError.hidden = false;
+    } finally {
+      setButtonProcessing(offerSubmitButton, false, "Сохраняем…", "Сохранить оффер");
+    }
+  });
+}
+
+if (offerDecisionDialog && offerDecisionForm) {
+  document.querySelector("#close-offer-decision-form")?.addEventListener("click", () =>
+    offerDecisionDialog.close(),
+  );
+  document.querySelector("#cancel-offer-decision-form")?.addEventListener("click", () =>
+    offerDecisionDialog.close(),
+  );
+  offerDecisionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    offerDecisionFormError.hidden = true;
+    setButtonProcessing(offerDecisionSubmitButton, true, "Сохраняем…", "Подтвердить");
+    const values = Object.fromEntries(new FormData(offerDecisionForm));
+    const payload = { status: values.status };
+    if (values.decision_note) payload.decision_note = values.decision_note;
+    try {
+      const response = await fetch(`/api/v1/offers/${values.offer_id}/decision`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Решение не сохранено");
+      offerDecisionDialog.close();
+      showNotice(payload.status === "accepted" ? "Оффер принят" : "Оффер отклонён");
+      await Promise.all([loadOffers(), loadVacancies()]);
+    } catch (error) {
+      offerDecisionFormError.textContent = error.message;
+      offerDecisionFormError.hidden = false;
+    } finally {
+      setButtonProcessing(offerDecisionSubmitButton, false, "Сохраняем…", "Подтвердить");
     }
   });
 }
@@ -3902,6 +4156,7 @@ void (async () => {
   await loadDirectOutreaches();
   await loadEmployerResponses();
   await loadHiringProcesses();
+  await loadOffers();
   await loadVacancies();
 })();
 loadMetrics();
