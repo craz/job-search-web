@@ -1603,6 +1603,8 @@ class StubScoring:
     def score_semantic_v1(self, vacancy_id: str) -> tuple[int, Any]:
         self._raise_if_unavailable()
         self.calls.append(("score_semantic_v1", vacancy_id))
+        if getattr(self, "score_conflict", None):
+            return 409, dict(self.score_conflict)
         job_id = "00000000-0000-4000-8000-0000000000aa"
         self.jobs[job_id] = {
             "job_id": job_id,

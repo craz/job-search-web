@@ -120,3 +120,39 @@ def test_get_score_job_proxies_scoring() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "queued"
+
+
+def test_score_already_queued_flattens_detail_for_browser() -> None:
+    """Duplicate enqueue must surface flat code/message (not only FastAPI detail)."""
+    core = StubCore()
+    core.items[0]["source_status"] = "active"
+    scoring = StubScoring()
+    scoring.score_conflict = {
+        "detail": {"code": "already_queued", "message": "active_queue_duplicate"},
+    }
+    client = WebClient(core, scoring=scoring)
+
+    response = client.request("POST", f"/api/v1/vacancies/{VACANCY_ID}/score")
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "already_queued"
+    assert body["message"] == "active_queue_duplicate"
+    assert "detail" not in body
+    assert ("score_semantic_v1", VACANCY_ID) in scoring.calls
+
+
+def test_browser_facing_error_payload_helper() -> None:
+    from job_search_web.app import browser_facing_error_payload
+
+    assert browser_facing_error_payload({"code": "x", "message": "y"}) == {
+        "code": "x",
+        "message": "y",
+    }
+    assert browser_facing_error_payload(
+        {"detail": {"code": "already_queued", "message": "active_queue_duplicate"}}
+    ) == {"code": "already_queued", "message": "active_queue_duplicate"}
+    assert browser_facing_error_payload({"detail": "boom"}) == {
+        "code": "error",
+        "message": "boom",
+    }

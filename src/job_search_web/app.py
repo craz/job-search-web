@@ -69,6 +69,29 @@ def proxy_response(status_code: int, payload: Any) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=payload)
 
 
+def browser_facing_error_payload(payload: Any) -> Any:
+    """Flatten FastAPI-style ``{detail: {code, message}}`` for browser handlers."""
+    if not isinstance(payload, dict):
+        return payload
+    if payload.get("code") is not None or payload.get("message") is not None:
+        return payload
+    detail = payload.get("detail")
+    if isinstance(detail, dict):
+        code = detail.get("code")
+        message = detail.get("message")
+        if code is None and message is None:
+            return payload
+        flat = {key: value for key, value in detail.items() if key not in {"code", "message"}}
+        if code is not None:
+            flat["code"] = code
+        if message is not None:
+            flat["message"] = message
+        return flat
+    if isinstance(detail, str) and detail.strip():
+        return {"code": "error", "message": detail.strip()}
+    return payload
+
+
 def scoring_unavailable_response() -> JSONResponse:
     """Return a stable browser-facing error when Scoring cannot be reached."""
     return JSONResponse(
@@ -1088,7 +1111,10 @@ def create_app(
                 return _source_status_unknown_response()
 
         try:
-            return proxy_response(*scoring_gateway.score_semantic_v1(vacancy_id))
+            status_code, payload = scoring_gateway.score_semantic_v1(vacancy_id)
+            if status_code >= 400:
+                payload = browser_facing_error_payload(payload)
+            return proxy_response(status_code, payload)
         except ScoringUnavailableError:
             return scoring_unavailable_response()
 
@@ -1096,7 +1122,10 @@ def create_app(
     def get_score_job(job_id: str) -> JSONResponse:
         """Proxy Scoring job status for light UI polling after queue accept."""
         try:
-            return proxy_response(*scoring_gateway.get_job(job_id))
+            status_code, payload = scoring_gateway.get_job(job_id)
+            if status_code >= 400:
+                payload = browser_facing_error_payload(payload)
+            return proxy_response(status_code, payload)
         except ScoringUnavailableError:
             return scoring_unavailable_response()
 

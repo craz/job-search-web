@@ -51,8 +51,10 @@ def test_score_action_mapping_strings_present() -> None:
     assert 'data-score type="button">Оценить</button>' in js
     assert 'data-score-retry="1" type="button">Повторить оценку</button>' in js
     assert 'data-score-state="archived">В архиве</span>' in js
+    assert 'data-score-pending="1"' in js
     assert "Оценивается…" in js
     assert "В очереди" in js
+    assert "pendingScoreByVacancyId" in js
     assert "/api/v1/vacancies/${vacancyId}/score" in js
     assert "/api/v1/semantic-failures" in js
     assert "vacancy_archived" in js
@@ -84,6 +86,8 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert 'id="vacancy-filter-scoring"' in html
     assert 'id="vacancy-filter-owner"' in html
     assert 'id="vacancy-sort"' in html
+    assert 'value="newest" selected' in html
+    assert 'let vacancyListSort = "newest"' in js
     assert "По приоритету" in html
     assert "Сначала новые" in html
     assert "Сначала старые" in html
