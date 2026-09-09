@@ -14,6 +14,8 @@ class HhUnavailableError(Exception):
 class HhGateway(Protocol):
     def connection_status(self) -> tuple[int, Any]: ...
 
+    def health_ready(self) -> tuple[int, Any]: ...
+
     def account_status(self) -> tuple[int, Any]: ...
 
     def resumes_list(self) -> tuple[int, Any]: ...
@@ -58,6 +60,10 @@ class HhClient:
 
     def connection_status(self) -> tuple[int, Any]:
         return self._request("GET", "/api/v1/connection")
+
+    def health_ready(self) -> tuple[int, Any]:
+        """HH readiness including browser egress CONNECT probe."""
+        return self._request("GET", "/health/ready", timeout=max(self.timeout_seconds, 10.0))
 
     def account_status(self) -> tuple[int, Any]:
         return self._request("GET", "/api/v1/account")

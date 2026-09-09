@@ -31,3 +31,11 @@ def test_open_login_waits_for_ready_and_maps_infra_failure() -> None:
     assert "loadHhConnection()" in js
     # Must not open dead noVNC via raw href before open-login succeeds.
     assert 'href="http://127.0.0.1:6080/vnc.html' not in html
+
+
+def test_automation_distinguishes_live_egress_from_last_cycle_error() -> None:
+    js = APP_JS.read_text(encoding="utf-8")
+    assert "/api/v1/hh/health" in js
+    assert "Последняя ошибка цикла:" in js
+    assert "Сейчас: локальный сетевой выход HeadHunter недоступен" in js
+    assert "liveEgressBroken" in js

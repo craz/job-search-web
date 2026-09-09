@@ -511,6 +511,28 @@ def test_hh_connection_status_is_proxied() -> None:
     assert hh.calls == [("connection", None)]
 
 
+def test_hh_health_ready_is_proxied() -> None:
+    hh = StubHh(status="connected")
+    hh.health_result = (
+        503,
+        {
+            "status": "degraded",
+            "code": "browser_proxy_unavailable",
+            "api": "ok",
+            "browser_egress": "unavailable",
+            "auth_session": "present",
+            "egress": {"proxy_connect_ok": False, "proxy_reachable": True},
+        },
+    )
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("GET", "/api/v1/hh/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["browser_egress"] == "unavailable"
+    assert body["code"] == "browser_proxy_unavailable"
+    assert hh.calls == [("health", None)]
+
+
 def test_hh_unavailable_is_explicit() -> None:
     """HH transport failure is unavailable, not unauthorized."""
     client = WebClient(StubCore(), hh=StubHh(unavailable=True))

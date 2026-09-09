@@ -194,6 +194,24 @@ def create_app(
                 },
             )
 
+    @application.get("/api/v1/hh/health")
+    def get_hh_health() -> JSONResponse:
+        """Proxy HH readiness (API + browser egress + auth_session marker)."""
+        try:
+            return proxy_response(*hh_gateway.health_ready())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "code": "hh_unavailable",
+                    "message": "HH health API is unavailable",
+                    "status": "unavailable",
+                    "api": "unavailable",
+                    "browser_egress": "unavailable",
+                    "auth_session": "unknown",
+                },
+            )
+
     @application.get("/api/v1/hh/account")
     def get_hh_account() -> JSONResponse:
         """Return normalized HH account/profile without raw /me or secrets."""

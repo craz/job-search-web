@@ -1085,6 +1085,28 @@ class StubHh:
         self.calls.append(("connection", None))
         return 200, self._payload()
 
+    def health_ready(self) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("health", None))
+        if getattr(self, "health_result", None) is not None:
+            return self.health_result
+        return 200, {
+            "status": "ok",
+            "component": "job-search-hh",
+            "api": "ok",
+            "browser_egress": "ok",
+            "auth_session": "present" if self.status == "connected" else "absent",
+            "egress": {
+                "proxy_url": "http://hh-egress:3128",
+                "misconfigured_loopback": False,
+                "proxy_reachable": True,
+                "proxy_connect_ok": True,
+            },
+        }
+
     def account_status(self) -> tuple[int, Any]:
         if self.unavailable:
             from job_search_web.hh_client import HhUnavailableError

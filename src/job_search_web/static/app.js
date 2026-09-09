@@ -2239,7 +2239,7 @@ function formatAutomationTime(value) {
   }
 }
 
-function renderAutomationStatus(payload) {
+function renderAutomationStatus(payload, hhHealth = null) {
   const statusLine = document.querySelector("#automation-status-line");
   const metaLine = document.querySelector("#automation-meta-line");
   const errorLine = document.querySelector("#automation-error-line");
@@ -2265,9 +2265,18 @@ function renderAutomationStatus(payload) {
   ]
     .filter(Boolean)
     .join(" · ");
-  if (payload?.last_error) {
+  const liveEgressBroken =
+    hhHealth &&
+    (hhHealth.browser_egress === "unavailable" ||
+      hhHealth.code === "browser_proxy_unavailable" ||
+      (hhHealth.egress && hhHealth.egress.proxy_connect_ok === false));
+  if (liveEgressBroken) {
     errorLine.hidden = false;
-    errorLine.textContent = `Ошибка: ${payload.last_error}`;
+    errorLine.textContent =
+      "Сейчас: локальный сетевой выход HeadHunter недоступен. Восстановите стек командой make boot (или make up).";
+  } else if (payload?.last_error) {
+    errorLine.hidden = false;
+    errorLine.textContent = `Последняя ошибка цикла: ${payload.last_error}`;
   } else {
     errorLine.hidden = true;
     errorLine.textContent = "";
@@ -2277,24 +2286,37 @@ function renderAutomationStatus(payload) {
 }
 
 async function loadAutomationStatus() {
+  let hhHealth = null;
+  try {
+    const hhResponse = await fetch("/api/v1/hh/health");
+    hhHealth = await hhResponse.json();
+  } catch (_error) {
+    hhHealth = { browser_egress: "unavailable", code: "hh_unavailable" };
+  }
   try {
     const response = await fetch("/api/v1/automation/status");
     const payload = await response.json();
     if (!response.ok) {
-      renderAutomationStatus({
-        enabled: false,
-        last_status: "unavailable",
-        last_error: payload.message || payload.code || "unavailable",
-      });
+      renderAutomationStatus(
+        {
+          enabled: false,
+          last_status: "unavailable",
+          last_error: payload.message || payload.code || "unavailable",
+        },
+        hhHealth
+      );
       return;
     }
-    renderAutomationStatus(payload);
+    renderAutomationStatus(payload, hhHealth);
   } catch (error) {
-    renderAutomationStatus({
-      enabled: false,
-      last_status: "unavailable",
-      last_error: error.message || "unavailable",
-    });
+    renderAutomationStatus(
+      {
+        enabled: false,
+        last_status: "unavailable",
+        last_error: error.message || "unavailable",
+      },
+      hhHealth
+    );
   }
 }
 
@@ -3924,7 +3946,7 @@ function hhLoginFailureMessage(payload) {
     return "Не удалось запустить окно входа HeadHunter";
   }
   if (code === "browser_proxy_unavailable") {
-    return "Не работает локальный сетевой выход HeadHunter. Перезапустите Job Search командой make up.";
+    return "Не работает локальный сетевой выход HeadHunter. Восстановите стек командой make boot (или make up).";
   }
   return (payload && (payload.message || payload.code)) || "Не удалось открыть вход";
 }
@@ -4289,7 +4311,7 @@ function renderHhResumes(payload) {
     stopHhResumesPoll();
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent =
-      "Не работает локальный сетевой выход HeadHunter. Перезапустите Job Search штатной командой make up.";
+      "Не работает локальный сетевой выход HeadHunter. Восстановите стек командой make boot (или make up).";
     void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
