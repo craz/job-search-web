@@ -12,6 +12,7 @@ def test_web_maps_local_egress_recovery_message() -> None:
     js = APP_JS.read_text(encoding="utf-8")
     assert 'kind === "local_egress_unavailable"' in js
     assert 'code === "browser_proxy_unavailable"' in js
-    assert "Не работает локальный сетевой выход HeadHunter" in js
-    assert "make boot" in js
-    assert "make up" in js
+    assert "Сетевой выход HeadHunter сейчас недоступен" in js
+    # Owner-facing copy must not instruct manual stack repair commands.
+    assert "Восстановите стек" not in js
+    assert "restart the workspace with make up" not in js

@@ -652,7 +652,9 @@ button { cursor: pointer; }
 
 .automation-panel__hint,
 .automation-panel__status,
-.automation-panel__meta {
+.automation-panel__health,
+.automation-panel__meta,
+.automation-panel__history {
   margin: 0 0 var(--space-1);
   font-size: var(--font-size-secondary);
   line-height: 1.45;
@@ -663,6 +665,12 @@ button { cursor: pointer; }
   margin: 0 0 var(--space-2);
   font-size: var(--font-size-secondary);
   color: var(--color-danger, #b42318);
+}
+
+.automation-panel__history {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted, var(--color-text-secondary));
+  opacity: 0.9;
 }
 
 .automation-panel__actions {

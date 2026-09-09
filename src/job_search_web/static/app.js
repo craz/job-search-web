@@ -2239,16 +2239,61 @@ function formatAutomationTime(value) {
   }
 }
 
+function isLiveHhEgressBroken(hhHealth) {
+  if (!hhHealth) return false;
+  return (
+    hhHealth.browser_egress === "unavailable" ||
+    hhHealth.code === "browser_proxy_unavailable" ||
+    (hhHealth.egress && hhHealth.egress.proxy_connect_ok === false)
+  );
+}
+
+function isLiveHhEgressOk(hhHealth) {
+  if (!hhHealth) return false;
+  if (isLiveHhEgressBroken(hhHealth)) return false;
+  return (
+    hhHealth.browser_egress === "ok" ||
+    (hhHealth.egress && hhHealth.egress.proxy_connect_ok === true) ||
+    hhHealth.status === "ok"
+  );
+}
+
+function humanizeAutomationCycleError(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const lower = text.toLowerCase();
+  if (lower.includes("browser_proxy_unavailable") || lower.includes("browser egress")) {
+    return "сетевой выход HeadHunter был недоступен";
+  }
+  // Drop internal operator runbook phrases from any historical payload.
+  return text
+    .replace(/;\s*restart the workspace with make\s+\w+\.?/gi, "")
+    .replace(/\bmake\s+(?:boot|up|restart)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function renderAutomationStatus(payload, hhHealth = null) {
   const statusLine = document.querySelector("#automation-status-line");
+  const healthLine = document.querySelector("#automation-health-line");
   const metaLine = document.querySelector("#automation-meta-line");
   const errorLine = document.querySelector("#automation-error-line");
+  const historyLine = document.querySelector("#automation-history-line");
   const toggle = document.querySelector("#automation-toggle");
   if (!statusLine || !metaLine || !errorLine || !toggle) return;
   const enabled = Boolean(payload?.enabled);
   const running = Boolean(payload?.running);
   const lastStatus = payload?.last_status || "never_run";
-  statusLine.textContent = `Автоматизация: ${enabled ? "ВКЛ" : "ВЫКЛ"}${running ? " · выполняется" : ""} · ${lastStatus}`;
+  statusLine.textContent = `Автоматизация: ${enabled ? "ВКЛ" : "ВЫКЛ"}${running ? " · выполняется" : ""}`;
+  if (healthLine) {
+    if (isLiveHhEgressBroken(hhHealth)) {
+      healthLine.textContent = "Сетевой выход HeadHunter: недоступен";
+    } else if (isLiveHhEgressOk(hhHealth)) {
+      healthLine.textContent = "Сетевой выход HeadHunter: доступен";
+    } else {
+      healthLine.textContent = "Сетевой выход HeadHunter: не проверен";
+    }
+  }
   const cycle = payload?.last_cycle || {};
   const counts = [
     cycle.created != null ? `new ${cycle.created}` : null,
@@ -2258,28 +2303,38 @@ function renderAutomationStatus(payload, hhHealth = null) {
   ]
     .filter(Boolean)
     .join(" · ");
+  const lastAt = formatAutomationTime(payload?.last_finished_at || payload?.last_started_at);
   metaLine.textContent = [
-    `Последний: ${formatAutomationTime(payload?.last_finished_at || payload?.last_started_at)}`,
+    `Последний цикл: ${lastAt}`,
+    `результат: ${lastStatus}`,
     enabled ? `Следующий: ${formatAutomationTime(payload?.next_run_at)}` : null,
     counts || null,
   ]
     .filter(Boolean)
     .join(" · ");
-  const liveEgressBroken =
-    hhHealth &&
-    (hhHealth.browser_egress === "unavailable" ||
-      hhHealth.code === "browser_proxy_unavailable" ||
-      (hhHealth.egress && hhHealth.egress.proxy_connect_ok === false));
+
+  const liveEgressBroken = isLiveHhEgressBroken(hhHealth);
   if (liveEgressBroken) {
     errorLine.hidden = false;
     errorLine.textContent =
-      "Сейчас: локальный сетевой выход HeadHunter недоступен. Восстановите стек командой make boot (или make up).";
-  } else if (payload?.last_error) {
-    errorLine.hidden = false;
-    errorLine.textContent = `Последняя ошибка цикла: ${payload.last_error}`;
+      "Сейчас: сетевой выход HeadHunter недоступен. Повторите позже — это текущая инфраструктурная проблема, не история цикла.";
   } else {
     errorLine.hidden = true;
     errorLine.textContent = "";
+  }
+
+  if (historyLine) {
+    const historical = humanizeAutomationCycleError(payload?.last_error);
+    if (historical && lastStatus === "error") {
+      historyLine.hidden = false;
+      historyLine.textContent = `Последний цикл завершился с ошибкой (${lastAt}): ${historical}`;
+    } else if (historical) {
+      historyLine.hidden = false;
+      historyLine.textContent = `История цикла (${lastAt}): ${historical}`;
+    } else {
+      historyLine.hidden = true;
+      historyLine.textContent = "";
+    }
   }
   toggle.textContent = enabled ? "Выключить" : "Включить";
   toggle.dataset.enabled = enabled ? "1" : "0";
@@ -2336,7 +2391,7 @@ async function toggleAutomation() {
       showNotice(payload.message || "Не удалось переключить автоматизацию", "warning");
       return;
     }
-    renderAutomationStatus(payload);
+    await loadAutomationStatus();
     showNotice(next ? "Автоматизация включена" : "Автоматизация выключена");
   } catch (error) {
     showNotice(error.message || "Не удалось переключить автоматизацию", "warning");
@@ -2373,7 +2428,7 @@ async function runAutomationNow() {
     showNotice(
       `Цикл завершён: enqueued ${cycle.scoring_enqueued ?? 0}, new ${cycle.created ?? 0}, changed ${cycle.updated ?? 0}`,
     );
-    renderAutomationStatus(payload.state || payload);
+    await loadAutomationStatus();
     await loadVacancies();
   } catch (error) {
     showNotice(error.message || "Цикл не выполнен", "warning");
@@ -3950,7 +4005,7 @@ function hhLoginFailureMessage(payload) {
     return "Не удалось запустить окно входа HeadHunter";
   }
   if (code === "browser_proxy_unavailable") {
-    return "Не работает локальный сетевой выход HeadHunter. Восстановите стек командой make boot (или make up).";
+    return "Сетевой выход HeadHunter сейчас недоступен. Повторите позже.";
   }
   return (payload && (payload.message || payload.code)) || "Не удалось открыть вход";
 }
@@ -4329,7 +4384,7 @@ function renderHhResumes(payload) {
     stopHhResumesPoll();
     setHhResumesActions({ open: false, confirm: false, novncUrl: "" });
     hhResumesStatus.textContent =
-      "Не работает локальный сетевой выход HeadHunter. Восстановите стек командой make boot (или make up).";
+      "Сетевой выход HeadHunter сейчас недоступен. Повторите позже.";
     void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }

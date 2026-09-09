@@ -55,7 +55,16 @@ def test_open_login_waits_for_ready_and_maps_infra_failure() -> None:
 
 def test_automation_distinguishes_live_egress_from_last_cycle_error() -> None:
     js = APP_JS.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
     assert "/api/v1/hh/health" in js
-    assert "Последняя ошибка цикла:" in js
-    assert "Сейчас: локальный сетевой выход HeadHunter недоступен" in js
-    assert "liveEgressBroken" in js
+    assert 'id="automation-health-line"' in html
+    assert 'id="automation-history-line"' in html
+    assert "Сетевой выход HeadHunter: доступен" in js
+    assert "Сетевой выход HeadHunter: недоступен" in js
+    assert "Последний цикл завершился с ошибкой" in js
+    assert "humanizeAutomationCycleError" in js
+    assert "isLiveHhEgressBroken" in js
+    # Historical cycle errors must not reuse the current red infrastructure line.
+    assert "Последняя ошибка цикла:" not in js
+    assert "Восстановите стек" not in js
+    assert "restart the workspace with make up" not in js
