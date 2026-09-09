@@ -1113,6 +1113,17 @@ button { cursor: pointer; }
 
 .vacancy-list .list-row-group--vacancy .list-row {
   transition: background 0.12s ease;
+  cursor: pointer;
+}
+
+.vacancy-list .list-row-group--vacancy .list-row__actions,
+.vacancy-list .list-row-group--vacancy .list-row__control {
+  cursor: auto;
+}
+
+.vacancy-list .list-row-group--vacancy .list-row__actions a,
+.vacancy-list .list-row-group--vacancy .list-row__actions button {
+  cursor: pointer;
 }
 
 .vacancy-list .list-row-group--vacancy:hover .list-row {

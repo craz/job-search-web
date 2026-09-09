@@ -1961,7 +1961,27 @@ function renderVacancyPagination() {
   if (size && String(size.value) !== String(limit)) size.value = String(limit);
 }
 
+function snapshotOpenVacancyDetails() {
+  return new Set(
+    [...document.querySelectorAll(".list-row-group--vacancy details.row-detail[open]")]
+      .map((node) => node.closest("[data-id]")?.dataset?.id)
+      .filter(Boolean),
+  );
+}
+
+function restoreOpenVacancyDetails(openIds) {
+  if (!openIds || openIds.size === 0) return;
+  for (const id of openIds) {
+    const details = document.querySelector(
+      `.list-row-group--vacancy[data-id="${CSS.escape(id)}"] details.row-detail`,
+    );
+    if (details) details.open = true;
+  }
+}
+
 function renderVacancyList(items) {
+  const openIds = snapshotOpenVacancyDetails();
+  const scrollY = window.scrollY;
   setSectionCount(count, vacancyPage.total);
   grid.innerHTML = items.length ? items.map(vacancyRow).join("") : "";
   renderVacancyPagination();
@@ -1982,6 +2002,8 @@ function renderVacancyList(items) {
     const nav = document.querySelector("#vacancy-pagination");
     if (nav) nav.hidden = true;
   }
+  restoreOpenVacancyDetails(openIds);
+  window.scrollTo(0, scrollY);
 }
 
 function compareVacanciesByFirstSeen(a, b, ascending) {
@@ -2116,6 +2138,8 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
 
 async function loadVacancies({ resetOffset = false } = {}) {
   if (resetOffset) vacancyPage.offset = 0;
+  const openIds = snapshotOpenVacancyDetails();
+  const scrollY = window.scrollY;
   grid.setAttribute("aria-busy", "true");
   if (!vacancySearchRunning) {
     renderLoadingState(grid, "Загружаем вакансии", "Web запрашивает страницу очереди у Core API.");
@@ -2133,6 +2157,8 @@ async function loadVacancies({ resetOffset = false } = {}) {
     vacancyPage.offset = Number(payload.offset || 0);
     assessmentsByVacancyId = indexAssessmentsFromVacancies(knownVacancies);
     renderVacancyList(knownVacancies);
+    restoreOpenVacancyDetails(openIds);
+    window.scrollTo(0, scrollY);
     void enrichVacancyBoardSecondary();
   } catch (error) {
     setSectionCount(count, null);
@@ -2639,7 +2665,7 @@ grid.addEventListener("change", async (event) => {
 });
 
 grid.addEventListener("click", async (event) => {
-  const decisionButton = event.target.closest("[data-owner-decision]");
+  const decisionButton = event.target.closest("button[data-owner-decision]");
   if (decisionButton) {
     const card = decisionButton.closest("[data-id]");
     const vacancyId = card?.dataset.id;
@@ -2663,7 +2689,7 @@ grid.addEventListener("click", async (event) => {
     }
     return;
   }
-  const channelButton = event.target.closest("[data-action-channel]");
+  const channelButton = event.target.closest("button[data-action-channel]");
   if (channelButton) {
     const card = channelButton.closest("[data-id]");
     const vacancyId = card?.dataset.id;
@@ -3196,14 +3222,31 @@ grid.addEventListener("click", async (event) => {
     return;
   }
   const button = event.target.closest("[data-apply]");
-  if (!button) return;
-  const card = button.closest("[data-id]");
-  applicationForm.reset();
-  applicationForm.elements.source.value = "manual";
-  applicationForm.elements.vacancy_id.value = card.dataset.id;
-  applicationVacancyTitle.textContent = card.querySelector("h3").textContent;
-  applicationFormError.hidden = true;
-  applicationDialog.showModal();
+  if (button) {
+    const card = button.closest("[data-id]");
+    applicationForm.reset();
+    applicationForm.elements.source.value = "manual";
+    applicationForm.elements.vacancy_id.value = card.dataset.id;
+    applicationVacancyTitle.textContent = card.querySelector("h3").textContent;
+    applicationFormError.hidden = true;
+    applicationDialog.showModal();
+    return;
+  }
+
+  // Non-interactive card area toggles the existing «Разбор» details (no hash jump).
+  const vacancyCard = event.target.closest(".list-row-group--vacancy");
+  if (!vacancyCard) return;
+  if (
+    event.target.closest(
+      "a, button, select, input, textarea, label, summary, .row-detail__body, .list-row__actions, .list-row__control, .owner-decision, .action-plan",
+    )
+  ) {
+    return;
+  }
+  if (!event.target.closest(".list-row")) return;
+  const details = vacancyCard.querySelector("details.row-detail");
+  if (!details) return;
+  details.open = !details.open;
 });
 
 document.querySelector("#close-application-form").addEventListener("click", () => applicationDialog.close());
