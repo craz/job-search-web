@@ -590,6 +590,30 @@ def test_hh_active_resume_can_be_selected_and_cleared() -> None:
     assert "access_token" not in invalid.text
 
 
+def test_hh_open_login_proxy_returns_failure_payload() -> None:
+    """Accepted HTTP from HH does not imply domain success — Web forwards conflict."""
+    hh = StubHh(status="action_required")
+    hh.open_login_result = (
+        409,
+        {
+            "code": "novnc_unavailable",
+            "message": "novnc_unavailable",
+            "browser_started": False,
+            "connection": {
+                "status": "action_required",
+                "action": {"code": "confirm_login"},
+            },
+        },
+    )
+    client = WebClient(StubCore(), hh=hh)
+    response = client.request("POST", "/api/v1/hh/connection/open-login")
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "novnc_unavailable"
+    assert body["browser_started"] is False
+    assert hh.calls == [("open-login", None)]
+
+
 def test_hh_resumes_markup_exposes_clear_and_sync_controls() -> None:
     client = WebClient(StubCore())
     page = client.request("GET", "/")

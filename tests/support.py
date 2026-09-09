@@ -1301,6 +1301,8 @@ class StubHh:
 
             raise HhUnavailableError
         self.calls.append(("open-login", None))
+        if getattr(self, "open_login_result", None) is not None:
+            return self.open_login_result
         self.status = "action_required"
         return 200, {
             "browser_started": True,
