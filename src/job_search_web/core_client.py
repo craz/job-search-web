@@ -114,6 +114,10 @@ class CoreGateway(Protocol):
         """Accept or decline an Offer through Core."""
         ...
 
+    def update_offer_comparison(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update owner comparison note/rank through Core."""
+        ...
+
     def list_metrics(self) -> tuple[int, Any]:
         """Return bounded Daily Metric history from Core."""
         ...
@@ -305,6 +309,10 @@ class CoreClient:
     def decide_offer(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
         """Forward Offer accept/decline."""
         return self._request("PATCH", f"/api/v1/offers/{offer_id}/decision", json=payload)
+
+    def update_offer_comparison(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Forward owner comparison note/rank update."""
+        return self._request("PATCH", f"/api/v1/offers/{offer_id}/comparison", json=payload)
 
     def list_metrics(self) -> tuple[int, Any]:
         """Fetch bounded Daily Metric history from Core."""

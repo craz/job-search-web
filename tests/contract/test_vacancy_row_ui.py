@@ -115,6 +115,11 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "data-record-offer" in js
     assert "/api/v1/offers" in js
     assert "data-accept-offer" in js
+    assert "data-offer-select" in js
+    assert "renderOfferCompare" in js
+    assert "/api/v1/offers" in js and "comparison" in js
+    assert "compare-offers" in html
+    assert "offer-compare-panel" in html
     assert "data-action-channel=" in js
     assert "Следующий шаг" in js
     assert "Открыть вакансию на HH" in js

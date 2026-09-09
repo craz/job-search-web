@@ -449,7 +449,7 @@ class StubCore:
         stage = payload.get("initial_stage") or "screening"
         vacancy = next((item for item in self.items if item["id"] == payload["vacancy_id"]), None)
         created = {
-            "id": "00000000-0000-0000-0000-0000000000cc",
+            "id": f"00000000-0000-0000-0000-0000000000c{len(self.hiring_items)}",
             "started_at": payload.get("started_at") or "2026-09-07T16:00:00Z",
             "current_stage": stage,
             "status": "active",
@@ -470,7 +470,7 @@ class StubCore:
             },
             "stage_events": [
                 {
-                    "id": "00000000-0000-0000-0000-0000000000cd",
+                    "id": f"00000000-0000-0000-0000-0000000000d{len(self.hiring_items)}",
                     "stage": stage,
                     "occurred_at": payload.get("started_at") or "2026-09-07T16:00:00Z",
                     "note": payload.get("note"),
@@ -643,6 +643,8 @@ class StubCore:
             "benefits_text": payload.get("benefits_text"),
             "proposed_start_date": payload.get("proposed_start_date"),
             "note": payload.get("note"),
+            "owner_comparison_note": None,
+            "owner_preference_rank": None,
             "status": "pending",
             "decided_at": None,
             "decision_note": None,
@@ -677,6 +679,25 @@ class StubCore:
                 "decision_note": payload.get("decision_note"),
                 "updated_at": "2026-09-09T13:00:00Z",
             }
+            self.offer_items[index] = updated
+            return 200, updated
+        return 404, {"code": "offer_not_found", "message": "Offer does not exist"}
+
+    def update_offer_comparison(self, offer_id: str, payload: dict[str, Any]) -> tuple[int, Any]:
+        """Update synthetic owner comparison fields without mutating siblings."""
+        self._guard()
+        self.calls.append(("offer-comparison", (offer_id, payload)))
+        for index, item in enumerate(self.offer_items):
+            if item["id"] != offer_id:
+                continue
+            updated = {**item, "updated_at": "2026-09-09T13:30:00Z"}
+            if "owner_comparison_note" in payload:
+                raw = payload["owner_comparison_note"]
+                updated["owner_comparison_note"] = (
+                    raw.strip() if isinstance(raw, str) else None
+                ) or None
+            if "owner_preference_rank" in payload:
+                updated["owner_preference_rank"] = payload["owner_preference_rank"]
             self.offer_items[index] = updated
             return 200, updated
         return 404, {"code": "offer_not_found", "message": "Offer does not exist"}

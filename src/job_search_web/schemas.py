@@ -171,6 +171,13 @@ class OfferDecisionUpdate(BaseModel):
     decision_note: str | None = Field(default=None, max_length=2000)
 
 
+class OfferComparisonUpdate(BaseModel):
+    """Browser-submitted owner comparison note/rank (R5.1)."""
+
+    owner_comparison_note: str | None = Field(default=None, max_length=2000)
+    owner_preference_rank: int | None = Field(default=None, ge=1, le=99)
+
+
 class DailyMetricUpdate(BaseModel):
     """Browser-submitted partial Daily Metric snapshot forwarded to Core."""
 

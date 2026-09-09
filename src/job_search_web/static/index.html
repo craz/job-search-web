@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Локальная доска вакансий Job Search">
     <title>Job Search — Вакансии</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260907-r251">
-    <script src="/assets/app.js?v=20260907-r251" defer></script>
+    <link rel="stylesheet" href="/assets/styles.css?v=20260909-r51">
+    <script src="/assets/app.js?v=20260909-r51" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">К основному содержимому</a>
@@ -251,6 +251,7 @@
               <h2 id="offers-title">Офферы <span class="section-count" id="offers-count">—</span></h2>
             </div>
             <p class="toolbar-note">Зафиксированные условия. Accept/Decline не закрывает поиск и ничего не отправляет.</p>
+            <button class="btn btn--secondary" id="compare-offers" type="button" disabled>Сравнить</button>
           </section>
 
           <section id="offers-list" class="list-rows" aria-live="polite" aria-busy="true">
@@ -261,6 +262,15 @@
                 <p class="state__detail">Web запрашивает офферы у Core API.</p>
               </div>
             </article>
+          </section>
+
+          <section id="offer-compare-panel" class="offer-compare" hidden aria-labelledby="offer-compare-title">
+            <div class="offer-compare__header">
+              <h3 id="offer-compare-title">Сравнение офферов</h3>
+              <button class="btn btn--ghost btn--sm" id="close-offer-compare" type="button">Закрыть сравнение</button>
+            </div>
+            <p class="toolbar-note" id="offer-compare-disclaimer"></p>
+            <div id="offer-compare-table" class="offer-compare__scroll"></div>
           </section>
 
           </div>
@@ -806,6 +816,7 @@
         <div class="dialog__body">
           <input name="offer_id" type="hidden">
           <input name="status" type="hidden">
+          <div id="offer-decision-summary" class="offer-decision-summary" hidden></div>
           <div class="form-grid">
             <label class="field wide">
               <span class="field__label">Причина / заметка</span>

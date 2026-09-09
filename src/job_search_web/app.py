@@ -31,6 +31,7 @@ from job_search_web.schemas import (
     HiringStageTransition,
     HypothesisClose,
     HypothesisCreate,
+    OfferComparisonUpdate,
     OfferCreate,
     OfferDecisionUpdate,
     PeopleConfirmRequest,
@@ -695,6 +696,18 @@ def create_app(
         try:
             return proxy_response(
                 *gateway.decide_offer(offer_id, request.model_dump(mode="json", exclude_none=True))
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+    @application.patch("/api/v1/offers/{offer_id}/comparison")
+    def patch_offer_comparison(offer_id: str, request: OfferComparisonUpdate) -> JSONResponse:
+        """Update owner comparison note/rank; does not close search cycle."""
+        try:
+            return proxy_response(
+                *gateway.update_offer_comparison(
+                    offer_id, request.model_dump(mode="json", exclude_unset=True)
+                )
             )
         except CoreUnavailableError:
             return unavailable_response()

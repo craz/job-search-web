@@ -54,6 +54,12 @@ const offerDecisionForm = document.querySelector("#offer-decision-form");
 const offerDecisionFormError = document.querySelector("#offer-decision-form-error");
 const offerDecisionSubmitButton = document.querySelector("#submit-offer-decision-form");
 const offerDecisionContext = document.querySelector("#offer-decision-context");
+const offerDecisionSummary = document.querySelector("#offer-decision-summary");
+const compareOffersButton = document.querySelector("#compare-offers");
+const offerComparePanel = document.querySelector("#offer-compare-panel");
+const offerCompareTable = document.querySelector("#offer-compare-table");
+const offerCompareDisclaimer = document.querySelector("#offer-compare-disclaimer");
+const closeOfferCompareButton = document.querySelector("#close-offer-compare");
 const hiringStartDialog = document.querySelector("#hiring-start-dialog");
 const hiringStartForm = document.querySelector("#hiring-start-form");
 const hiringStartFormError = document.querySelector("#hiring-start-form-error");
@@ -104,6 +110,7 @@ let hiringProcessByVacancyId = new Map();
 let activeHiringProcesses = [];
 let offersByVacancyId = new Map();
 let knownOffers = [];
+let selectedOfferIds = new Set();
 let osintUnavailable = false;
 let assessmentsByVacancyId = new Map();
 let semanticFailuresByVacancyId = new Map();
@@ -885,6 +892,200 @@ function formatCompensation(offer) {
   return `${offer.compensation_amount} ${currency} (${basis})`.trim();
 }
 
+function offerCell(value) {
+  if (value == null || value === "") return `<span class="is-empty">пусто</span>`;
+  return escapeHtml(String(value));
+}
+
+function compensationCompareWarning(offers) {
+  const bases = new Set(offers.map((item) => item.compensation_basis || "unknown"));
+  const currencies = new Set(
+    offers
+      .map((item) => String(item.compensation_currency || "").toUpperCase())
+      .filter(Boolean),
+  );
+  const parts = [];
+  if (bases.size > 1) parts.push("разный basis (gross/net/unknown) — суммы не эквивалентны");
+  if (currencies.size > 1) parts.push("разная валюта — без FX-конвертации");
+  if (!parts.length) return "";
+  return `Нельзя напрямую сравнивать компенсацию: ${parts.join("; ")}.`;
+}
+
+function openOfferDecision(offer, status) {
+  if (!offer || !offerDecisionForm || !offerDecisionDialog) return;
+  offerDecisionForm.reset();
+  offerDecisionForm.elements.offer_id.value = offer.id;
+  offerDecisionForm.elements.status.value = status;
+  if (offerDecisionContext) {
+    offerDecisionContext.textContent =
+      status === "accepted" ? "Подтверждение принятия оффера" : "Подтверждение отклонения оффера";
+  }
+  if (offerDecisionSummary) {
+    const company = offer.vacancy?.company?.name || "—";
+    const role = offer.position_title || offer.vacancy?.title || "—";
+    offerDecisionSummary.hidden = false;
+    offerDecisionSummary.innerHTML = `
+      <p><strong>${escapeHtml(company)}</strong> · ${escapeHtml(role)}</p>
+      <p>${escapeHtml(formatCompensation(offer))}</p>
+      <p>${escapeHtml(offer.work_format || "формат н/д")} · ${escapeHtml(offer.location || "локация н/д")}${
+        offer.proposed_start_date ? ` · выход ${escapeHtml(offer.proposed_start_date)}` : ""
+      }</p>
+      <p class="list-row__meta">Другие офферы и search cycle не изменятся автоматически.</p>
+    `;
+  }
+  offerDecisionFormError.hidden = true;
+  offerDecisionDialog.showModal();
+}
+
+function syncCompareButton() {
+  if (!compareOffersButton) return;
+  compareOffersButton.disabled = selectedOfferIds.size < 2;
+  compareOffersButton.textContent =
+    selectedOfferIds.size >= 2 ? `Сравнить (${selectedOfferIds.size})` : "Сравнить";
+}
+
+function offerRow(item) {
+  const company = item.vacancy?.company?.name || "—";
+  const status = offerStatusLabels[item.status] || item.status;
+  const pending = item.status === "pending" ? " · требует решения" : "";
+  const checked = selectedOfferIds.has(item.id) ? "checked" : "";
+  const ownerNote = item.owner_comparison_note
+    ? `<p class="list-row__meta">Заметка · ${escapeHtml(excerpt(item.owner_comparison_note, 80))}</p>`
+    : "";
+  const rank =
+    item.owner_preference_rank != null
+      ? `<p class="list-row__meta">Предпочтение · ${escapeHtml(String(item.owner_preference_rank))}</p>`
+      : "";
+  return `<article class="list-row list-row--with-leading" data-offer-id="${escapeHtml(item.id)}">
+    <div class="list-row__select">
+      <input type="checkbox" data-offer-select="${escapeHtml(item.id)}" aria-label="Выбрать для сравнения" ${checked}>
+    </div>
+    <div class="list-row__primary">
+      <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
+      <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(status)}${escapeHtml(pending)}</p>
+      <p class="list-row__meta">${escapeHtml(formatCompensation(item))}</p>
+      <p class="list-row__meta">${escapeHtml(item.work_format || "формат н/д")} · ${escapeHtml(item.location || "локация н/д")}${
+        item.proposed_start_date ? ` · выход ${escapeHtml(item.proposed_start_date)}` : ""
+      }</p>
+      ${ownerNote}
+      ${rank}
+    </div>
+  </article>`;
+}
+
+function renderOfferCompare(offers) {
+  if (!offerComparePanel || !offerCompareTable) return;
+  if (offers.length < 2) {
+    offerComparePanel.hidden = true;
+    return;
+  }
+  const warning = compensationCompareWarning(offers);
+  if (offerCompareDisclaimer) {
+    offerCompareDisclaimer.textContent =
+      warning || "Компенсация показана как записана работодателем — без нормализации.";
+    offerCompareDisclaimer.classList.toggle("is-warn", Boolean(warning));
+  }
+  const rows = [
+    ["Компания / роль", (o) => `${o.vacancy?.company?.name || "—"} / ${o.position_title || o.vacancy?.title || "—"}`],
+    ["Компенсация", (o) => formatCompensation(o)],
+    ["Валюта", (o) => o.compensation_currency || ""],
+    ["Basis", (o) => compensationBasisLabels[o.compensation_basis] || o.compensation_basis || "неизвестно"],
+    ["Формат", (o) => o.work_format || ""],
+    ["Локация", (o) => o.location || ""],
+    ["Бонус / переменная", (o) => o.bonus_text || ""],
+    ["Льготы", (o) => o.benefits_text || ""],
+    ["Старт", (o) => o.proposed_start_date || ""],
+    ["Прочие условия", (o) => o.note || ""],
+    ["Статус", (o) => offerStatusLabels[o.status] || o.status],
+  ];
+  const head = `<tr><th>Параметр</th>${offers
+    .map((o) => `<th>${escapeHtml(o.vacancy?.company?.name || "Оффер")}</th>`)
+    .join("")}</tr>`;
+  const body = rows
+    .map(([label, getter]) => {
+      const cells = offers.map((o) => `<td>${offerCell(getter(o))}</td>`).join("");
+      return `<tr><th scope="row">${escapeHtml(label)}</th>${cells}</tr>`;
+    })
+    .join("");
+  const ownerCells = offers
+    .map((o) => {
+      const actions =
+        o.status === "pending"
+          ? `<div class="offer-compare-actions">
+              <button class="btn btn--secondary btn--sm" data-accept-offer="${escapeHtml(o.id)}" type="button">Принять</button>
+              <button class="btn btn--ghost btn--sm" data-decline-offer="${escapeHtml(o.id)}" type="button">Отклонить</button>
+            </div>`
+          : `<p class="list-row__meta">Решение · ${escapeHtml(formatDate(o.decided_at))}</p>`;
+      return `<td>
+        <label class="field">
+          <span class="field__label">Заметка владельца</span>
+          <textarea class="control offer-compare-note" data-offer-note="${escapeHtml(o.id)}" maxlength="2000">${escapeHtml(o.owner_comparison_note || "")}</textarea>
+        </label>
+        <label class="field">
+          <span class="field__label">Предпочтение (1 = выше)</span>
+          <input class="control offer-compare-rank" data-offer-rank="${escapeHtml(o.id)}" type="number" min="1" max="99" value="${
+            o.owner_preference_rank != null ? escapeHtml(String(o.owner_preference_rank)) : ""
+          }">
+        </label>
+        <button class="btn btn--ghost btn--sm" data-save-offer-comparison="${escapeHtml(o.id)}" type="button">Сохранить заметку</button>
+        ${actions}
+      </td>`;
+    })
+    .join("");
+  offerCompareTable.innerHTML = `<table class="offer-compare-table">
+    <thead>${head}</thead>
+    <tbody>${body}<tr><th scope="row">Оценка владельца</th>${ownerCells}</tr></tbody>
+  </table>`;
+  offerComparePanel.hidden = false;
+}
+
+function selectedOffers() {
+  return knownOffers.filter((item) => selectedOfferIds.has(item.id));
+}
+
+async function loadOffers() {
+  if (offersList) offersList.setAttribute("aria-busy", "true");
+  try {
+    const response = await fetch("/api/v1/offers");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Не удалось получить офферы");
+    knownOffers = payload.items || [];
+    offersByVacancyId = new Map();
+    for (const item of knownOffers) {
+      const vacancyId = item?.vacancy?.id;
+      if (!vacancyId) continue;
+      if (!offersByVacancyId.has(vacancyId)) offersByVacancyId.set(vacancyId, item);
+    }
+    selectedOfferIds = new Set(
+      [...selectedOfferIds].filter((id) => knownOffers.some((item) => item.id === id)),
+    );
+    syncCompareButton();
+    if (offersCount) setSectionCount(offersCount, payload.total);
+    if (offersList) {
+      if (payload.total) offersList.innerHTML = knownOffers.map(offerRow).join("");
+      else {
+        offersList.innerHTML = "";
+        renderEmptyState(offersList, "Офферов нет", "Запишите оффер из карточки вакансии с процессом найма.");
+      }
+    }
+    if (offerComparePanel && !offerComparePanel.hidden) {
+      renderOfferCompare(selectedOffers());
+    }
+    if (knownVacancies?.length) renderVacancyList(knownVacancies);
+  } catch (error) {
+    knownOffers = [];
+    offersByVacancyId = new Map();
+    if (offersCount) setSectionCount(offersCount, null);
+    if (offersList) {
+      renderErrorState(offersList, "Не удалось загрузить офферы", error.message, loadOffers);
+    }
+  } finally {
+    if (offersList) offersList.setAttribute("aria-busy", "false");
+  }
+}
+
+/* --- Vacancy search (R2.2.5 corrected: resume_suitable primary) --- */
+
 function renderOfferSection(item) {
   const offer = offersByVacancyId.get(item.id);
   if (!offer) {
@@ -913,6 +1114,7 @@ function renderOfferSection(item) {
     ${offer.bonus_text ? `<p class="list-row__meta">Бонус · ${escapeHtml(excerpt(offer.bonus_text, 100))}</p>` : ""}
     ${offer.benefits_text ? `<p class="list-row__meta">Льготы · ${escapeHtml(excerpt(offer.benefits_text, 100))}</p>` : ""}
     ${offer.note ? `<p class="list-row__meta">${escapeHtml(excerpt(offer.note, 120))}</p>` : ""}
+    ${offer.owner_comparison_note ? `<p class="list-row__meta">Заметка · ${escapeHtml(excerpt(offer.owner_comparison_note, 80))}</p>` : ""}
     ${actions}
   </div>`;
 }
@@ -1600,56 +1802,6 @@ async function loadHiringProcesses() {
     }
   } finally {
     if (hiringList) hiringList.setAttribute("aria-busy", "false");
-  }
-}
-
-function offerRow(item) {
-  const company = item.vacancy?.company?.name || "—";
-  const status = offerStatusLabels[item.status] || item.status;
-  const pending = item.status === "pending" ? " · требует решения" : "";
-  return `<article class="list-row" data-offer-id="${escapeHtml(item.id)}">
-    <div class="list-row__primary">
-      <h3 class="list-row__title">${escapeHtml(item.vacancy?.title || "Вакансия")}</h3>
-      <p class="list-row__secondary">${escapeHtml(company)} · ${escapeHtml(status)}${escapeHtml(pending)}</p>
-      <p class="list-row__meta">${escapeHtml(formatCompensation(item))}</p>
-      <p class="list-row__meta">${escapeHtml(item.work_format || "формат н/д")} · ${escapeHtml(item.location || "локация н/д")}${
-        item.proposed_start_date ? ` · выход ${escapeHtml(item.proposed_start_date)}` : ""
-      }</p>
-    </div>
-  </article>`;
-}
-
-async function loadOffers() {
-  if (offersList) offersList.setAttribute("aria-busy", "true");
-  try {
-    const response = await fetch("/api/v1/offers");
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || "Не удалось получить офферы");
-    knownOffers = payload.items || [];
-    offersByVacancyId = new Map();
-    for (const item of knownOffers) {
-      const vacancyId = item?.vacancy?.id;
-      if (!vacancyId) continue;
-      if (!offersByVacancyId.has(vacancyId)) offersByVacancyId.set(vacancyId, item);
-    }
-    if (offersCount) setSectionCount(offersCount, payload.total);
-    if (offersList) {
-      if (payload.total) offersList.innerHTML = knownOffers.map(offerRow).join("");
-      else {
-        offersList.innerHTML = "";
-        renderEmptyState(offersList, "Офферов нет", "Запишите оффер из карточки вакансии с процессом найма.");
-      }
-    }
-    if (knownVacancies?.length) renderVacancyList(knownVacancies);
-  } catch (error) {
-    knownOffers = [];
-    offersByVacancyId = new Map();
-    if (offersCount) setSectionCount(offersCount, null);
-    if (offersList) {
-      renderErrorState(offersList, "Не удалось загрузить офферы", error.message, loadOffers);
-    }
-  } finally {
-    if (offersList) offersList.setAttribute("aria-busy", "false");
   }
 }
 
@@ -2617,30 +2769,14 @@ grid.addEventListener("click", async (event) => {
   if (acceptOfferButton) {
     const offerId = acceptOfferButton.getAttribute("data-accept-offer");
     const offer = knownOffers.find((item) => item.id === offerId);
-    if (!offer || !offerDecisionForm) return;
-    offerDecisionForm.reset();
-    offerDecisionForm.elements.offer_id.value = offerId;
-    offerDecisionForm.elements.status.value = "accepted";
-    if (offerDecisionContext) {
-      offerDecisionContext.textContent = `${offer.vacancy?.title || "Оффер"} · ${formatCompensation(offer)}`;
-    }
-    offerDecisionFormError.hidden = true;
-    offerDecisionDialog.showModal();
+    openOfferDecision(offer, "accepted");
     return;
   }
   const declineOfferButton = event.target.closest("[data-decline-offer]");
   if (declineOfferButton) {
     const offerId = declineOfferButton.getAttribute("data-decline-offer");
     const offer = knownOffers.find((item) => item.id === offerId);
-    if (!offer || !offerDecisionForm) return;
-    offerDecisionForm.reset();
-    offerDecisionForm.elements.offer_id.value = offerId;
-    offerDecisionForm.elements.status.value = "declined";
-    if (offerDecisionContext) {
-      offerDecisionContext.textContent = `${offer.vacancy?.title || "Оффер"} · ${formatCompensation(offer)}`;
-    }
-    offerDecisionFormError.hidden = true;
-    offerDecisionDialog.showModal();
+    openOfferDecision(offer, "declined");
     return;
   }
   const completeHiringActivityButton = event.target.closest("[data-complete-hiring-activity]");
@@ -3240,7 +3376,7 @@ if (offerDecisionDialog && offerDecisionForm) {
       if (!response.ok) throw new Error(body.message || "Решение не сохранено");
       offerDecisionDialog.close();
       showNotice(payload.status === "accepted" ? "Оффер принят" : "Оффер отклонён");
-      await Promise.all([loadOffers(), loadVacancies()]);
+      await Promise.all([loadOffers(), loadVacancies(), loadHiringProcesses()]);
     } catch (error) {
       offerDecisionFormError.textContent = error.message;
       offerDecisionFormError.hidden = false;
@@ -3249,6 +3385,70 @@ if (offerDecisionDialog && offerDecisionForm) {
     }
   });
 }
+
+document.querySelector("#section-offers")?.addEventListener("click", async (event) => {
+  const select = event.target.closest("[data-offer-select]");
+  if (select) {
+    const offerId = select.getAttribute("data-offer-select");
+    if (select.checked) selectedOfferIds.add(offerId);
+    else selectedOfferIds.delete(offerId);
+    syncCompareButton();
+    return;
+  }
+  const acceptOfferButton = event.target.closest("[data-accept-offer]");
+  if (acceptOfferButton) {
+    const offer = knownOffers.find(
+      (item) => item.id === acceptOfferButton.getAttribute("data-accept-offer"),
+    );
+    openOfferDecision(offer, "accepted");
+    return;
+  }
+  const declineOfferButton = event.target.closest("[data-decline-offer]");
+  if (declineOfferButton) {
+    const offer = knownOffers.find(
+      (item) => item.id === declineOfferButton.getAttribute("data-decline-offer"),
+    );
+    openOfferDecision(offer, "declined");
+    return;
+  }
+  const saveButton = event.target.closest("[data-save-offer-comparison]");
+  if (saveButton) {
+    const offerId = saveButton.getAttribute("data-save-offer-comparison");
+    const noteField = offerCompareTable?.querySelector(`[data-offer-note="${offerId}"]`);
+    const rankField = offerCompareTable?.querySelector(`[data-offer-rank="${offerId}"]`);
+    const payload = {
+      owner_comparison_note: noteField?.value ?? "",
+      owner_preference_rank: rankField?.value ? Number(rankField.value) : null,
+    };
+    try {
+      const response = await fetch(`/api/v1/offers/${offerId}/comparison`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Заметка не сохранена");
+      showNotice("Заметка сравнения сохранена");
+      await loadOffers();
+    } catch (error) {
+      showNotice(error.message, "warning");
+    }
+  }
+});
+
+compareOffersButton?.addEventListener("click", () => {
+  const offers = selectedOffers();
+  if (offers.length < 2) {
+    showNotice("Выберите минимум два оффера", "warning");
+    return;
+  }
+  renderOfferCompare(offers);
+  offerComparePanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+closeOfferCompareButton?.addEventListener("click", () => {
+  if (offerComparePanel) offerComparePanel.hidden = true;
+});
 
 applicationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
