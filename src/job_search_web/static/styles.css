@@ -499,6 +499,14 @@ button { cursor: pointer; }
   margin-bottom: var(--space-4);
 }
 
+.toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .vacancy-search {
   margin-bottom: var(--space-5);
   padding: var(--space-4);
@@ -1832,6 +1840,8 @@ label.wide {
   .app-header__status { align-self: flex-start; }
   .app-nav__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbar__actions { width: 100%; }
+  .toolbar__actions .btn,
   .toolbar .btn,
   .toolbar .btn--primary { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }

@@ -191,6 +191,19 @@ class StubCore:
             mapping = (
                 dict(params) if isinstance(params, dict) else {key: value for key, value in params}
             )
+            scoring_state = mapping.get("scoring_state")
+            source_status = mapping.get("source_status")
+            if scoring_state == "unscored":
+                items = [item for item in items if not item.get("current_assessment")]
+            elif scoring_state == "current":
+                items = [item for item in items if item.get("current_assessment")]
+            if source_status:
+                items = [
+                    item
+                    for item in items
+                    if str(item.get("source_status") or "") == str(source_status)
+                ]
+            total = len(items)
             limit = mapping.get("limit")
             offset = int(mapping.get("offset") or 0)
             if limit is not None:

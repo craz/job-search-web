@@ -2242,6 +2242,7 @@ async function loadVacancies({ resetOffset = false } = {}) {
     restoreOpenVacancyDetails(openIds);
     window.scrollTo(0, scrollY);
     void enrichVacancyBoardSecondary();
+    void refreshBulkScoreNewButton();
   } catch (error) {
     setSectionCount(count, null);
     signal.classList.add("offline");
@@ -2252,6 +2253,7 @@ async function loadVacancies({ resetOffset = false } = {}) {
     renderErrorState(grid, "Не удалось загрузить вакансии", error.message, () => loadVacancies());
     const nav = document.querySelector("#vacancy-pagination");
     if (nav) nav.hidden = true;
+    void refreshBulkScoreNewButton();
   } finally {
     grid.setAttribute("aria-busy", "false");
   }
@@ -2614,6 +2616,101 @@ async function runAutomationNow() {
   }
 }
 
+function formatBulkScoreNotice(result) {
+  const parts = [];
+  const enqueued = Number(result.enqueued || 0);
+  const remaining = Number(result.remaining || 0);
+  const requested = Number(result.requested || 0);
+  const attempted = Number(result.attempted || 0);
+  if (enqueued > 0) {
+    if (remaining > 0 || attempted < requested) {
+      parts.push(`Поставлено ${enqueued} из ${requested}`);
+    } else {
+      parts.push(`Поставлено в очередь: ${enqueued}`);
+    }
+  }
+  if (Number(result.already_scored || 0) > 0) {
+    parts.push(`уже оценены: ${result.already_scored}`);
+  }
+  if (Number(result.already_queued || 0) > 0) {
+    parts.push(`уже в очереди: ${result.already_queued}`);
+  }
+  if (Number(result.failed || 0) > 0) {
+    parts.push(`ошибка: ${result.failed}`);
+  }
+  if (!parts.length) return "Нет новых вакансий для оценки";
+  return parts.join(" · ");
+}
+
+async function refreshBulkScoreNewButton() {
+  const button = document.querySelector("#bulk-score-new");
+  if (!button || button.dataset.busy === "1") return;
+  try {
+    const response = await fetch("/api/v1/vacancies/bulk-score-new");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      button.disabled = true;
+      if (!button.textContent.includes("Оценить новые (")) {
+        button.textContent = "Оценить новые";
+      }
+      return;
+    }
+    const eligible = Number(payload.eligible || 0);
+    if (eligible <= 0) {
+      button.disabled = true;
+      button.textContent = "Нет новых для оценки";
+      return;
+    }
+    button.disabled = false;
+    button.textContent = `Оценить новые (${eligible})`;
+  } catch (_error) {
+    button.disabled = true;
+    if (!button.textContent.includes("(")) {
+      button.textContent = "Оценить новые";
+    }
+  }
+}
+
+async function runBulkScoreNew() {
+  const button = document.querySelector("#bulk-score-new");
+  if (!button || button.disabled) return;
+  const previous = button.textContent;
+  button.dataset.busy = "1";
+  button.disabled = true;
+  button.textContent = "Ставим в очередь…";
+  try {
+    const response = await fetch("/api/v1/vacancies/bulk-score-new", { method: "POST" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const info = apiErrorInfo(payload);
+      throw new Error(info.message || "Не удалось поставить новые в очередь");
+    }
+    const enqueued = Number(payload.enqueued || 0);
+    showNotice(formatBulkScoreNotice(payload), enqueued > 0 ? "success" : "info");
+    for (const item of payload.enqueued_items || []) {
+      const vacancyId = item.vacancy_id;
+      if (!vacancyId) continue;
+      pendingScoreByVacancyId.set(vacancyId, item.job_id || true);
+      if (item.job_id) void watchPendingScoreJob(vacancyId, item.job_id);
+    }
+    await loadVacancies();
+  } catch (error) {
+    showNotice(error.message || "Не удалось поставить новые в очередь", "error");
+  } finally {
+    button.dataset.busy = "0";
+    button.textContent = previous;
+    await refreshBulkScoreNewButton();
+  }
+}
+
+function initBulkScoreNew() {
+  const button = document.querySelector("#bulk-score-new");
+  if (!button) return;
+  button.addEventListener("click", () => void runBulkScoreNew());
+  // Defer first count until Core is likely up; also refresh after queue loads.
+  window.setTimeout(() => void refreshBulkScoreNewButton(), 500);
+}
+
 function initAutomationControls() {
   const toggle = document.querySelector("#automation-toggle");
   const runNow = document.querySelector("#automation-run-now");
@@ -2674,6 +2771,7 @@ function initVacancySearch() {
   initVacancySearchTabs();
   initVacancyListFilter();
   initAutomationControls();
+  initBulkScoreNew();
   const button = document.querySelector("#suitable-run");
   if (button) {
     button.addEventListener("click", () => {

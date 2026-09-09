@@ -15,6 +15,12 @@ from job_search_web.automation_client import (
     AutomationGateway,
     AutomationUnavailableError,
 )
+from job_search_web.bulk_score_new import (
+    BULK_SCORE_NEW_CAP,
+    BULK_SCORE_NEW_MAX_AGE_DAYS,
+    collect_eligible_new_vacancy_ids,
+    run_bulk_score_new,
+)
 from job_search_web.core_client import CoreClient, CoreGateway, CoreUnavailableError
 from job_search_web.hh_client import HhClient, HhGateway, HhUnavailableError
 from job_search_web.osint_client import OsintClient, OsintGateway, OsintUnavailableError
@@ -1117,6 +1123,105 @@ def create_app(
             return proxy_response(status_code, payload)
         except ScoringUnavailableError:
             return scoring_unavailable_response()
+
+    def _score_one_for_bulk(vacancy_id: str) -> tuple[int, Any]:
+        """Reuse single-score gates for active prefiltered ids; aggregate-friendly."""
+        status, vacancy = gateway.get_vacancy(vacancy_id)
+        if status != 200 or not isinstance(vacancy, dict):
+            body = vacancy if isinstance(vacancy, dict) else {"code": "vacancy_not_found"}
+            return status, browser_facing_error_payload(body)
+
+        source_status = _source_status_of(vacancy)
+        if source_status == "archived":
+            return 409, {
+                "code": "vacancy_archived",
+                "message": "Vacancy is archived on the source; scoring is blocked",
+            }
+        if source_status != "active":
+            # Bulk selection already requires active; treat drift as skippable failure.
+            return 409, {
+                "code": "source_status_unknown",
+                "message": "Vacancy source status is not active",
+                "retryable": True,
+            }
+
+        status_code, payload = scoring_gateway.score_semantic_v1(vacancy_id)
+        if status_code >= 400:
+            payload = browser_facing_error_payload(payload)
+        return status_code, payload
+
+    def _semantic_failed_ids() -> set[str]:
+        try:
+            status, payload = scoring_gateway.list_semantic_failures()
+        except ScoringUnavailableError:
+            return set()
+        if status != 200 or not isinstance(payload, dict):
+            return set()
+        failed: set[str] = set()
+        for item in payload.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            vacancy_id = str(item.get("vacancy_id") or "").strip()
+            if vacancy_id:
+                failed.add(vacancy_id)
+        return failed
+
+    @application.get("/api/v1/vacancies/bulk-score-new")
+    def get_bulk_score_new() -> JSONResponse:
+        """Count fresh active unscored vacancies eligible for bulk «Оценить новые»."""
+        try:
+            eligible = collect_eligible_new_vacancy_ids(
+                list_vacancies=gateway.list_vacancies,
+                failed_ids=_semantic_failed_ids(),
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+        return JSONResponse(
+            status_code=200,
+            content={
+                "eligible": len(eligible),
+                "cap": BULK_SCORE_NEW_CAP,
+                "enqueueable": min(len(eligible), BULK_SCORE_NEW_CAP),
+                "definition": {
+                    "scoring_state": "unscored",
+                    "source_status": "active",
+                    "max_age_days": BULK_SCORE_NEW_MAX_AGE_DAYS,
+                    "excludes": ["current_assessment", "semantic_failures", "stale_by_age"],
+                },
+            },
+        )
+
+    @application.post("/api/v1/vacancies/bulk-score-new")
+    def post_bulk_score_new() -> JSONResponse:
+        """Enqueue eligible new vacancies via existing per-vacancy semantic_v1 path."""
+        try:
+            eligible = collect_eligible_new_vacancy_ids(
+                list_vacancies=gateway.list_vacancies,
+                failed_ids=_semantic_failed_ids(),
+            )
+        except CoreUnavailableError:
+            return unavailable_response()
+
+        def score_one(vacancy_id: str) -> tuple[int, Any]:
+            try:
+                return _score_one_for_bulk(vacancy_id)
+            except ScoringUnavailableError as error:
+                return 503, {
+                    "code": "scoring_unavailable",
+                    "message": str(error) or "scoring_unavailable",
+                }
+            except CoreUnavailableError as error:
+                return 503, {
+                    "code": "core_unavailable",
+                    "message": str(error) or "core_unavailable",
+                }
+
+        result = run_bulk_score_new(
+            vacancy_ids=eligible,
+            score_one=score_one,
+            cap=BULK_SCORE_NEW_CAP,
+        )
+        return JSONResponse(status_code=200, content=result)
 
     @application.get("/api/v1/score/jobs/{job_id}")
     def get_score_job(job_id: str) -> JSONResponse:
