@@ -1221,8 +1221,12 @@ function vacancySourceStatus(item) {
   return "unknown";
 }
 
+function vacancyPublicationDate(item) {
+  return item?.source_published_at || item?.first_seen_at || null;
+}
+
 function vacancyFreshnessHint(item) {
-  const raw = item?.source_published_at || item?.first_seen_at;
+  const raw = vacancyPublicationDate(item);
   if (!raw) return "";
   const ageMs = Date.now() - Date.parse(raw);
   if (Number.isNaN(ageMs) || ageMs < 0) return "";
@@ -1506,7 +1510,7 @@ function vacancyRow(item) {
           </div>
         </div>
         <p class="list-row__secondary">${escapeHtml(item.company.name)}${facts ? ` · ${escapeHtml(facts)}` : ""}</p>
-        <p class="list-row__meta">Получена: ${escapeHtml(formatFirstSeen(item.first_seen_at))}${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
+        <p class="list-row__published">Опубликована: <time datetime="${escapeHtml(vacancyPublicationDate(item) || "")}">${escapeHtml(formatFirstSeen(vacancyPublicationDate(item)))}</time>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
       </div>
       <div class="list-row__trailing">
         ${assessmentSummary}
@@ -1898,6 +1902,7 @@ let vacancyListFilter = {
   fresh: "",
   owner: "",
 };
+let vacancyListSort = "priority";
 let vacancyPage = { limit: 50, offset: 0, total: 0 };
 let semanticFailedIds = [];
 
@@ -1915,7 +1920,10 @@ function buildVacancyListQuery() {
   const params = new URLSearchParams();
   params.set("limit", String(vacancyPage.limit));
   params.set("offset", String(vacancyPage.offset));
-  params.set("review_order", "true");
+  const sort = vacancyListSort || "priority";
+  params.set("sort", sort);
+  // Keep review_order for priority so older Core builds and filters stay aligned.
+  if (sort === "priority") params.set("review_order", "true");
   params.set("include_current_assessment", "true");
   const text = (vacancyListFilter.text || "").trim();
   if (text) params.set("q", text);
@@ -2454,6 +2462,7 @@ function initVacancyListFilter() {
   const scoring = document.querySelector("#vacancy-filter-scoring");
   const fresh = document.querySelector("#vacancy-filter-fresh");
   const owner = document.querySelector("#vacancy-filter-owner");
+  const sort = document.querySelector("#vacancy-sort");
   let textTimer;
   const applyFilters = () => {
     vacancyListFilter = {
@@ -2464,6 +2473,7 @@ function initVacancyListFilter() {
       fresh: fresh?.value || "",
       owner: owner?.value || "",
     };
+    vacancyListSort = sort?.value || "priority";
     void loadVacancies({ resetOffset: true });
   };
   text?.addEventListener("input", () => {
@@ -2475,6 +2485,7 @@ function initVacancyListFilter() {
   scoring?.addEventListener("change", applyFilters);
   fresh?.addEventListener("change", applyFilters);
   owner?.addEventListener("change", applyFilters);
+  sort?.addEventListener("change", applyFilters);
 
   document.querySelector("#vacancy-page-prev")?.addEventListener("click", () => {
     vacancyPage.offset = Math.max(0, vacancyPage.offset - vacancyPage.limit);

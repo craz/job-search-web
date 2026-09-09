@@ -52,7 +52,7 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "buildVacancyListQuery" in js
     assert "formatFirstSeen" in js
     assert "getFullYear()" in js
-    assert "Получена:" in js
+    assert "Опубликована:" in js
     assert "buildVacancyListQuery" in js
     assert "vacancy-filter-verdict" in html
     assert "vacancy-pagination" in html

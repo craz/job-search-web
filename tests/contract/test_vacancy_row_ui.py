@@ -73,6 +73,8 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert "function buildVacancyListQuery" in js
+    assert 'params.set("sort", sort)' in js or 'params.set("sort"' in js
+    assert "vacancyListSort" in js
     assert "review_order" in js
     assert "/api/v1/vacancies?${buildVacancyListQuery()}" in js or "buildVacancyListQuery()" in js
     assert "data-owner-decision=" in js
@@ -81,6 +83,12 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert 'id="vacancy-filter-verdict"' in html
     assert 'id="vacancy-filter-scoring"' in html
     assert 'id="vacancy-filter-owner"' in html
+    assert 'id="vacancy-sort"' in html
+    assert "По приоритету" in html
+    assert "Сначала новые" in html
+    assert "Сначала старые" in html
+    assert "list-row__published" in js
+    assert "Опубликована:" in js
     assert 'id="vacancy-pagination"' in html
     assert 'id="vacancy-page-prev"' in html
     assert 'id="vacancy-page-next"' in html

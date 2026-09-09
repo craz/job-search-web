@@ -1122,6 +1122,14 @@ button { cursor: pointer; }
   line-height: 1.45;
 }
 
+.vacancy-list .list-row__published {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium, 500);
+  line-height: 1.4;
+}
+
 .vacancy-list .list-row__meta {
   color: #b4bcc8;
   font-size: var(--font-size-metadata);

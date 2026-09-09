@@ -111,6 +111,20 @@ def test_vacancy_list_forwards_pagination_query() -> None:
     assert ("verdict", "apply") in forwarded
 
 
+def test_vacancy_list_forwards_sort_query() -> None:
+    core = StubCore()
+    client = WebClient(core)
+    listing = client.request(
+        "GET",
+        "/api/v1/vacancies?limit=25&offset=0&sort=newest&owner_decision=interested",
+    )
+    assert listing.status_code == 200
+    forwarded = core.calls[0][1]
+    assert ("sort", "newest") in forwarded
+    assert ("limit", "25") in forwarded
+    assert ("owner_decision", "interested") in forwarded
+
+
 def test_styles_expose_ui_primitives() -> None:
     """R0 primitives are present in the browser stylesheet."""
     css = WebClient(StubCore()).request("GET", "/assets/styles.css")
