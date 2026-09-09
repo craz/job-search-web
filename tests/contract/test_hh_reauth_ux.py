@@ -15,8 +15,28 @@ def test_retry_does_not_treat_start_as_success() -> None:
     assert "hhRetryOutcomeNotice" in js
     assert 'showNotice("HeadHunter доступен")' in js
     assert 'showNotice("Требуется повторный вход в HeadHunter", "warning")' in js
+    assert "Я вошёл — проверить" in js
     # Former false-success path must stay gone.
     assert 'showNotice("Повторная проверка HeadHunter…")' not in js
+
+
+def test_explicit_confirm_cta_after_browser_started() -> None:
+    """browser_started → visible Web confirm → refresh → connected messaging."""
+    js = APP_JS.read_text(encoding="utf-8")
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    assert 'id="hh-resumes-confirm"' in html
+    assert "Я вошёл — проверить" in html
+    assert "HH_ACTION_LABELS" in js
+    assert 'confirm_login: "Я вошёл — проверить"' in js
+    assert 'showNotice("Проверяем вход в HeadHunter…", "info")' in js
+    assert 'showNotice("Вход в HeadHunter ещё не завершён", "warning")' in js
+    assert 'connectionAction === "confirm_login"' in js
+    assert 'headerAction = "confirm_login"' in js
+    # Retry while waiting for confirm must not strand the owner.
+    assert 'hhConnection.dataset.action === "confirm_login"' in js
+    assert "runHhLoginAction(" in js
+    assert '"confirm_login"' in js
+    assert "/api/v1/hh/connection/confirm" in js
 
 
 def test_open_login_waits_for_ready_and_maps_infra_failure() -> None:

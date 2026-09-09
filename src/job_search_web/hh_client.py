@@ -96,7 +96,13 @@ class HhClient:
         return self._request("POST", "/api/v1/connection/open-login", json={})
 
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]:
-        return self._request("POST", "/api/v1/connection/confirm", json={"confirmed": confirmed})
+        # Confirm may stop the login browser and probe the profile (resumes page).
+        return self._request(
+            "POST",
+            "/api/v1/connection/confirm",
+            json={"confirmed": confirmed},
+            timeout=max(self.timeout_seconds, 90.0),
+        )
 
     def search_vacancies(self, payload: dict[str, Any]) -> tuple[int, Any]:
         """Run HH SearchRun orchestration (bounded; measured ~151s for max_pages=1)."""

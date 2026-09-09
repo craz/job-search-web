@@ -46,9 +46,10 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert 'id="hh-resumes"' in page.text
     assert 'id="hh-resumes-open"' in page.text
     assert 'id="hh-resumes-confirm"' in page.text
-    assert 'href="http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale"' in page.text
+    # Open-login is a button (no pre-baked noVNC href before browser_started).
+    assert 'href="http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale"' not in page.text
     assert "Войти в HeadHunter" in page.text
-    assert "Я вошёл — показать резюме" in page.text
+    assert "Я вошёл — проверить" in page.text
     assert "HeadHunter" in page.text
     assert "/assets/app.js?v=20260909-r52" in page.text
     assert "/assets/styles.css?v=20260909-r52" in page.text

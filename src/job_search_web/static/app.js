@@ -3804,7 +3804,7 @@ const HH_STATUS_LABELS = {
 
 const HH_ACTION_LABELS = {
   open_login: "Войти в HeadHunter",
-  confirm_login: "Я вошёл — показать резюме",
+  confirm_login: "Я вошёл — проверить",
   acquire_token: "Получить токен",
   reconnect: "Войти снова",
 };
@@ -3867,11 +3867,15 @@ function renderHhConnection(payload) {
   hhConnection.dataset.status = status;
   hhConnectionLabel.textContent = HH_STATUS_LABELS[status] || status;
   const actionCode = payload.action && payload.action.code ? payload.action.code : "none";
-  // Login / confirm for resumes lives in the «Резюме HH» strip — do not duplicate
-  // the same CTA in the header. Token acquire + reconnect stay in the header.
+  hhConnection.dataset.action = actionCode;
+  hhConnection.dataset.novncUrl = (payload.action && payload.action.novnc_url) || "";
+  // Confirm lives primarily in the resumes strip; also expose it in the header
+  // so recovery is visible even when resumes briefly report open_login.
   let headerAction = "none";
   if (actionCode === "acquire_token") {
     headerAction = "acquire_token";
+  } else if (actionCode === "confirm_login") {
+    headerAction = "confirm_login";
   } else if (actionCode === "reconnect" || status === "expired") {
     headerAction = "reconnect";
   }
@@ -3958,6 +3962,11 @@ function hhRetryOutcomeNotice() {
     return;
   }
   if (status === "action_required" || status === "expired" || status === "not_authorized") {
+    const action = hhConnection.dataset.action || "";
+    if (action === "confirm_login") {
+      showNotice("Вход в HeadHunter ещё не завершён. Нажмите «Я вошёл — проверить».", "warning");
+      return;
+    }
     showNotice("Требуется повторный вход в HeadHunter", "warning");
     return;
   }
@@ -4165,6 +4174,15 @@ async function syncHhResumeContent() {
     showNotice("Проверяем HeadHunter…", "info");
     hhResumeSync.disabled = true;
     try {
+      const pendingConfirm = hhConnection.dataset.action === "confirm_login";
+      if (pendingConfirm) {
+        await runHhLoginAction(
+          "confirm_login",
+          hhConnection.dataset.novncUrl || "",
+          hhResumeSync
+        );
+        return;
+      }
       await loadHhConnection();
       hhRetryOutcomeNotice();
     } finally {
@@ -4346,11 +4364,19 @@ function renderHhResumes(payload) {
     code === "browser_login_required"
   ) {
     hhResumesList.innerHTML = "";
-    const waitingConfirm = actionCode === "confirm_login";
+    // Connection SoT for pending confirm: resumes historically returned open_login
+    // while auth_session was already pending_operator.
+    const connectionAction = hhConnection.dataset.action || "";
+    const waitingConfirm =
+      actionCode === "confirm_login" || connectionAction === "confirm_login";
+    const url =
+      novncUrl ||
+      hhConnection.dataset.novncUrl ||
+      "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
     if (waitingConfirm) {
       hhResumesStatus.textContent =
-        "Войдите в HeadHunter во вкладке входа. Список обновится сам — или нажмите «Я вошёл — показать резюме».";
-      setHhResumesActions({ open: true, confirm: true, novncUrl });
+        "Войдите в HeadHunter во вкладке входа, затем нажмите «Я вошёл — проверить».";
+      setHhResumesActions({ open: true, confirm: true, novncUrl: url });
       if (!hhResumesPollTimer) startHhResumesPoll({ attempts: 20, intervalMs: 2500 });
       void loadHhResumeContent({ hhCheckFailed: true });
       return false;
@@ -4359,7 +4385,7 @@ function renderHhResumes(payload) {
     hhResumesStatus.textContent = expiredHint
       ? "Сессия HeadHunter истекла или нужна повторная авторизация. Войдите снова."
       : "Чтобы показать ваши резюме, войдите в HeadHunter. Нажмите кнопку ниже.";
-    setHhResumesActions({ open: true, confirm: false, novncUrl });
+    setHhResumesActions({ open: true, confirm: false, novncUrl: url });
     void loadHhResumeContent({ hhCheckFailed: true });
     return false;
   }
@@ -4503,19 +4529,51 @@ async function runHhLoginAction(action, novncUrl, button) {
         hhResumes.hidden = false;
         hhResumesList.innerHTML = "";
         hhResumesStatus.textContent =
-          "Войдите в HeadHunter во вкладке входа. Список обновится сам, когда вход сохранится.";
+          "Войдите в HeadHunter во вкладке входа, затем нажмите «Я вошёл — проверить».";
         setHhResumesActions({ open: true, confirm: true, novncUrl: url });
-        showNotice("Войдите в HeadHunter во вкладке входа — список резюме обновится автоматически.");
+        showNotice("Войдите во вкладке входа, затем нажмите «Я вошёл — проверить».", "info");
+        // Refresh connection SoT so subsequent resume polls keep confirm visible.
+        await loadHhConnection();
+        setHhResumesActions({
+          open: true,
+          confirm: true,
+          novncUrl: hhConnection.dataset.novncUrl || url,
+        });
         startHhResumesPoll({ attempts: 24, intervalMs: 2500 });
       }
       return;
     }
     if (action === "confirm_login") {
+      showNotice("Проверяем вход в HeadHunter…", "info");
       const response = await fetch("/api/v1/hh/connection/confirm", { method: "POST" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || payload.code || "Не удалось подтвердить вход");
-      showNotice("Вход сохранён. Обновляем список резюме…");
+      if (!response.ok) {
+        throw new Error(payload.message || payload.code || "Не удалось подтвердить вход");
+      }
+      if (
+        payload.code === "browser_login_incomplete" ||
+        payload.browser_login === "login_required"
+      ) {
+        await loadHhConnection();
+        showNotice("Вход в HeadHunter ещё не завершён", "warning");
+        return;
+      }
+      if (payload.token_refresh === "failed") {
+        await loadHhConnection();
+        showNotice("Не удалось обновить OAuth-токен HeadHunter", "error");
+        return;
+      }
       await loadHhConnection();
+      const status = hhConnection.dataset.status || "unavailable";
+      if (status === "connected") {
+        showNotice("HeadHunter доступен");
+        return;
+      }
+      if (status === "action_required" || status === "not_authorized" || status === "expired") {
+        showNotice("Вход в HeadHunter ещё не завершён", "warning");
+        return;
+      }
+      showNotice("Не удалось проверить HeadHunter", "error");
       return;
     }
     if (action === "acquire_token") {
