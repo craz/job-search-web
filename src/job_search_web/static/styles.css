@@ -638,6 +638,15 @@ button { cursor: pointer; }
   line-height: 1.45;
 }
 
+.vacancy-search__last.is-history .vacancy-search__last-body {
+  color: var(--color-text-muted, var(--color-text-secondary));
+  opacity: 0.95;
+}
+
+.vacancy-search__last.is-error .vacancy-search__last-body {
+  color: var(--color-danger, #b42318);
+}
+
 .automation-panel {
   margin-top: var(--space-4);
   padding-top: var(--space-3);

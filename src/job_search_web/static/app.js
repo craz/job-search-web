@@ -1997,7 +1997,7 @@ const SEARCH_RECOVERY = {
   not_authorized: "Нужно войти в HeadHunter",
   browser_captcha_or_action_required: "HeadHunter требует действие в браузере",
   action_required: "HeadHunter требует действие в браузере",
-  profile_locked: "Профиль браузера HeadHunter сейчас занят",
+  profile_locked: "Браузер HeadHunter сейчас используется",
   transport_unavailable: "HeadHunter сейчас недоступен",
   browser_vacancy_read_failed: "HeadHunter сейчас недоступен",
   search_page_failed: "Не удалось получить результаты поиска",
@@ -2010,8 +2010,27 @@ const SEARCH_RECOVERY = {
   hh_unavailable: "HeadHunter сейчас недоступен",
 };
 
-function humanRecovery(code) {
+const SEARCH_RECOVERY_HISTORY = {
+  profile_locked: "Во время проверки браузер HeadHunter был занят",
+  browser_login_required: "Нужно было войти в HeadHunter",
+  browser_session_not_logged_in: "Нужно было войти в HeadHunter",
+  not_authorized: "Нужно было войти в HeadHunter",
+  browser_captcha_or_action_required: "HeadHunter требовал действие в браузере",
+  action_required: "HeadHunter требовал действие в браузере",
+  transport_unavailable: "HeadHunter был недоступен",
+  browser_vacancy_read_failed: "HeadHunter был недоступен",
+  hh_unavailable: "HeadHunter был недоступен",
+};
+
+function humanRecovery(code, { historical = false } = {}) {
   if (!code) return "";
+  if (historical) {
+    return (
+      SEARCH_RECOVERY_HISTORY[code] ||
+      SEARCH_RECOVERY[code] ||
+      "Проверка завершилась с ошибкой"
+    );
+  }
   return SEARCH_RECOVERY[code] || "Проверка завершилась с ошибкой";
 }
 
@@ -2030,6 +2049,11 @@ function setSuitableRunning(running) {
     button.disabled = running;
     button.textContent = running ? "Проверяем…" : "Проверить подходящие";
   }
+}
+
+function hhConnectionLooksHealthy() {
+  const status = hhConnection?.dataset?.status || "";
+  return status === "connected";
 }
 
 function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
@@ -2054,20 +2078,40 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
   const created = Number(run.created_count || 0);
   const updated = Number(run.updated_count || 0);
   const unchanged = Number(run.unchanged_count || 0);
-  const recovery = humanRecovery(run.error_code);
-  let headline = "Последняя проверка";
-  if (status === "running") headline = "Проверяем подходящие вакансии…";
-  else if (status === "success" && processed === 0) headline = "По вашему резюме подходящих вакансий в этой проверке нет";
-  else if (status === "success") headline = "Проверка завершена";
-  else if (status === "partial") headline = "Проверка завершена не полностью";
-  else if (status === "failed") headline = recovery || "Проверка не удалась";
+  const historyDetail = humanRecovery(run.error_code, { historical: true });
+  let headline = `Последняя проверка: ${when}`;
+  let detail = "";
+  if (status === "running") {
+    headline = "Проверяем подходящие вакансии…";
+  } else if (status === "success" && processed === 0) {
+    detail = "подходящих вакансий в этой проверке нет";
+  } else if (status === "success") {
+    detail = "завершена";
+  } else if (status === "partial") {
+    detail = "завершена не полностью";
+  } else if (status === "failed") {
+    detail = "завершилась с ошибкой";
+  }
+  if (status !== "running" && detail) {
+    headline = `Последняя проверка: ${when} — ${detail}`;
+  }
   const counts =
     status === "failed" && processed === 0
       ? ""
-      : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.`;
-  const extra = status === "partial" && recovery ? recovery : "";
+      : status === "running"
+        ? ""
+        : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.`;
+  const historyNote =
+    status === "failed" && historyDetail
+      ? historyDetail
+      : status === "partial" && historyDetail
+        ? historyDetail
+        : "";
   last.hidden = false;
-  body.textContent = [headline, counts, extra, when].filter(Boolean).join(" · ");
+  const healthyNow = hhConnectionLooksHealthy() && status !== "running";
+  last.classList.toggle("is-history", healthyNow && status === "failed");
+  last.classList.toggle("is-error", status === "failed" && !healthyNow);
+  body.textContent = [headline, counts, historyNote].filter(Boolean).join(" · ");
 }
 
 async function loadVacancies({ resetOffset = false } = {}) {
@@ -2159,6 +2203,9 @@ async function loadActiveResumeLine() {
   return null;
 }
 
+let latestSuitableRunCache = null;
+let latestSuitableRunMeta = {};
+
 async function loadLatestSuitableRun() {
   const response = await fetch("/api/v1/search-runs");
   const payload = await response.json();
@@ -2166,11 +2213,18 @@ async function loadLatestSuitableRun() {
   const latest = payload.items.find((item) => item.acquisition_kind === "resume_suitable") || null;
   if (!latest) return;
   const title = latest.candidate_context_snapshot?.hh_resume_title;
-  renderSuitableSummary(latest, { sourceTotal: latest.source_total, resumeTitle: title });
+  latestSuitableRunCache = latest;
+  latestSuitableRunMeta = { sourceTotal: latest.source_total, resumeTitle: title };
+  renderSuitableSummary(latest, latestSuitableRunMeta);
   if (latest.status === "running") {
     setSuitableRunning(true);
     setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
   }
+}
+
+function refreshSuitableHistoryPresentation() {
+  if (!latestSuitableRunCache) return;
+  renderSuitableSummary(latestSuitableRunCache, latestSuitableRunMeta);
 }
 
 async function runSuitableSearch() {
@@ -2191,10 +2245,12 @@ async function runSuitableSearch() {
       payload.candidate_context?.hh_resume_title ||
       run?.candidate_context_snapshot?.hh_resume_title;
     if (run) {
-      renderSuitableSummary(run, {
+      latestSuitableRunCache = run;
+      latestSuitableRunMeta = {
         sourceTotal: payload.source_total ?? run.source_total,
         resumeTitle,
-      });
+      };
+      renderSuitableSummary(run, latestSuitableRunMeta);
     }
     if (!response.ok && !run) {
       setSuitableStatus(humanRecovery(payload.code) || payload.message || "Проверка не удалась", {
@@ -2204,8 +2260,11 @@ async function runSuitableSearch() {
     }
     const status = String(run?.status || payload.status || "");
     if (status === "failed") {
-      setSuitableStatus(humanRecovery(run?.error_code || payload.code) || "Проверка не удалась", {
-        error: true,
+      // Completed run: keep the live status line neutral; details live in history block.
+      setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
+      renderSuitableSummary(run, {
+        sourceTotal: payload.source_total ?? run?.source_total,
+        resumeTitle,
       });
     } else if (status === "partial") {
       setSuitableStatus("Проверка завершена не полностью");
@@ -4552,8 +4611,10 @@ async function loadHhConnection() {
       await loadHhAccount();
     }
     await loadHhResumes();
+    refreshSuitableHistoryPresentation();
   } catch (error) {
     renderHhConnection({ status: "unavailable", action: { code: "none" } });
+    refreshSuitableHistoryPresentation();
   }
 }
 
