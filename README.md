@@ -44,6 +44,11 @@ Blind owner calibration labeling (R2.3.6.1) is served at
 persists labels into the same private Scoring store as the CLI and never shows
 model scores, verdicts or Assessments.
 
+«Проверить подходящие» runs a bounded multi-page HH suitable acquire (default
+cap: 5 SERP pages / ~250 vacancies per click). Progress shows HH `found` vs
+checked counts; «Загрузить ещё» continues from the next HH page for the same
+resume/order context instead of restarting at page 0.
+
 ## Boundaries
 
 - Browser requests use Web's same-origin `/api/v1` facade.

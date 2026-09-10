@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Suitable vacancy check paginates up to 5 HH pages (~250) per run with explicit
+  «Загрузить ещё» continuation (`start_page`), progress «Загружено X из Y», and
+  scaled HH proxy timeout. No silent first-page-only behavior.
 - R2.4.1b: vacancy list «Оценить» action with Web orchestration
   `POST /api/v1/vacancies/{id}/score` (source_status gate + HH refresh + Scoring
   semantic-v1 enqueue), optional source-status refresh, and light job polling.

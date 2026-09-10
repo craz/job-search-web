@@ -106,12 +106,14 @@
             <div class="vacancy-search__panel" id="panel-suitable" data-search-panel="suitable">
               <div class="vacancy-search__header">
                 <h3 id="vacancy-search-title" class="vacancy-search__title">Подходящие вакансии</h3>
-                <p class="vacancy-search__hint">По рабочему резюме HeadHunter. Проверяем до ~50 вакансий за запуск; это может занять несколько минут.</p>
+                <p class="vacancy-search__hint">По рабочему резюме HeadHunter. За один запуск — до 5 страниц HH (~250 вакансий). Если подходящих больше — «Загрузить ещё» продолжает со следующей страницы, а не с начала. Это может занять несколько минут.</p>
               </div>
               <p class="vacancy-search__resume" id="suitable-resume-line">Рабочее резюме: —</p>
               <p class="vacancy-search__total" id="suitable-total-line" hidden>HH предлагает: —</p>
+              <p class="vacancy-search__progress" id="suitable-progress-line" hidden></p>
               <div class="vacancy-search__actions">
                 <button class="btn btn--primary" id="suitable-run" type="button">Проверить подходящие</button>
+                <button class="btn btn--ghost" id="suitable-load-more" type="button" hidden>Загрузить ещё</button>
                 <p class="vacancy-search__status" id="suitable-status" role="status" aria-live="polite"></p>
               </div>
               <div class="vacancy-search__last" id="suitable-last" hidden>

@@ -2146,12 +2146,89 @@ function setSuitableStatus(message, { running = false, error = false } = {}) {
   status.classList.toggle("is-error", Boolean(error));
 }
 
+const SUITABLE_MAX_PAGES_PER_RUN = 5;
+const SUITABLE_PAGE_SIZE_HINT = 50;
+const SUITABLE_CONTINUATION_KEY = "hhSuitableContinuation";
+
+function readSuitableContinuation() {
+  try {
+    const raw = localStorage.getItem(SUITABLE_CONTINUATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeSuitableContinuation(state) {
+  try {
+    if (!state) {
+      localStorage.removeItem(SUITABLE_CONTINUATION_KEY);
+      return;
+    }
+    localStorage.setItem(SUITABLE_CONTINUATION_KEY, JSON.stringify(state));
+  } catch (_error) {
+    // Ignore quota / private-mode storage failures.
+  }
+}
+
+function setSuitableLoadMoreVisible(visible) {
+  const button = document.querySelector("#suitable-load-more");
+  if (!button) return;
+  button.hidden = !visible;
+}
+
+function renderSuitableProgress(meta = {}) {
+  const progressLine = document.querySelector("#suitable-progress-line");
+  if (!progressLine) return;
+  const cumulative = Number(meta.cumulativeChecked);
+  const sourceTotal = meta.sourceTotal ?? meta.found;
+  const pageFrom = meta.pageFrom;
+  const pageTo = meta.pageTo;
+  const more = Boolean(meta.moreRemaining);
+  const parts = [];
+  if (Number.isFinite(cumulative) && cumulative > 0 && sourceTotal != null && sourceTotal !== "") {
+    parts.push(
+      `Загружено ${Number(cumulative).toLocaleString("ru-RU")} из ${Number(sourceTotal).toLocaleString("ru-RU")}`
+    );
+  } else if (Number.isFinite(cumulative) && cumulative > 0) {
+    parts.push(`Загружено ${Number(cumulative).toLocaleString("ru-RU")}`);
+  }
+  if (pageFrom != null && pageTo != null) {
+    parts.push(
+      pageFrom === pageTo
+        ? `страница HH ${pageFrom}`
+        : `страницы HH ${pageFrom}–${pageTo}`
+    );
+  }
+  if (more) {
+    parts.push("есть ещё на HH");
+  } else if (parts.length) {
+    parts.push("дальше по HH не осталось (или достигнут конец выдачи)");
+  }
+  if (!parts.length) {
+    progressLine.hidden = true;
+    progressLine.textContent = "";
+    return;
+  }
+  progressLine.hidden = false;
+  progressLine.textContent = parts.join(" · ");
+  setSuitableLoadMoreVisible(more);
+}
+
 function setSuitableRunning(running) {
   vacancySearchRunning = running;
   const button = document.querySelector("#suitable-run");
   if (button) {
     button.disabled = running;
     button.textContent = running ? "Проверяем…" : "Проверить подходящие";
+  }
+  const more = document.querySelector("#suitable-load-more");
+  if (more) {
+    more.disabled = running;
+    more.textContent = running ? "Загружаем…" : "Загрузить ещё";
   }
 }
 
@@ -2160,7 +2237,7 @@ function hhConnectionLooksHealthy() {
   return status === "connected";
 }
 
-function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
+function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumulativeChecked, moreRemaining } = {}) {
   const last = document.querySelector("#suitable-last");
   const body = document.querySelector("#suitable-last-body");
   const totalLine = document.querySelector("#suitable-total-line");
@@ -2168,13 +2245,30 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
   if (resumeLine && resumeTitle) {
     resumeLine.textContent = `Рабочее резюме: ${resumeTitle}`;
   }
-  const total = sourceTotal ?? run?.source_total;
+  const total = sourceTotal ?? run?.source_total ?? pagination?.found ?? pagination?.source_total;
   if (totalLine) {
     if (total != null && total !== "") {
       totalLine.hidden = false;
       totalLine.textContent = `HH предлагает: ${Number(total).toLocaleString("ru-RU")}`;
     }
   }
+  const pageFrom = pagination?.page_from ?? pagination?.start_page;
+  const pageTo = pagination?.page_to;
+  const more =
+    moreRemaining != null
+      ? Boolean(moreRemaining)
+      : Boolean(pagination?.more_remaining ?? readSuitableContinuation()?.moreRemaining);
+  const cumulative =
+    cumulativeChecked != null
+      ? Number(cumulativeChecked)
+      : Number(readSuitableContinuation()?.cumulativeChecked || run?.found_count || 0);
+  renderSuitableProgress({
+    cumulativeChecked: cumulative,
+    sourceTotal: total,
+    pageFrom,
+    pageTo,
+    moreRemaining: more,
+  });
   if (!last || !body || !run) return;
   const when = formatDate(run.finished_at || run.started_at);
   const status = String(run.status || "");
@@ -2199,12 +2293,18 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle } = {}) {
   if (status !== "running" && detail) {
     headline = `Последняя проверка: ${when} — ${detail}`;
   }
+  const pageHint =
+    pageFrom != null && pageTo != null
+      ? pageFrom === pageTo
+        ? `Страница HH: ${pageFrom}.`
+        : `Страницы HH: ${pageFrom}–${pageTo}.`
+      : "";
   const counts =
     status === "failed" && processed === 0
       ? ""
       : status === "running"
         ? ""
-        : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.`;
+        : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.${pageHint ? ` ${pageHint}` : ""}`;
   const historyNote =
     status === "failed" && historyDetail
       ? historyDetail
@@ -2323,8 +2423,28 @@ async function loadLatestSuitableRun() {
   const latest = payload.items.find((item) => item.acquisition_kind === "resume_suitable") || null;
   if (!latest) return;
   const title = latest.candidate_context_snapshot?.hh_resume_title;
+  const continuation = readSuitableContinuation();
   latestSuitableRunCache = latest;
-  latestSuitableRunMeta = { sourceTotal: latest.source_total, resumeTitle: title };
+  latestSuitableRunMeta = {
+    sourceTotal: latest.source_total ?? continuation?.sourceTotal,
+    resumeTitle: title,
+    pagination: continuation
+      ? {
+          page_from: continuation.pageFrom,
+          page_to: continuation.pageTo,
+          more_remaining: continuation.moreRemaining,
+          found: continuation.sourceTotal,
+        }
+      : latest.execution_snapshot
+        ? {
+            start_page: latest.execution_snapshot.start_page,
+            page_from: latest.execution_snapshot.start_page,
+            max_pages: latest.execution_snapshot.max_pages,
+          }
+        : undefined,
+    cumulativeChecked: continuation?.cumulativeChecked,
+    moreRemaining: continuation?.moreRemaining,
+  };
   renderSuitableSummary(latest, latestSuitableRunMeta);
   if (latest.status === "running") {
     setSuitableRunning(true);
@@ -2337,16 +2457,33 @@ function refreshSuitableHistoryPresentation() {
   renderSuitableSummary(latestSuitableRunCache, latestSuitableRunMeta);
 }
 
-async function runSuitableSearch() {
+async function runSuitableSearch({ continueFromPrior = false } = {}) {
   if (vacancySearchRunning) return;
+  const continuation = continueFromPrior ? readSuitableContinuation() : null;
+  if (continueFromPrior && (!continuation || continuation.nextPage == null)) {
+    setSuitableStatus("Нет следующей страницы для загрузки", { error: true });
+    setSuitableLoadMoreVisible(false);
+    return;
+  }
+  const startPage = continueFromPrior ? Number(continuation.nextPage) : 0;
+  const maxPages = SUITABLE_MAX_PAGES_PER_RUN;
   setSuitableRunning(true);
-  setSuitableStatus("Проверяем подходящие вакансии… Это может занять несколько минут.", { running: true });
+  setSuitableStatus(
+    continueFromPrior
+      ? `Загружаем ещё подходящие (со страницы HH ${startPage}, до ${maxPages} стр.)…`
+      : `Проверяем подходящие вакансии (до ${maxPages} стр. HH / ~${maxPages * SUITABLE_PAGE_SIZE_HINT})… Это может занять несколько минут.`,
+    { running: true }
+  );
   try {
     const response = await fetch("/api/v1/hh/vacancies/suitable", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        execution: { order: "publication_time", max_pages: 1 },
+        execution: {
+          order: "publication_time",
+          max_pages: maxPages,
+          start_page: startPage,
+        },
       }),
     });
     const payload = await response.json();
@@ -2354,11 +2491,49 @@ async function runSuitableSearch() {
     const resumeTitle =
       payload.candidate_context?.hh_resume_title ||
       run?.candidate_context_snapshot?.hh_resume_title;
+    const pagination = payload.acquisition?.pagination || {};
+    const sourceTotal = payload.source_total ?? pagination.source_total ?? pagination.found;
+    const processed = Number(run?.found_count || 0);
+    const priorCumulative = continueFromPrior ? Number(continuation?.cumulativeChecked || 0) : 0;
+    const cumulativeChecked = priorCumulative + processed;
+    const moreRemaining = Boolean(pagination.more_remaining);
+    const nextPage = pagination.next_page;
+    if (moreRemaining && nextPage != null) {
+      writeSuitableContinuation({
+        resumeId: payload.candidate_context?.hh_resume_external_id || continuation?.resumeId || null,
+        order: "publication_time",
+        nextPage: Number(nextPage),
+        cumulativeChecked,
+        sourceTotal,
+        pageFrom: pagination.page_from ?? startPage,
+        pageTo: pagination.page_to,
+        moreRemaining: true,
+      });
+    } else {
+      writeSuitableContinuation(
+        cumulativeChecked > 0
+          ? {
+              resumeId:
+                payload.candidate_context?.hh_resume_external_id || continuation?.resumeId || null,
+              order: "publication_time",
+              nextPage: null,
+              cumulativeChecked,
+              sourceTotal,
+              pageFrom: pagination.page_from ?? startPage,
+              pageTo: pagination.page_to,
+              moreRemaining: false,
+            }
+          : null
+      );
+    }
     if (run) {
       latestSuitableRunCache = run;
       latestSuitableRunMeta = {
-        sourceTotal: payload.source_total ?? run.source_total,
+        sourceTotal,
         resumeTitle,
+        pagination,
+        cumulativeChecked,
+        moreRemaining,
       };
       renderSuitableSummary(run, latestSuitableRunMeta);
     }
@@ -2373,13 +2548,22 @@ async function runSuitableSearch() {
       // Completed run: keep the live status line neutral; details live in history block.
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
       renderSuitableSummary(run, {
-        sourceTotal: payload.source_total ?? run?.source_total,
+        sourceTotal,
         resumeTitle,
+        pagination,
+        cumulativeChecked,
+        moreRemaining,
       });
     } else if (status === "partial") {
       setSuitableStatus("Проверка завершена не полностью");
     } else if (status === "success" && Number(run?.found_count || 0) === 0) {
       setSuitableStatus("В этой проверке подходящих вакансий нет");
+    } else if (moreRemaining) {
+      setSuitableStatus(
+        `Проверка завершена · загружено ${cumulativeChecked.toLocaleString("ru-RU")}${
+          sourceTotal != null ? ` из ${Number(sourceTotal).toLocaleString("ru-RU")}` : ""
+        } · можно «Загрузить ещё»`
+      );
     } else {
       setSuitableStatus("Проверка завершена");
     }
@@ -2775,7 +2959,24 @@ function initVacancySearch() {
   const button = document.querySelector("#suitable-run");
   if (button) {
     button.addEventListener("click", () => {
-      void runSuitableSearch();
+      void runSuitableSearch({ continueFromPrior: false });
+    });
+  }
+  const loadMore = document.querySelector("#suitable-load-more");
+  if (loadMore) {
+    loadMore.addEventListener("click", () => {
+      void runSuitableSearch({ continueFromPrior: true });
+    });
+  }
+  const continuation = readSuitableContinuation();
+  setSuitableLoadMoreVisible(Boolean(continuation?.moreRemaining && continuation?.nextPage != null));
+  if (continuation?.cumulativeChecked) {
+    renderSuitableProgress({
+      cumulativeChecked: continuation.cumulativeChecked,
+      sourceTotal: continuation.sourceTotal,
+      pageFrom: continuation.pageFrom,
+      pageTo: continuation.pageTo,
+      moreRemaining: continuation.moreRemaining,
     });
   }
   void (async () => {

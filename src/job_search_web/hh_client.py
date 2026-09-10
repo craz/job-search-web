@@ -115,11 +115,23 @@ class HhClient:
 
     def search_suitable_vacancies(self, payload: dict[str, Any] | None = None) -> tuple[int, Any]:
         """Primary resume-suitable SearchRun (bounded browser acquire)."""
+        body: dict[str, Any] = dict(payload) if isinstance(payload, dict) else {}
+        exec_obj: dict[str, Any] = {}
+        raw_execution = body.get("execution")
+        if isinstance(raw_execution, dict):
+            exec_obj = dict(raw_execution)
+        try:
+            max_pages = int(exec_obj.get("max_pages") or 1)
+        except (TypeError, ValueError):
+            max_pages = 1
+        max_pages = max(1, min(max_pages, 20))
+        # Measured ~151s for max_pages=1 with details; scale conservatively per page.
+        timeout = max(self.timeout_seconds, 90.0 + max_pages * 180.0)
         return self._request(
             "POST",
             "/api/v1/vacancies/suitable",
-            json=payload or {},
-            timeout=max(self.timeout_seconds, 180.0),
+            json=body,
+            timeout=timeout,
         )
 
     def get_vacancy_source_status(self, external_id: str) -> tuple[int, Any]:

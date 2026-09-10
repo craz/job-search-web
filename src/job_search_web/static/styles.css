@@ -539,6 +539,7 @@ button { cursor: pointer; }
 
 .vacancy-search__resume,
 .vacancy-search__total,
+.vacancy-search__progress,
 .vacancy-search__deferred {
   margin: 0 0 var(--space-3);
   font-size: var(--font-size-secondary);

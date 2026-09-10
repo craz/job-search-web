@@ -25,6 +25,11 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     assert "Подходящие вакансии" in html
     assert "Проверить подходящие" in html
     assert 'id="suitable-run"' in html
+    assert 'id="suitable-load-more"' in html
+    assert "Загрузить ещё" in html
+    assert "до 5 страниц" in html
+    assert "~250" in html
+    assert "до ~50 вакансий" not in html
     assert "Рабочее резюме" in html
     assert "HH предлагает" in html
     assert "Свой поиск" in html
@@ -49,6 +54,11 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "Новых:" in js
     assert "Уже в базе:" in js
     assert "HH предлагает" in js
+    assert "SUITABLE_MAX_PAGES_PER_RUN" in js
+    assert "start_page" in js
+    assert "continueFromPrior" in js
+    assert "Загрузить ещё" in js
+    assert "max_pages: 1" not in js
     assert "buildVacancyListQuery" in js
     assert "formatFirstSeen" in js
     assert "getFullYear()" in js
@@ -68,4 +78,5 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
 def test_hh_client_suitable_uses_long_timeout() -> None:
     text = (ROOT / "src" / "job_search_web" / "hh_client.py").read_text(encoding="utf-8")
     assert "vacancies/suitable" in text
+    assert "max_pages * 180.0" in text
     assert "180.0" in text
