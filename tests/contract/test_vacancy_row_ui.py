@@ -92,7 +92,10 @@ def test_review_queue_owner_decision_mvp_strings() -> None:
     assert "Сначала новые" in html
     assert "Сначала старые" in html
     assert "list-row__published" in js
-    assert "Опубликована:" in js
+    assert "Опубликована" in js
+    assert "Найдена" in js
+    assert "vacancyFreshnessLabel" in js
+    assert "source_published_at" in js
     assert 'id="vacancy-pagination"' in html
     assert 'id="vacancy-page-prev"' in html
     assert 'id="vacancy-page-next"' in html

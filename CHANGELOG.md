@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Vacancy freshness UX: label «Опубликована» only when `source_published_at` is present; otherwise «Найдена» (`first_seen_at`). Never present first_seen as HH publication time.
+- Suitable pagination wording: «Проверено N из M · можно загрузить ещё» when continuation remains; «дальше по HH не осталось» only when HH has no further page (not page-budget stop).
+
 - Expanded HH vacancy detail: button «Проверить обновления» →
   `POST /api/v1/vacancies/{id}/refresh-content` (HH detail → Core ingest);
   UX: Проверяем… / Изменений нет / Вакансия обновлена /

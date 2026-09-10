@@ -69,11 +69,17 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "start_page" in js
     assert "continueFromPrior" in js
     assert "Загрузить ещё" in js
+    assert "можно загрузить ещё" in js
+    assert "Проверено ${" in js or "Проверено " in js
+    assert "дальше по HH не осталось (или достигнут конец выдачи)" not in js
     assert "max_pages: 1" not in js
     assert "buildVacancyListQuery" in js
     assert "formatFirstSeen" in js
     assert "getFullYear()" in js
-    assert "Опубликована:" in js
+    assert "Опубликована" in js
+    assert "Найдена" in js
+    assert "vacancyFreshnessLabel" in js
+    assert "source_published_at" in js
     assert "buildVacancyListQuery" in js
     assert "vacancy-filter-verdict" in html
     assert "vacancy-pagination" in html

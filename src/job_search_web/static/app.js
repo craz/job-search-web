@@ -1469,7 +1469,27 @@ function vacancySourceStatus(item) {
 }
 
 function vacancyPublicationDate(item) {
+  // Coalesce for freshness age / sort-adjacent UX only — never for labels.
   return item?.source_published_at || item?.first_seen_at || null;
+}
+
+function vacancyFreshnessLabel(item) {
+  /** Truthful freshness: HH publication vs local first-seen. */
+  if (item?.source_published_at) {
+    return {
+      kind: "published",
+      label: "Опубликована",
+      value: item.source_published_at,
+    };
+  }
+  if (item?.first_seen_at) {
+    return {
+      kind: "found",
+      label: "Найдена",
+      value: item.first_seen_at,
+    };
+  }
+  return null;
 }
 
 function vacancyFreshnessHint(item) {
@@ -1786,7 +1806,11 @@ function vacancyRow(item) {
           </div>
         </div>
         <p class="list-row__secondary">${escapeHtml(item.company.name)}${facts ? ` · ${escapeHtml(facts)}` : ""}</p>
-        <p class="list-row__published">Опубликована: <time datetime="${escapeHtml(vacancyPublicationDate(item) || "")}">${escapeHtml(formatFirstSeen(vacancyPublicationDate(item)))}</time>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
+        ${(() => {
+          const freshness = vacancyFreshnessLabel(item);
+          if (!freshness) return "";
+          return `<p class="list-row__published">${escapeHtml(freshness.label)}: <time datetime="${escapeHtml(freshness.value || "")}">${escapeHtml(formatFirstSeen(freshness.value))}</time>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>`;
+        })()}
       </div>
       <div class="list-row__trailing">
         ${assessmentSummary}
@@ -2870,10 +2894,10 @@ function renderSuitableProgress(meta = {}) {
   const parts = [];
   if (Number.isFinite(cumulative) && cumulative > 0 && sourceTotal != null && sourceTotal !== "") {
     parts.push(
-      `Загружено ${Number(cumulative).toLocaleString("ru-RU")} из ${Number(sourceTotal).toLocaleString("ru-RU")}`
+      `Проверено ${Number(cumulative).toLocaleString("ru-RU")} из ${Number(sourceTotal).toLocaleString("ru-RU")}`
     );
   } else if (Number.isFinite(cumulative) && cumulative > 0) {
-    parts.push(`Загружено ${Number(cumulative).toLocaleString("ru-RU")}`);
+    parts.push(`Проверено ${Number(cumulative).toLocaleString("ru-RU")}`);
   }
   if (pageFrom != null && pageTo != null) {
     parts.push(
@@ -2882,10 +2906,20 @@ function renderSuitableProgress(meta = {}) {
         : `страницы HH ${pageFrom}–${pageTo}`
     );
   }
-  if (more) {
-    parts.push("есть ещё на HH");
+  // Truthful continuation wording:
+  // - moreRemaining from HH pagination (page budget / not exhausted) → можно загрузить ещё
+  // - stale UI state with checked << source_total → same (never claim HH end)
+  // - only when checked covers source_total (or total unknown and more=false) → HH end
+  const checkedBelowTotal =
+    Number.isFinite(cumulative) &&
+    cumulative > 0 &&
+    sourceTotal != null &&
+    sourceTotal !== "" &&
+    cumulative < Number(sourceTotal);
+  if (more || checkedBelowTotal) {
+    parts.push("можно загрузить ещё");
   } else if (parts.length) {
-    parts.push("дальше по HH не осталось (или достигнут конец выдачи)");
+    parts.push("дальше по HH не осталось");
   }
   if (!parts.length) {
     progressLine.hidden = true;
@@ -2894,6 +2928,7 @@ function renderSuitableProgress(meta = {}) {
   }
   progressLine.hidden = false;
   progressLine.textContent = parts.join(" · ");
+  // Load-more button still requires real continuation (next_page), not inferred wording.
   setSuitableLoadMoreVisible(more);
 }
 
@@ -3551,9 +3586,9 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
       setSuitableStatus("В этой проверке подходящих вакансий нет");
     } else if (moreRemaining) {
       setSuitableStatus(
-        `Проверка завершена · загружено ${cumulativeChecked.toLocaleString("ru-RU")}${
+        `Проверка завершена · проверено ${cumulativeChecked.toLocaleString("ru-RU")}${
           sourceTotal != null ? ` из ${Number(sourceTotal).toLocaleString("ru-RU")}` : ""
-        } · можно «Загрузить ещё»`
+        } · можно загрузить ещё`
       );
     } else {
       setSuitableStatus("Проверка завершена");
