@@ -85,18 +85,40 @@ def test_run_bulk_partial_failure_and_cap() -> None:
     result = run_bulk_score_new(
         vacancy_ids=["a", "b", "c", "d", "e", "f"],
         score_one=score_one,
-        cap=4,
+        cap=2,
     )
-    assert calls == ["a", "b", "c", "d"]
+    # Cap counts new enqueues only: a(enqueued), b(queued), c(fail), d(scored), e(enqueued) → stop.
+    assert calls == ["a", "b", "c", "d", "e"]
     assert result["requested"] == 6
-    assert result["attempted"] == 4
-    assert result["remaining"] == 2
-    assert result["enqueued"] == 1
+    assert result["attempted"] == 5
+    assert result["enqueued"] == 2
     assert result["already_queued"] == 1
     assert result["failed"] == 1
     assert result["already_scored"] == 1
-    assert result["enqueued_vacancy_ids"] == ["a"]
-    assert result["job_ids"] == ["j-a"]
+    assert result["remaining"] == 2  # c failed + f not attempted
+    assert result["enqueued_vacancy_ids"] == ["a", "e"]
+    assert result["job_ids"] == ["j-a", "j-e"]
+
+
+def test_run_bulk_second_pass_skips_already_queued_to_fill_cap() -> None:
+    calls: list[str] = []
+
+    def score_one(vacancy_id: str):
+        calls.append(vacancy_id)
+        if vacancy_id in {"q1", "q2"}:
+            return 409, {"code": "already_queued", "message": "active_queue_duplicate"}
+        return 202, {"job_id": f"j-{vacancy_id}", "status": "queued"}
+
+    result = run_bulk_score_new(
+        vacancy_ids=["q1", "q2", "n1", "n2", "n3"],
+        score_one=score_one,
+        cap=2,
+    )
+    assert calls == ["q1", "q2", "n1", "n2"]
+    assert result["enqueued"] == 2
+    assert result["already_queued"] == 2
+    assert result["enqueued_vacancy_ids"] == ["n1", "n2"]
+    assert result["remaining"] == 1
 
 
 def test_classify_score_response_buckets() -> None:

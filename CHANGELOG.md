@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bulk «Оценить новые»: enqueue budget is new jobs only — already-queued ids are
+  skipped so a second click advances the remainder («Поставлено N из M»).
 - Suitable vacancy check paginates up to 5 HH pages (~250) per run with explicit
   «Загрузить ещё» continuation (`start_page`), progress «Загружено X из Y», and
   scaled HH proxy timeout. No silent first-page-only behavior.

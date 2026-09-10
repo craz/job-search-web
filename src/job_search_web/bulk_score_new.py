@@ -5,6 +5,10 @@ Product «новые» for the queue button is intentionally NOT funnel status `
 Assessment, within AUTO_SCORE_MAX_AGE_DAYS freshness, not a known terminal
 semantic failure — same freshness boundary automation uses so we never enqueue
 the whole historical unscored backlog.
+
+Queued/processing exclusion is enforced by Scoring ``active_queue_duplicate``:
+the bulk walker skips those without consuming the enqueue cap so a second click
+advances the remainder. Terminal semantic failures never join the eligible set.
 """
 
 from __future__ import annotations
@@ -134,24 +138,33 @@ def run_bulk_score_new(
     score_one: Callable[[str], tuple[int, Any]],
     cap: int = BULK_SCORE_NEW_CAP,
 ) -> dict[str, Any]:
-    """Enqueue up to ``cap`` ids through the existing single-score path."""
+    """Enqueue until ``cap`` new jobs land (or the eligible list is exhausted).
+
+    ``already_queued`` / ``already_scored`` / ``failed`` do not consume the
+    enqueue budget, so a second click advances past ids already in flight
+    instead of only re-hitting the same first page of the eligible list.
+    """
     limit = max(1, int(cap))
     requested = list(vacancy_ids)
-    slice_ids = requested[:limit]
     counts = {
         "requested": len(requested),
-        "attempted": len(slice_ids),
+        "attempted": 0,
         "enqueued": 0,
         "already_queued": 0,
         "already_scored": 0,
         "failed": 0,
-        "remaining": max(0, len(requested) - len(slice_ids)),
+        "remaining": 0,
         "cap": limit,
     }
     job_ids: list[str] = []
     enqueued_items: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
-    for vacancy_id in slice_ids:
+    covered: set[str] = set()
+
+    for vacancy_id in requested:
+        if counts["enqueued"] >= limit:
+            break
+        counts["attempted"] += 1
         try:
             status_code, payload = score_one(vacancy_id)
         except Exception as error:  # noqa: BLE001 - one failure must not abort batch
@@ -170,7 +183,10 @@ def run_bulk_score_new(
                 item["job_id"] = job_id
                 job_ids.append(job_id)
             enqueued_items.append(item)
-        if bucket == "failed":
+            covered.add(vacancy_id)
+        elif bucket in {"already_queued", "already_scored"}:
+            covered.add(vacancy_id)
+        elif bucket == "failed":
             failures.append(
                 {
                     "vacancy_id": vacancy_id,
@@ -178,6 +194,8 @@ def run_bulk_score_new(
                     "message": str(body.get("message") or "score_failed"),
                 }
             )
+
+    counts["remaining"] = max(0, len(requested) - len(covered))
     return {
         **counts,
         "job_ids": job_ids,

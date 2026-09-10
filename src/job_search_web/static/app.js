@@ -2840,13 +2840,17 @@ async function refreshBulkScoreNewButton() {
       return;
     }
     const eligible = Number(payload.eligible || 0);
-    if (eligible <= 0) {
+    // Core still reports unscored while Scoring jobs are in flight; subtract local
+    // pending so the button count drops as soon as cards become «В очереди».
+    const pendingLocal = pendingScoreByVacancyId.size;
+    const display = Math.max(0, eligible - pendingLocal);
+    if (display <= 0) {
       button.disabled = true;
       button.textContent = "Нет новых для оценки";
       return;
     }
     button.disabled = false;
-    button.textContent = `Оценить новые (${eligible})`;
+    button.textContent = `Оценить новые (${display})`;
   } catch (_error) {
     button.disabled = true;
     if (!button.textContent.includes("(")) {
@@ -2858,6 +2862,7 @@ async function refreshBulkScoreNewButton() {
 async function runBulkScoreNew() {
   const button = document.querySelector("#bulk-score-new");
   if (!button || button.disabled) return;
+  const scrollY = window.scrollY;
   const previous = button.textContent;
   button.dataset.busy = "1";
   button.disabled = true;
@@ -2878,6 +2883,7 @@ async function runBulkScoreNew() {
       if (item.job_id) void watchPendingScoreJob(vacancyId, item.job_id);
     }
     await loadVacancies();
+    window.scrollTo(0, scrollY);
   } catch (error) {
     showNotice(error.message || "Не удалось поставить новые в очередь", "error");
   } finally {
