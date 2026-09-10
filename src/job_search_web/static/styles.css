@@ -582,6 +582,18 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-semibold);
 }
 
+.vacancy-search__live-captcha-meta {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.vacancy-search__live-captcha-shot {
+  max-width: min(100%, 420px);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
 .vacancy-search__live-captcha-actions {
   display: flex;
   flex-wrap: wrap;

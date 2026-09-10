@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Suitable CAPTCHA handoff: «HeadHunter остановил загрузку и требует подтверждение»
+  with scraper screenshot, challenge-noVNC open (not login), and «Проверить снова».
 - Suitable CAPTCHA: live panel switches from «загрузка деталей» to
   «HeadHunter требует подтверждение CAPTCHA» with noVNC open + «Я вошёл —
   проверить»; historical line «остановлено: требуется CAPTCHA» (not proxy hang).

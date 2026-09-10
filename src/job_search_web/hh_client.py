@@ -95,6 +95,35 @@ class HhClient:
     def open_login(self) -> tuple[int, Any]:
         return self._request("POST", "/api/v1/connection/open-login", json={})
 
+    def open_challenge(self, *, challenge_url: str | None = None) -> tuple[int, Any]:
+        body: dict[str, Any] = {}
+        if challenge_url:
+            body["challenge_url"] = challenge_url
+        return self._request("POST", "/api/v1/connection/open-challenge", json=body)
+
+    def confirm_challenge(self) -> tuple[int, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/connection/confirm-challenge",
+            json={},
+            timeout=max(self.timeout_seconds, 90.0),
+        )
+
+    def get_challenge(self) -> tuple[int, Any]:
+        return self._request("GET", "/api/v1/challenge")
+
+    def get_challenge_screenshot(self) -> tuple[int, bytes, dict[str, str]]:
+        try:
+            response = httpx.request(
+                "GET",
+                f"{self.base_url}/api/v1/challenge/screenshot",
+                timeout=max(self.timeout_seconds, 20.0),
+            )
+            headers = {k.lower(): v for k, v in response.headers.items()}
+            return response.status_code, response.content, headers
+        except httpx.RequestError as error:
+            raise HhUnavailableError from error
+
     def confirm_login(self, *, confirmed: bool) -> tuple[int, Any]:
         # Confirm may stop the login browser and probe the profile (resumes page).
         return self._request(

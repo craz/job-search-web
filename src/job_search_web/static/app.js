@@ -2346,8 +2346,8 @@ const SEARCH_RECOVERY = {
   browser_login_required: "Нужно войти в HeadHunter",
   browser_session_not_logged_in: "Нужно войти в HeadHunter",
   not_authorized: "Нужно войти в HeadHunter",
-  browser_captcha_or_action_required: "HeadHunter требует подтверждение CAPTCHA",
-  captcha_required: "HeadHunter требует подтверждение CAPTCHA",
+  browser_captcha_or_action_required: "HeadHunter остановил загрузку и требует подтверждение",
+  captcha_required: "HeadHunter остановил загрузку и требует подтверждение",
   action_required: "HeadHunter требует действие в браузере",
   profile_locked: "Браузер HeadHunter сейчас используется",
   transport_unavailable: "HeadHunter сейчас недоступен",
@@ -2486,32 +2486,70 @@ function isSuitableCaptchaCode(code) {
   return code === "browser_captcha_or_action_required" || code === "captcha_required";
 }
 
-function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl = "" } = {}) {
+function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl = "", challenge = null } = {}) {
   const captcha = document.querySelector("#suitable-live-captcha");
   const msg = document.querySelector("#suitable-live-captcha-msg");
+  const meta = document.querySelector("#suitable-live-captcha-meta");
+  const shot = document.querySelector("#suitable-live-captcha-shot");
   const openBtn = document.querySelector("#suitable-captcha-open");
   const confirmBtn = document.querySelector("#suitable-captcha-confirm");
   const stuckEl = document.querySelector("#suitable-live-stuck");
   if (stuckEl) stuckEl.hidden = true;
   if (!captcha || !msg) return;
   captcha.hidden = false;
-  const pagesFetched = progress.pages_fetched;
-  const pagesPlanned = progress.pages_planned;
-  const checked = progress.checked_count;
-  const when = detectedAt || progress.last_progress_at;
-  const bits = ["HeadHunter требует подтверждение CAPTCHA"];
+  const challengeInfo = challenge && typeof challenge === "object" ? challenge : {};
+  const mergedProgress = {
+    ...progress,
+    ...(challengeInfo.progress && typeof challengeInfo.progress === "object"
+      ? challengeInfo.progress
+      : {}),
+  };
+  const pagesFetched = mergedProgress.pages_fetched;
+  const pagesPlanned = mergedProgress.pages_planned;
+  const checked = mergedProgress.checked_count;
+  const when = detectedAt || challengeInfo.detected_at || mergedProgress.last_progress_at;
+  msg.textContent = "HeadHunter остановил загрузку и требует подтверждение";
+  const bits = [];
   if (when) bits.push(`обнаружено: ${formatSuitableClock(when)}`);
   if (pagesFetched != null && pagesPlanned != null) {
     bits.push(`страниц HH: ${pagesFetched}/${pagesPlanned}`);
   }
   if (checked != null) bits.push(`проверено: ${Number(checked).toLocaleString("ru-RU")}`);
-  msg.textContent = bits.join(" · ");
+  const shotOk = Boolean(challengeInfo.screenshot_available);
+  bits.push(shotOk ? "скриншот scraper-браузера: есть" : "скриншот: нет");
+  bits.push(
+    challengeInfo.challenge_session_available
+      ? "сессия challenge в noVNC: доступна"
+      : "сессия challenge: откройте вручную по кнопке ниже"
+  );
+  bits.push("«Войти в HeadHunter» здесь не подходит — это другой браузер без challenge");
+  if (meta) {
+    meta.hidden = false;
+    meta.textContent = bits.join(" · ");
+  }
+  if (shot) {
+    if (shotOk) {
+      shot.hidden = false;
+      shot.src = `/api/v1/hh/challenge/screenshot?t=${Date.now()}`;
+    } else {
+      shot.hidden = true;
+      shot.removeAttribute("src");
+    }
+  }
   const url =
     novncUrl ||
+    challengeInfo.novnc_url ||
     hhConnection?.dataset?.novncUrl ||
     "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
-  if (openBtn) openBtn.dataset.novncUrl = url;
-  if (confirmBtn) confirmBtn.dataset.novncUrl = url;
+  if (openBtn) {
+    openBtn.dataset.novncUrl = url;
+    openBtn.dataset.challengeUrl = challengeInfo.challenge_url || "";
+    openBtn.textContent = "Открыть challenge в noVNC";
+  }
+  if (confirmBtn) {
+    confirmBtn.dataset.novncUrl = url;
+    confirmBtn.textContent = "Проверить снова";
+  }
 }
 
 function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
@@ -3151,7 +3189,9 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
     const status = String(run?.status || payload.status || "");
     const code = String(payload.code || run?.error_code || "");
     if (isSuitableCaptchaCode(code) || status === "action_required") {
-      setSuitableStatus("HeadHunter требует подтверждение CAPTCHA", { error: false });
+      setSuitableStatus("HeadHunter остановил загрузку и требует подтверждение", {
+        error: false,
+      });
       showSuitableCaptchaPanel({
         progress: run?.progress || {
           pages_fetched: pagination.pages_fetched,
@@ -3159,17 +3199,10 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
           checked_count: cumulativeChecked || processed,
           last_progress_at: run?.finished_at,
         },
-        detectedAt: run?.finished_at || run?.progress?.last_progress_at,
-        novncUrl: payload.action?.novnc_url || "",
+        detectedAt: run?.finished_at || run?.progress?.last_progress_at || payload.challenge?.detected_at,
+        novncUrl: payload.action?.novnc_url || payload.challenge?.novnc_url || "",
+        challenge: payload.challenge || null,
       });
-      // Surface the same recovery actions as HH account panel (noVNC + confirm).
-      if (typeof setHhResumesActions === "function") {
-        setHhResumesActions({
-          open: true,
-          confirm: true,
-          novncUrl: payload.action?.novnc_url || "",
-        });
-      }
     } else if (status === "failed") {
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
       renderSuitableSummary(run, {
@@ -3601,20 +3634,77 @@ function initVacancySearch() {
       void runSuitableSearch({ continueFromPrior: true });
     });
   }
-  document.querySelector("#suitable-captcha-open")?.addEventListener("click", (event) => {
+  document.querySelector("#suitable-captcha-open")?.addEventListener("click", async (event) => {
     const btn = event.currentTarget;
-    const url = btn?.dataset?.novncUrl || "";
-    void runHhLoginAction("open_login", url, btn);
+    const knownUrl = btn?.dataset?.novncUrl || "";
+    const challengeUrl = btn?.dataset?.challengeUrl || "";
+    try {
+      if (btn) btn.disabled = true;
+      const response = await fetch("/api/v1/hh/connection/open-challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(challengeUrl ? { challenge_url: challengeUrl } : {}),
+      });
+      const payload = await response.json();
+      const url = payload?.action?.novnc_url || payload?.novnc_url || knownUrl;
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      if (!response.ok) {
+        setSuitableStatus(
+          payload.message || "Не удалось открыть challenge-браузер",
+          { error: true }
+        );
+        return;
+      }
+      setSuitableStatus(
+        "Открыт браузер challenge (тот же профиль, URL challenge — не страница входа). Пройдите CAPTCHA в noVNC.",
+        { error: false }
+      );
+      showSuitableCaptchaPanel({
+        challenge: payload.challenge || null,
+        novncUrl: url,
+        progress: payload.challenge?.progress || {},
+      });
+    } catch (error) {
+      setSuitableStatus(error.message || "Не удалось открыть challenge", { error: true });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
   document.querySelector("#suitable-captcha-confirm")?.addEventListener("click", async (event) => {
     const btn = event.currentTarget;
-    const url = btn?.dataset?.novncUrl || "";
-    await runHhLoginAction("confirm_login", url, btn);
-    // Exact mid-detail resume is not implemented — restart a fresh suitable run.
-    setSuitableStatus(
-      "Проверка HH обновлена. Можно снова запустить «Проверить подходящие» (продолжение с середины деталей не сохраняется).",
-      { error: false }
-    );
+    try {
+      if (btn) btn.disabled = true;
+      const response = await fetch("/api/v1/hh/connection/confirm-challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json();
+      if (payload.cleared) {
+        const captcha = document.querySelector("#suitable-live-captcha");
+        if (captcha) captcha.hidden = true;
+        setSuitableStatus(
+          payload.message ||
+            "Challenge снят. Можно снова запустить «Проверить подходящие» (точное продолжение середины деталей не сохраняется).",
+          { error: false }
+        );
+        return;
+      }
+      setSuitableStatus(
+        payload.message || "CAPTCHA всё ещё активна — пройдите её в noVNC challenge-браузере.",
+        { error: true }
+      );
+      if (payload.challenge) {
+        showSuitableCaptchaPanel({
+          challenge: payload.challenge,
+          progress: payload.challenge.progress || {},
+        });
+      }
+    } catch (error) {
+      setSuitableStatus(error.message || "Не удалось проверить challenge", { error: true });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   });
   const continuation = readSuitableContinuation();
   setSuitableLoadMoreVisible(Boolean(continuation?.moreRemaining && continuation?.nextPage != null));

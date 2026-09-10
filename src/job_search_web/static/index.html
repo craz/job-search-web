@@ -116,16 +116,23 @@
                 <p class="vacancy-search__live-progress" id="suitable-live-progress"></p>
                 <p class="vacancy-search__live-counts" id="suitable-live-counts"></p>
                 <p class="vacancy-search__live-stuck" id="suitable-live-stuck" hidden>Давно нет прогресса</p>
-                <div class="vacancy-search__live-captcha" id="suitable-live-captcha" hidden>
+              <div class="vacancy-search__live-captcha" id="suitable-live-captcha" hidden>
                   <p class="vacancy-search__live-captcha-msg" id="suitable-live-captcha-msg">
-                    HeadHunter требует подтверждение CAPTCHA
+                    HeadHunter остановил загрузку и требует подтверждение
                   </p>
+                  <p class="vacancy-search__live-captcha-meta" id="suitable-live-captcha-meta"></p>
+                  <img
+                    class="vacancy-search__live-captcha-shot"
+                    id="suitable-live-captcha-shot"
+                    alt="Скриншот CAPTCHA из scraper-браузера"
+                    hidden
+                  />
                   <div class="vacancy-search__live-captcha-actions">
                     <button type="button" class="btn btn--primary" id="suitable-captcha-open">
-                      Войти в HeadHunter
+                      Открыть challenge в noVNC
                     </button>
                     <button type="button" class="btn btn--ghost" id="suitable-captcha-confirm">
-                      Я вошёл — проверить
+                      Проверить снова
                     </button>
                   </div>
                 </div>

@@ -385,6 +385,60 @@ def create_app(
                 content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
             )
 
+    @application.post("/api/v1/hh/connection/open-challenge")
+    def post_hh_open_challenge(payload: dict[str, Any] | None = None) -> JSONResponse:
+        """Open headed Chromium at the captured challenge URL (not login page)."""
+        try:
+            body = payload if isinstance(payload, dict) else {}
+            url = body.get("challenge_url") if isinstance(body.get("challenge_url"), str) else None
+            return proxy_response(*hh_gateway.open_challenge(challenge_url=url))
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
+
+    @application.post("/api/v1/hh/connection/confirm-challenge")
+    def post_hh_confirm_challenge() -> JSONResponse:
+        """Validate challenge is gone, then clear active CAPTCHA operator state."""
+        try:
+            return proxy_response(*hh_gateway.confirm_challenge())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
+
+    @application.get("/api/v1/hh/challenge")
+    def get_hh_challenge() -> JSONResponse:
+        try:
+            return proxy_response(*hh_gateway.get_challenge())
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
+
+    @application.get("/api/v1/hh/challenge/screenshot")
+    def get_hh_challenge_screenshot() -> Response:
+        try:
+            status, content, headers = hh_gateway.get_challenge_screenshot()
+            if status >= 400:
+                return JSONResponse(
+                    status_code=status,
+                    content={"code": "screenshot_unavailable"},
+                )
+            return Response(
+                content=content,
+                media_type=headers.get("content-type", "image/png"),
+                headers={"Cache-Control": "no-store"},
+            )
+        except HhUnavailableError:
+            return JSONResponse(
+                status_code=503,
+                content={"code": "hh_unavailable", "message": "HH connection API is unavailable"},
+            )
+
     @application.post("/api/v1/hh/connection/confirm")
     def post_hh_confirm() -> JSONResponse:
         """Record explicit operator confirmation after interactive HH login."""
