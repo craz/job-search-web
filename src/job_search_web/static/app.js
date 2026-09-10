@@ -2367,8 +2367,8 @@ const SEARCH_RECOVERY_HISTORY = {
   browser_login_required: "во время проверки нужно было войти в HeadHunter",
   browser_session_not_logged_in: "во время проверки нужно было войти в HeadHunter",
   not_authorized: "во время проверки нужно было войти в HeadHunter",
-  browser_captcha_or_action_required: "остановлено: требуется CAPTCHA",
-  captcha_required: "остановлено: требуется CAPTCHA",
+  browser_captcha_or_action_required: "HeadHunter потребовал CAPTCHA",
+  captcha_required: "HeadHunter потребовал CAPTCHA",
   action_required: "во время проверки HeadHunter требовал действие в браузере",
   transport_unavailable: "во время проверки HeadHunter был недоступен",
   browser_vacancy_read_failed: "во время проверки HeadHunter был недоступен",
@@ -2495,8 +2495,19 @@ function hideSuitableLivePanel() {
   if (live) live.hidden = true;
   const stuck = document.querySelector("#suitable-live-stuck");
   if (stuck) stuck.hidden = true;
+  hideSuitableCaptchaPanel();
+}
+
+function hideSuitableCaptchaPanel() {
   const captcha = document.querySelector("#suitable-live-captcha");
   if (captcha) captcha.hidden = true;
+  const openBtn = document.querySelector("#suitable-captcha-open");
+  const confirmBtn = document.querySelector("#suitable-captcha-confirm");
+  if (openBtn) {
+    openBtn.hidden = true;
+    openBtn.disabled = true;
+  }
+  if (confirmBtn) confirmBtn.hidden = true;
 }
 
 function isSuitableCaptchaCode(code) {
@@ -2752,8 +2763,8 @@ function renderSuitableFinalSummary(run, meta = {}) {
   const updated = Number(run.updated_count || 0);
   const unchanged = Number(run.unchanged_count || 0);
   const captchaStopped = isSuitableCaptchaCode(run.error_code);
+  // Historical final summary: never present CAPTCHA as a live recovery phrase here.
   progressEl.textContent = [
-    captchaStopped ? "остановлено: требуется CAPTCHA" : null,
     `Проверено: ${processed.toLocaleString("ru-RU")}`,
     pageFrom != null && pageTo != null ? `Страницы HH: ${pageFrom}–${pageTo}` : null,
   ]
@@ -2767,8 +2778,7 @@ function renderSuitableFinalSummary(run, meta = {}) {
       // Finished SearchRun may still carry captcha error_code historically.
       // Live operator panel (open/confirm) only when challenge is still active.
       if (!challenge) {
-        const captcha = document.querySelector("#suitable-live-captcha");
-        if (captcha) captcha.hidden = true;
+        hideSuitableCaptchaPanel();
         return;
       }
       showSuitableCaptchaPanel({
@@ -2785,8 +2795,7 @@ function renderSuitableFinalSummary(run, meta = {}) {
       });
     });
   } else {
-    const captcha = document.querySelector("#suitable-live-captcha");
-    if (captcha) captcha.hidden = true;
+    hideSuitableCaptchaPanel();
   }
 }
 
@@ -2911,21 +2920,21 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
   } else if (status === "success") {
     headline = `Последняя проверка: ${when} — завершена`;
   } else if (status === "partial") {
-    headline = historyDetail
-      ? `Последняя проверка: ${when} — ${
-          isSuitableCaptchaCode(run.error_code)
-            ? historyDetail
-            : `завершилась не полностью: ${historyDetail}`
-        }`
-      : `Последняя проверка: ${when} — завершилась не полностью`;
+    if (isSuitableCaptchaCode(run.error_code)) {
+      headline = `Последняя проверка остановлена: HeadHunter потребовал CAPTCHA · ${when}`;
+    } else {
+      headline = historyDetail
+        ? `Последняя проверка: ${when} — завершилась не полностью: ${historyDetail}`
+        : `Последняя проверка: ${when} — завершилась не полностью`;
+    }
   } else if (status === "failed") {
-    headline = historyDetail
-      ? `Последняя проверка: ${when} — ${
-          isSuitableCaptchaCode(run.error_code)
-            ? historyDetail
-            : `завершилась с ошибкой: ${historyDetail}`
-        }`
-      : `Последняя проверка: ${when} — завершилась с ошибкой`;
+    if (isSuitableCaptchaCode(run.error_code)) {
+      headline = `Последняя проверка остановлена: HeadHunter потребовал CAPTCHA · ${when}`;
+    } else {
+      headline = historyDetail
+        ? `Последняя проверка: ${when} — завершилась с ошибкой: ${historyDetail}`
+        : `Последняя проверка: ${when} — завершилась с ошибкой`;
+    }
   }
   const pageHint =
     pageFrom != null && pageTo != null
@@ -2941,8 +2950,12 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
   const healthyNow = hhConnectionLooksHealthy();
   const treatAsHistory =
     healthyNow && (status === "failed" || status === "partial") && Boolean(run.error_code);
-  last.classList.toggle("is-history", treatAsHistory);
-  last.classList.toggle("is-error", status === "failed" && !healthyNow);
+  last.classList.toggle("is-history", treatAsHistory || isSuitableCaptchaCode(run.error_code));
+  // Historical CAPTCHA must not look like a current red failure when HH is healthy / challenge gone.
+  last.classList.toggle(
+    "is-error",
+    status === "failed" && !healthyNow && !isSuitableCaptchaCode(run.error_code)
+  );
   body.textContent = [headline, counts].filter(Boolean).join(" · ");
 }
 

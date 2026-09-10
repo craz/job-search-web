@@ -10,6 +10,9 @@
   isolate HH/CAPTCHA failures via Promise.allSettled so Core/vacancies still load;
   hide live CAPTCHA operator panel for historical SearchRun when challenge is
   no longer active.
+- Web self-validation: `make js-syntax` + `make js-smoke` are part of `make test`;
+  intentional malformed JS fixture must fail the syntax gate; historical CAPTCHA
+  copy without live recovery CTAs; CSS `[hidden]` wins over `display:grid`.
 - Suitable CAPTCHA «Проверить снова»: immediate «Проверяем HeadHunter…»,
   explicit still-open / still-challenged / success messages in the captcha
   panel (no silent failures), refresh connection after clear.

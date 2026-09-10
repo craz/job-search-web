@@ -29,8 +29,15 @@ Requirements: Python 3.12, `uv`, GNU Make and a running Core API.
 ```bash
 make bootstrap
 CORE_API_URL=http://127.0.0.1:8000 make dev
-make test
+make test          # includes js-syntax + js-smoke (Node must be on PATH)
+make js-syntax     # node --check on shipped static/*.js
+make js-smoke      # stubbed-DOM bootstrap; HH degradation must not blank vacancies
 ```
+
+Web **TECHNICAL PASS** requires a green `make test` including JS syntax/bootstrap
+gates. Do not claim PASS from Python contract/string tests alone if `app.js` was
+not parsed. User-visible interaction changes also need a minimal real-browser
+smoke before READY FOR OWNER ACCEPTANCE.
 
 Open <http://127.0.0.1:8080>. Production-like startup uses the workspace
 Compose stack so the browser reaches Web and Web reaches `core:8000` internally.

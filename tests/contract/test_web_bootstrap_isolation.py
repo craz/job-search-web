@@ -33,11 +33,12 @@ def test_bootstrap_uses_allsettled_and_isolates_hh() -> None:
     assert "loadHhConnection().catch" in js or "void loadHhConnection().catch" in js
     assert "bootstrap" in js
     # Vacancies remain an independent settled task.
-    assert '["vacancies", () => loadVacancies()]' in js or '["vacancies", () => loadVacancies()]' in js.replace(
-        " ", ""
+    assert (
+        '["vacancies", () => loadVacancies()]' in js
+        or '["vacancies", () => loadVacancies()]' in js.replace(" ", "")
     )
     # Cache-bust must move when app.js changes (broken cached parse kills owner UI).
-    assert re.search(r'app\.js\?v=\d{8}-r\d+', HTML.read_text(encoding="utf-8"))
+    assert re.search(r"app\.js\?v=\d{8}-r\d+", HTML.read_text(encoding="utf-8"))
 
 
 def test_show_suitable_captcha_panel_safe_on_null_challenge() -> None:
@@ -45,7 +46,7 @@ def test_show_suitable_captcha_panel_safe_on_null_challenge() -> None:
     marker = "function showSuitableCaptchaPanel"
     assert marker in js
     body = js.split(marker, 1)[1].split("\nasync function ", 1)[0]
-    assert "challenge && typeof challenge === \"object\"" in body or "challengeInfo" in body
+    assert 'challenge && typeof challenge === "object"' in body or "challengeInfo" in body
     assert "confirmBtn" in body
     # Guard against the live regression: `if confirmBtn)` without '(' .
     assert "if (confirmBtn)" in body

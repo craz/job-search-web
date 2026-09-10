@@ -560,6 +560,12 @@ button { cursor: pointer; }
   min-height: 4.5rem;
 }
 
+/* display:grid above must not defeat HTML hidden — otherwise CAPTCHA CTAs stay visible. */
+.vacancy-search__live[hidden],
+.vacancy-search__live-captcha[hidden] {
+  display: none !important;
+}
+
 .vacancy-search__live-timing,
 .vacancy-search__live-progress,
 .vacancy-search__live-counts {

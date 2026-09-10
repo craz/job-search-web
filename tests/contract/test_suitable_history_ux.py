@@ -42,4 +42,7 @@ def test_active_run_hides_previous_history_block() -> None:
     # Historical recovery must not fall back to present-tense SEARCH_RECOVERY.
     history_fn = js.split("function humanRecovery", 1)[1].split("function setSuitableStatus", 1)[0]
     assert "SEARCH_RECOVERY_HISTORY[code]" in history_fn
-    assert "SEARCH_RECOVERY[code]" not in history_fn.split("if (historical)")[1].split("return SEARCH_RECOVERY")[0]
+    assert (
+        "SEARCH_RECOVERY[code]"
+        not in history_fn.split("if (historical)")[1].split("return SEARCH_RECOVERY")[0]
+    )

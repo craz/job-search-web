@@ -27,7 +27,7 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     assert 'id="suitable-run"' in html
     assert 'id="suitable-load-more"' in html
     assert 'id="suitable-live"' in html
-    assert 'suitable-live-timing' in html
+    assert "suitable-live-timing" in html
     assert "Загрузить ещё" in html
     assert "до 5 страниц" in html
     assert "~250" in html
