@@ -16,9 +16,12 @@ def test_score_click_not_stolen_by_article_owner_decision() -> None:
     assert 'closest("button[data-owner-decision]")' in js
     assert 'closest("[data-owner-decision]")' not in js
     assert 'closest("[data-score]")' in js
-    decision_idx = js.index('closest("button[data-owner-decision]")')
-    score_idx = js.index('closest("[data-score]")')
-    assert decision_idx < score_idx
+    # Score must be handled before owner-decision so a future broad closest
+    # cannot silently swallow «Оценить».
+    click_region = js.split('grid.addEventListener("click"', 1)[1]
+    score_idx = click_region.index('closest("[data-score]")')
+    decision_idx = click_region.index('closest("button[data-owner-decision]")')
+    assert score_idx < decision_idx
 
 
 def test_manual_score_enqueue_and_pending_ux_strings() -> None:
@@ -34,12 +37,17 @@ def test_manual_score_enqueue_and_pending_ux_strings() -> None:
     assert "Оценка уже в очереди" in js
     assert "Модель оценки сейчас недоступна" in js
     assert "Оценка поставлена в очередь" in js
+    assert "Ставим в очередь…" in js
+    assert "Оценка запущена…" in js
     assert "jobPayload.error_code" in js
     score_block = js.split("const scoreButton = event.target.closest")[1].split(
-        "const researchButton = event.target.closest"
+        "const decisionButton = event.target.closest"
     )[0]
     assert "resetOffset: true" not in score_block
     assert "window.scrollTo(0, scrollY)" in score_block
+    assert "pendingScoreByVacancyId.set(vacancyId" in score_block
+    assert "Ставим в очередь…" in score_block
+    assert "Оценка запущена…" in score_block
     assert (
         "fetch(`/api/v1/vacancies/${vacancyId}/score`" in score_block
         or "fetch(`/api/v1/vacancies/${vacancyId}/score`" in js

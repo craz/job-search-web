@@ -4221,6 +4221,166 @@ grid.addEventListener("change", async (event) => {
 });
 
 grid.addEventListener("click", async (event) => {
+  // Score first: article[data-owner-decision] must never steal «Оценить».
+  const scoreButton = event.target.closest("[data-score]");
+  if (scoreButton) {
+    if (scoreButton.disabled || scoreButton.dataset.scorePending === "1") return;
+    const card = scoreButton.closest("[data-id]");
+    const vacancyId = card?.dataset.id;
+    if (!vacancyId) return;
+    // Preserve filters/sort/page across score refresh (no pagination reset).
+    const scrollY = window.scrollY;
+    const idleLabel = scoreButton.dataset.scoreRetry === "1" ? "Повторить оценку" : "Оценить";
+    // Optimistic pending BEFORE await so list re-renders keep «В очереди».
+    pendingScoreByVacancyId.set(vacancyId, pendingScoreByVacancyId.get(vacancyId) || true);
+    scoreButton.disabled = true;
+    scoreButton.classList.add("is-processing");
+    scoreButton.dataset.scorePending = "1";
+    scoreButton.textContent = "Ставим в очередь…";
+    showNotice("Оценка запущена…", "info");
+    const restoreIdle = () => {
+      pendingScoreByVacancyId.delete(vacancyId);
+      const live = document.querySelector(
+        `.list-row-group--vacancy[data-id="${CSS.escape(vacancyId)}"] [data-score]`,
+      );
+      const btn = live || scoreButton;
+      btn.disabled = false;
+      btn.classList.remove("is-processing");
+      btn.textContent = idleLabel;
+      delete btn.dataset.scorePending;
+    };
+    const keepQueued = (jobId) => {
+      pendingScoreByVacancyId.set(vacancyId, jobId || pendingScoreByVacancyId.get(vacancyId) || true);
+      const live = document.querySelector(
+        `.list-row-group--vacancy[data-id="${CSS.escape(vacancyId)}"] [data-score]`,
+      );
+      const btn = live || scoreButton;
+      btn.disabled = true;
+      btn.classList.add("is-processing");
+      btn.dataset.scorePending = "1";
+      btn.textContent = "В очереди";
+    };
+    const setScoreLabel = (label) => {
+      const live = document.querySelector(
+        `.list-row-group--vacancy[data-id="${CSS.escape(vacancyId)}"] [data-score]`,
+      );
+      const btn = live || scoreButton;
+      btn.textContent = label;
+      btn.disabled = true;
+      btn.classList.add("is-processing");
+      btn.dataset.scorePending = "1";
+    };
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/score`, { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      const errorInfo = apiErrorInfo(payload);
+      if (!response.ok) {
+        if (errorInfo.code === "vacancy_archived") {
+          showNotice(errorInfo.message || "Вакансия в архиве на источнике", "warning");
+          pendingScoreByVacancyId.delete(vacancyId);
+          await loadVacancies();
+          window.scrollTo(0, scrollY);
+          return;
+        }
+        if (errorInfo.code === "source_status_unknown") {
+          showNotice(errorInfo.message || "Статус на источнике неизвестен — повторите позже", "warning");
+          restoreIdle();
+          return;
+        }
+        if (errorInfo.code === "scoring_unavailable") {
+          showNotice(
+            errorInfo.message || "Scoring сейчас недоступен. Очередь работает; оценку повторите позже.",
+            "warning",
+          );
+          restoreIdle();
+          return;
+        }
+        if (
+          errorInfo.code === "ollama_unavailable" ||
+          errorInfo.code === "rabbitmq_publish_failed" ||
+          errorInfo.message === "ollama_unavailable"
+        ) {
+          showNotice(
+            errorInfo.code === "rabbitmq_publish_failed"
+              ? "Не удалось поставить оценку в очередь (RabbitMQ)."
+              : "Модель оценки сейчас недоступна. Повторите позже.",
+            "warning",
+          );
+          restoreIdle();
+          return;
+        }
+        if (
+          errorInfo.code === "already_queued" ||
+          errorInfo.code === "active_queue_duplicate" ||
+          errorInfo.message === "active_queue_duplicate"
+        ) {
+          keepQueued();
+          showNotice("Оценка уже в очереди", "info");
+          await loadVacancies();
+          window.scrollTo(0, scrollY);
+          return;
+        }
+        throw new Error(errorInfo.message || "Оценка не запущена");
+      }
+      const jobId = payload.job_id;
+      pendingScoreByVacancyId.set(vacancyId, jobId || true);
+      setScoreLabel(payload.status === "processing" ? "Оценивается…" : "В очереди");
+      showNotice(
+        payload.status === "done" ? "Оценка готова" : "Оценка поставлена в очередь",
+      );
+      if (payload.status === "done") {
+        pendingScoreByVacancyId.delete(vacancyId);
+        await loadVacancies();
+        window.scrollTo(0, scrollY);
+        return;
+      }
+      if (jobId) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          const jobResponse = await fetch(`/api/v1/score/jobs/${jobId}`);
+          const jobPayload = await jobResponse.json().catch(() => ({}));
+          if (!jobResponse.ok) {
+            const jobErr = apiErrorInfo(jobPayload);
+            throw new Error(jobErr.message || "Не удалось проверить статус оценки");
+          }
+          if (jobPayload.status === "processing") {
+            setScoreLabel("Оценивается…");
+            continue;
+          }
+          if (jobPayload.status === "done") {
+            pendingScoreByVacancyId.delete(vacancyId);
+            showNotice("Оценка готова");
+            await loadVacancies();
+            window.scrollTo(0, scrollY);
+            return;
+          }
+          // Scoring may leave error_code on non-error status (e.g. queued + ollama_unavailable).
+          if (jobPayload.status === "error" || jobPayload.error_code || jobPayload.error_message) {
+            throw new Error(
+              jobPayload.error_message || jobPayload.error_code || "Оценка не выполнена",
+            );
+          }
+          if (jobPayload.status === "queued") {
+            setScoreLabel("В очереди");
+          }
+        }
+        keepQueued(jobId);
+        showNotice("Оценка ещё в очереди — статус сохранится на карточке", "info");
+        void watchPendingScoreJob(vacancyId, jobId);
+        await loadVacancies();
+        window.scrollTo(0, scrollY);
+        return;
+      }
+      keepQueued();
+    } catch (error) {
+      showNotice(error.message || "Оценка не запущена", "error");
+      restoreIdle();
+      await loadVacancies();
+      window.scrollTo(0, scrollY);
+    }
+    return;
+  }
+
   const decisionButton = event.target.closest("button[data-owner-decision]");
   if (decisionButton) {
     const card = decisionButton.closest("[data-id]");
@@ -4637,143 +4797,6 @@ grid.addEventListener("click", async (event) => {
       await Promise.all([loadHiringProcesses(), loadVacancies()]);
     } catch (error) {
       showNotice(error.message, "warning");
-    }
-    return;
-  }
-  const scoreButton = event.target.closest("[data-score]");
-  if (scoreButton) {
-    if (scoreButton.disabled || scoreButton.dataset.scorePending === "1") return;
-    const card = scoreButton.closest("[data-id]");
-    const vacancyId = card?.dataset.id;
-    if (!vacancyId) return;
-    // Preserve filters/sort/page across score refresh (no pagination reset).
-    const scrollY = window.scrollY;
-    scoreButton.disabled = true;
-    scoreButton.classList.add("is-processing");
-    const idleLabel = scoreButton.dataset.scoreRetry === "1" ? "Повторить оценку" : "Оценить";
-    scoreButton.textContent = "Оценивается…";
-    const restoreIdle = () => {
-      pendingScoreByVacancyId.delete(vacancyId);
-      scoreButton.disabled = false;
-      scoreButton.classList.remove("is-processing");
-      scoreButton.textContent = idleLabel;
-      delete scoreButton.dataset.scorePending;
-    };
-    const keepQueued = () => {
-      pendingScoreByVacancyId.set(vacancyId, pendingScoreByVacancyId.get(vacancyId) || true);
-      scoreButton.disabled = true;
-      scoreButton.classList.add("is-processing");
-      scoreButton.dataset.scorePending = "1";
-      scoreButton.textContent = "В очереди";
-    };
-    try {
-      const response = await fetch(`/api/v1/vacancies/${vacancyId}/score`, { method: "POST" });
-      const payload = await response.json().catch(() => ({}));
-      const errorInfo = apiErrorInfo(payload);
-      if (!response.ok) {
-        if (errorInfo.code === "vacancy_archived") {
-          showNotice(errorInfo.message || "Вакансия в архиве на источнике", "warning");
-          pendingScoreByVacancyId.delete(vacancyId);
-          await loadVacancies();
-          window.scrollTo(0, scrollY);
-          return;
-        }
-        if (errorInfo.code === "source_status_unknown") {
-          showNotice(errorInfo.message || "Статус на источнике неизвестен — повторите позже", "warning");
-          restoreIdle();
-          return;
-        }
-        if (errorInfo.code === "scoring_unavailable") {
-          showNotice(
-            errorInfo.message || "Scoring сейчас недоступен. Очередь работает; оценку повторите позже.",
-            "warning",
-          );
-          restoreIdle();
-          return;
-        }
-        if (
-          errorInfo.code === "ollama_unavailable" ||
-          errorInfo.code === "rabbitmq_publish_failed" ||
-          errorInfo.message === "ollama_unavailable"
-        ) {
-          showNotice(
-            errorInfo.code === "rabbitmq_publish_failed"
-              ? "Не удалось поставить оценку в очередь (RabbitMQ)."
-              : "Модель оценки сейчас недоступна. Повторите позже.",
-            "warning",
-          );
-          restoreIdle();
-          return;
-        }
-        if (
-          errorInfo.code === "already_queued" ||
-          errorInfo.code === "active_queue_duplicate" ||
-          errorInfo.message === "active_queue_duplicate"
-        ) {
-          keepQueued();
-          showNotice("Оценка уже в очереди", "info");
-          await loadVacancies();
-          window.scrollTo(0, scrollY);
-          return;
-        }
-        throw new Error(errorInfo.message || "Оценка не запущена");
-      }
-      const jobId = payload.job_id;
-      pendingScoreByVacancyId.set(vacancyId, jobId || true);
-      scoreButton.dataset.scorePending = "1";
-      scoreButton.textContent = payload.status === "processing" ? "Оценивается…" : "В очереди";
-      showNotice(
-        payload.status === "done" ? "Оценка готова" : "Оценка поставлена в очередь",
-      );
-      if (payload.status === "done") {
-        pendingScoreByVacancyId.delete(vacancyId);
-        await loadVacancies();
-        window.scrollTo(0, scrollY);
-        return;
-      }
-      if (jobId) {
-        for (let attempt = 0; attempt < 40; attempt += 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, 1500));
-          const jobResponse = await fetch(`/api/v1/score/jobs/${jobId}`);
-          const jobPayload = await jobResponse.json().catch(() => ({}));
-          if (!jobResponse.ok) {
-            const jobErr = apiErrorInfo(jobPayload);
-            throw new Error(jobErr.message || "Не удалось проверить статус оценки");
-          }
-          if (jobPayload.status === "processing") {
-            scoreButton.textContent = "Оценивается…";
-            continue;
-          }
-          if (jobPayload.status === "done") {
-            pendingScoreByVacancyId.delete(vacancyId);
-            showNotice("Оценка готова");
-            await loadVacancies();
-            window.scrollTo(0, scrollY);
-            return;
-          }
-          // Scoring may leave error_code on non-error status (e.g. queued + ollama_unavailable).
-          if (jobPayload.status === "error" || jobPayload.error_code || jobPayload.error_message) {
-            throw new Error(
-              jobPayload.error_message || jobPayload.error_code || "Оценка не выполнена",
-            );
-          }
-          if (jobPayload.status === "queued") {
-            scoreButton.textContent = "В очереди";
-          }
-        }
-        keepQueued();
-        showNotice("Оценка ещё в очереди — статус сохранится на карточке", "info");
-        void watchPendingScoreJob(vacancyId, jobId);
-        await loadVacancies();
-        window.scrollTo(0, scrollY);
-        return;
-      }
-      keepQueued();
-    } catch (error) {
-      showNotice(error.message || "Оценка не запущена", "error");
-      restoreIdle();
-      await loadVacancies();
-      window.scrollTo(0, scrollY);
     }
     return;
   }

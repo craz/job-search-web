@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Manual «Оценить»: handle `[data-score]` before owner-decision; set pending +
+  «Ставим в очередь…» / notice «Оценка запущена…» immediately (survive list
+  re-renders); re-bind live button by vacancy id; DOM regression that
+  article `[data-owner-decision]` must not intercept the score button.
+
 - Vacancy freshness UX: label «Опубликована» only when `source_published_at` is present; otherwise «Найдена» (`first_seen_at`). Never present first_seen as HH publication time.
 - Suitable pagination wording: «Проверено N из M · можно загрузить ещё» when continuation remains; «дальше по HH не осталось» only when HH has no further page (not page-budget stop).
 
