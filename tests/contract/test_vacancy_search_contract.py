@@ -26,6 +26,8 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     assert "Проверить подходящие" in html
     assert 'id="suitable-run"' in html
     assert 'id="suitable-load-more"' in html
+    assert 'id="suitable-live"' in html
+    assert 'suitable-live-timing' in html
     assert "Загрузить ещё" in html
     assert "до 5 страниц" in html
     assert "~250" in html
@@ -50,6 +52,14 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     html = (STATIC / "index.html").read_text(encoding="utf-8")
     assert "/api/v1/hh/vacancies/suitable" in js
     assert "Проверяем подходящие вакансии" in js
+    assert "startSuitableLiveWatch" in js
+    assert "pollSuitableRunningProgress" in js
+    assert "renderSuitableLiveFromRun" in js
+    assert "renderSuitableFinalSummary" in js
+    assert "Давно нет прогресса" in html
+    assert "SUITABLE_POLL_MS" in js
+    assert "Запущена:" in js
+    assert "прошло" in js
     assert "Проверено:" in js
     assert "Новых:" in js
     assert "Уже в базе:" in js

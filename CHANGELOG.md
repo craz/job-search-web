@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Suitable live progress: started/elapsed timer, HH page + checked counts from
+  SearchRun.progress polling, stuck warning, reload restore, final duration summary.
 - Localize vacancy scoring decision card labels/enums/actions to Russian; raw
   codes and model stay under muted «Технические детали».
 - Vacancy Разбор shows structured Assessment decision card; non-authoritative relevance_score is muted and no longer treated as the verdict explanation.

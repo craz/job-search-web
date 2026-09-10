@@ -2396,6 +2396,14 @@ function setSuitableStatus(message, { running = false, error = false } = {}) {
 const SUITABLE_MAX_PAGES_PER_RUN = 5;
 const SUITABLE_PAGE_SIZE_HINT = 50;
 const SUITABLE_CONTINUATION_KEY = "hhSuitableContinuation";
+const SUITABLE_POLL_MS = 2000;
+const SUITABLE_STUCK_MS = 180000; // matches ~1 HH page budget
+
+let suitableLiveRunId = null;
+let suitableLiveStartedAt = null;
+let suitablePollTimer = null;
+let suitableElapsedTimer = null;
+let suitableActivePost = false;
 
 function readSuitableContinuation() {
   try {
@@ -2425,6 +2433,154 @@ function setSuitableLoadMoreVisible(visible) {
   const button = document.querySelector("#suitable-load-more");
   if (!button) return;
   button.hidden = !visible;
+}
+
+function formatSuitableClock(iso) {
+  if (!iso) return "—";
+  try {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return String(iso);
+    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch (_error) {
+    return String(iso);
+  }
+}
+
+function formatSuitableElapsed(ms) {
+  const totalSec = Math.max(0, Math.floor(Number(ms) / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min <= 0) return `${sec} сек`;
+  return `${min} мин ${sec} сек`;
+}
+
+function stopSuitableLiveTimers() {
+  if (suitablePollTimer) {
+    clearInterval(suitablePollTimer);
+    suitablePollTimer = null;
+  }
+  if (suitableElapsedTimer) {
+    clearInterval(suitableElapsedTimer);
+    suitableElapsedTimer = null;
+  }
+}
+
+function hideSuitableLivePanel() {
+  const live = document.querySelector("#suitable-live");
+  if (live) live.hidden = true;
+  const stuck = document.querySelector("#suitable-live-stuck");
+  if (stuck) stuck.hidden = true;
+}
+
+function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
+  const live = document.querySelector("#suitable-live");
+  const timing = document.querySelector("#suitable-live-timing");
+  const progressEl = document.querySelector("#suitable-live-progress");
+  const countsEl = document.querySelector("#suitable-live-counts");
+  const stuckEl = document.querySelector("#suitable-live-stuck");
+  if (!live || !timing || !progressEl || !countsEl) return;
+  if (!run || String(run.status || "") !== "running") {
+    hideSuitableLivePanel();
+    return;
+  }
+  live.hidden = false;
+  const startedAt = run.started_at || clientStartedAt || suitableLiveStartedAt;
+  suitableLiveStartedAt = startedAt;
+  suitableLiveRunId = run.id || suitableLiveRunId;
+  const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
+  const elapsedMs = Date.now() - startedMs;
+  timing.textContent = `Запущена: ${formatSuitableClock(startedAt)} · прошло ${formatSuitableElapsed(elapsedMs)}`;
+
+  const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
+  const pagesPlanned =
+    progress.pages_planned ??
+    run.execution_snapshot?.max_pages ??
+    SUITABLE_MAX_PAGES_PER_RUN;
+  const pagesFetched = progress.pages_fetched;
+  const pageCurrent = progress.page_current;
+  const pageFrom = progress.page_from ?? run.execution_snapshot?.start_page ?? 0;
+  const checked =
+    progress.checked_count != null ? Number(progress.checked_count) : Number(run.found_count || 0);
+  const sourceTotal = progress.source_total ?? run.source_total;
+  const pageOrdinal =
+    pagesFetched != null
+      ? Math.min(Number(pagesFetched), Number(pagesPlanned) || Number(pagesFetched))
+      : pageCurrent != null
+        ? Number(pageCurrent) - Number(pageFrom) + 1
+        : null;
+  const pageBits = [];
+  if (pageOrdinal != null && pagesPlanned != null) {
+    pageBits.push(`Страница HH: ${pageOrdinal} из ${pagesPlanned}`);
+  } else if (pagesFetched != null) {
+    pageBits.push(`Страниц HH: ${pagesFetched}`);
+  }
+  if (Number.isFinite(checked)) {
+    if (sourceTotal != null && sourceTotal !== "") {
+      pageBits.push(
+        `Проверено: ${checked.toLocaleString("ru-RU")} из ~${Number(sourceTotal).toLocaleString("ru-RU")}`
+      );
+    } else {
+      pageBits.push(`Проверено: ${checked.toLocaleString("ru-RU")}`);
+    }
+  }
+  if (progress.phase === "details") pageBits.push("загрузка деталей");
+  if (progress.phase === "ingest") pageBits.push("запись в базу");
+  progressEl.textContent = pageBits.join(" · ") || "Ожидаем первую страницу HH…";
+
+  const created = progress.created_count;
+  const updated = progress.updated_count;
+  const unchanged = progress.unchanged_count;
+  const countBits = [];
+  if (created != null) countBits.push(`Новых: ${created}`);
+  if (updated != null) countBits.push(`Обновлено: ${updated}`);
+  if (unchanged != null) countBits.push(`Уже в базе: ${unchanged}`);
+  countsEl.textContent = countBits.join(" · ");
+  countsEl.hidden = !countBits.length;
+
+  const lastProgressAt = progress.last_progress_at || run.started_at;
+  const lastMs = lastProgressAt ? new Date(lastProgressAt).getTime() : startedMs;
+  const stalled = Date.now() - lastMs > SUITABLE_STUCK_MS;
+  if (stuckEl) stuckEl.hidden = !stalled;
+}
+
+function renderSuitableFinalSummary(run, meta = {}) {
+  const live = document.querySelector("#suitable-live");
+  const timing = document.querySelector("#suitable-live-timing");
+  const progressEl = document.querySelector("#suitable-live-progress");
+  const countsEl = document.querySelector("#suitable-live-counts");
+  const stuckEl = document.querySelector("#suitable-live-stuck");
+  if (!live || !run) return;
+  live.hidden = false;
+  if (stuckEl) stuckEl.hidden = true;
+  const startedAt = run.started_at;
+  const finishedAt = run.finished_at;
+  const startedMs = startedAt ? new Date(startedAt).getTime() : null;
+  const finishedMs = finishedAt ? new Date(finishedAt).getTime() : null;
+  const durationMs =
+    startedMs != null && finishedMs != null ? Math.max(0, finishedMs - startedMs) : null;
+  timing.textContent = [
+    `Запущена: ${formatSuitableClock(startedAt)}`,
+    finishedAt ? `Завершена: ${formatSuitableClock(finishedAt)}` : null,
+    durationMs != null ? `Длительность: ${formatSuitableElapsed(durationMs)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const pagination = meta.pagination || {};
+  const pageFrom = pagination.page_from ?? pagination.start_page;
+  const pageTo = pagination.page_to;
+  const processed = Number(run.found_count || 0);
+  const created = Number(run.created_count || 0);
+  const updated = Number(run.updated_count || 0);
+  const unchanged = Number(run.unchanged_count || 0);
+  progressEl.textContent = [
+    `Проверено: ${processed.toLocaleString("ru-RU")}`,
+    pageFrom != null && pageTo != null ? `Страницы HH: ${pageFrom}–${pageTo}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  countsEl.hidden = false;
+  countsEl.textContent = `Новых: ${created} · Обновлено: ${updated} · Уже в базе: ${unchanged}`;
 }
 
 function renderSuitableProgress(meta = {}) {
@@ -2477,6 +2633,10 @@ function setSuitableRunning(running) {
     more.disabled = running;
     more.textContent = running ? "Загружаем…" : "Загрузить ещё";
   }
+  if (!running) {
+    stopSuitableLiveTimers();
+    suitableActivePost = false;
+  }
 }
 
 function hhConnectionLooksHealthy() {
@@ -2527,7 +2687,8 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
   let headline = `Последняя проверка: ${when}`;
   let detail = "";
   if (status === "running") {
-    headline = "Проверяем подходящие вакансии…";
+    headline = `Проверка идёт · запущена ${formatSuitableClock(run.started_at)}`;
+    renderSuitableLiveFromRun(run);
   } else if (status === "success" && processed === 0) {
     detail = "подходящих вакансий в этой проверке нет";
   } else if (status === "success") {
@@ -2563,6 +2724,66 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
   last.classList.toggle("is-history", healthyNow && status === "failed");
   last.classList.toggle("is-error", status === "failed" && !healthyNow);
   body.textContent = [headline, counts, historyNote].filter(Boolean).join(" · ");
+}
+
+async function pollSuitableRunningProgress() {
+  try {
+    const response = await fetch("/api/v1/search-runs");
+    const payload = await response.json();
+    if (!response.ok || !payload.items?.length) return null;
+    const running =
+      payload.items.find(
+        (item) =>
+          item.acquisition_kind === "resume_suitable" && String(item.status || "") === "running"
+      ) || null;
+    if (!running) return null;
+    if (suitableLiveRunId && running.id && running.id !== suitableLiveRunId) {
+      // Prefer the run we started; fall through to newest running suitable.
+    }
+    suitableLiveRunId = running.id || suitableLiveRunId;
+    latestSuitableRunCache = running;
+    renderSuitableLiveFromRun(running, { clientStartedAt: suitableLiveStartedAt });
+    setSuitableRunning(true);
+    setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
+    return running;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function startSuitableLiveWatch({ startedAtIso = null, runId = null } = {}) {
+  suitableLiveStartedAt = startedAtIso || suitableLiveStartedAt || new Date().toISOString();
+  suitableLiveRunId = runId || suitableLiveRunId;
+  stopSuitableLiveTimers();
+  const live = document.querySelector("#suitable-live");
+  if (live) {
+    live.hidden = false;
+    renderSuitableLiveFromRun(
+      {
+        id: suitableLiveRunId,
+        status: "running",
+        started_at: suitableLiveStartedAt,
+        progress: { pages_fetched: 0, pages_planned: SUITABLE_MAX_PAGES_PER_RUN, checked_count: 0, phase: "started" },
+        execution_snapshot: { max_pages: SUITABLE_MAX_PAGES_PER_RUN, start_page: 0 },
+      },
+      { clientStartedAt: suitableLiveStartedAt }
+    );
+  }
+  suitableElapsedTimer = setInterval(() => {
+    if (!suitableLiveStartedAt) return;
+    const timing = document.querySelector("#suitable-live-timing");
+    if (!timing) return;
+    const elapsedMs = Date.now() - new Date(suitableLiveStartedAt).getTime();
+    const base = timing.textContent || "";
+    const prefix = base.includes("· прошло")
+      ? base.replace(/· прошло .+$/, "")
+      : `Запущена: ${formatSuitableClock(suitableLiveStartedAt)} `;
+    timing.textContent = `${prefix.replace(/\s+$/, "")} · прошло ${formatSuitableElapsed(elapsedMs)}`;
+  }, 1000);
+  suitablePollTimer = setInterval(() => {
+    void pollSuitableRunningProgress();
+  }, SUITABLE_POLL_MS);
+  void pollSuitableRunningProgress();
 }
 
 async function loadVacancies({ resetOffset = false } = {}) {
@@ -2685,7 +2906,8 @@ async function loadLatestSuitableRun() {
       : latest.execution_snapshot
         ? {
             start_page: latest.execution_snapshot.start_page,
-            page_from: latest.execution_snapshot.start_page,
+            page_from: latest.progress?.page_from ?? latest.execution_snapshot.start_page,
+            page_to: latest.progress?.page_current,
             max_pages: latest.execution_snapshot.max_pages,
           }
         : undefined,
@@ -2696,6 +2918,13 @@ async function loadLatestSuitableRun() {
   if (latest.status === "running") {
     setSuitableRunning(true);
     setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
+    suitableLiveRunId = latest.id;
+    startSuitableLiveWatch({ startedAtIso: latest.started_at, runId: latest.id });
+    renderSuitableLiveFromRun(latest);
+  } else if (!suitableActivePost) {
+    if (latest.finished_at) {
+      renderSuitableFinalSummary(latest, latestSuitableRunMeta);
+    }
   }
 }
 
@@ -2705,7 +2934,7 @@ function refreshSuitableHistoryPresentation() {
 }
 
 async function runSuitableSearch({ continueFromPrior = false } = {}) {
-  if (vacancySearchRunning) return;
+  if (vacancySearchRunning || suitableActivePost) return;
   const continuation = continueFromPrior ? readSuitableContinuation() : null;
   if (continueFromPrior && (!continuation || continuation.nextPage == null)) {
     setSuitableStatus("Нет следующей страницы для загрузки", { error: true });
@@ -2714,13 +2943,20 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
   }
   const startPage = continueFromPrior ? Number(continuation.nextPage) : 0;
   const maxPages = SUITABLE_MAX_PAGES_PER_RUN;
+  suitableActivePost = true;
+  suitableLiveRunId = null;
+  suitableLiveStartedAt = new Date().toISOString();
   setSuitableRunning(true);
   setSuitableStatus(
     continueFromPrior
       ? `Загружаем ещё подходящие (со страницы HH ${startPage}, до ${maxPages} стр.)…`
-      : `Проверяем подходящие вакансии (до ${maxPages} стр. HH / ~${maxPages * SUITABLE_PAGE_SIZE_HINT})… Это может занять несколько минут.`,
+      : `Проверяем подходящие вакансии (до ${maxPages} стр. HH / ~${maxPages * SUITABLE_PAGE_SIZE_HINT})…`,
     { running: true }
   );
+  startSuitableLiveWatch({
+    startedAtIso: suitableLiveStartedAt,
+    runId: null,
+  });
   try {
     const response = await fetch("/api/v1/hh/vacancies/suitable", {
       method: "POST",
@@ -2783,8 +3019,12 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
         moreRemaining,
       };
       renderSuitableSummary(run, latestSuitableRunMeta);
+      if (String(run.status || "") !== "running") {
+        renderSuitableFinalSummary(run, { pagination });
+      }
     }
     if (!response.ok && !run) {
+      hideSuitableLivePanel();
       setSuitableStatus(humanRecovery(payload.code) || payload.message || "Проверка не удалась", {
         error: true,
       });
@@ -2792,7 +3032,6 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
     }
     const status = String(run?.status || payload.status || "");
     if (status === "failed") {
-      // Completed run: keep the live status line neutral; details live in history block.
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
       renderSuitableSummary(run, {
         sourceTotal,
@@ -2816,8 +3055,10 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
     }
     await loadVacancies();
   } catch (error) {
+    hideSuitableLivePanel();
     setSuitableStatus(error.message || "Проверка не удалась", { error: true });
   } finally {
+    suitableActivePost = false;
     setSuitableRunning(false);
   }
 }
