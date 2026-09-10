@@ -33,3 +33,25 @@ def test_suitable_captcha_copy_and_actions() -> None:
     captcha_branch = js.split("isSuitableCaptchaCode(code)")[1].split("else if (status ===")[0]
     assert "browser_proxy_unavailable" not in captcha_branch
     assert "open_login" not in captcha_branch
+
+
+def test_missing_challenge_url_hides_open_button() -> None:
+    js = APP_JS.read_text(encoding="utf-8")
+    assert "canOpenChallenge" in js
+    assert "openBtn.hidden = !canOpenChallenge" in js
+    assert "CAPTCHA обнаружена, но открыть её не удалось" in js
+    assert "Скриншот CAPTCHA" in js
+
+
+def test_open_challenge_requires_interactive_ready_before_novnc() -> None:
+    js = APP_JS.read_text(encoding="utf-8")
+    marker = 'document.querySelector("#suitable-captcha-open")?.addEventListener'
+    assert marker in js
+    open_handler = js.split(marker)[1].split(
+        'document.querySelector("#suitable-captcha-confirm")'
+    )[0]
+    assert "interactive_ready" in open_handler
+    assert "browser_started" in open_handler
+    ready_idx = open_handler.index("interactive_ready")
+    open_idx = open_handler.index("window.open")
+    assert ready_idx < open_idx

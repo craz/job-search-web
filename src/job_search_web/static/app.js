@@ -2509,6 +2509,12 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   if (!captcha || !msg) return;
   captcha.hidden = false;
   const challengeInfo = challenge && typeof challenge === "object" ? challenge : {};
+  const recoveryAvailable = Boolean(
+    challengeInfo.recovery_available !== false &&
+      (challengeInfo.challenge_url || challengeInfo.recovery_available === true)
+  );
+  const hasUrl = Boolean(challengeInfo.challenge_url);
+  const canOpenChallenge = recoveryAvailable && hasUrl;
   const mergedProgress = {
     ...progress,
     ...(challengeInfo.progress && typeof challengeInfo.progress === "object"
@@ -2519,20 +2525,33 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   const pagesPlanned = mergedProgress.pages_planned;
   const checked = mergedProgress.checked_count;
   const when = detectedAt || challengeInfo.detected_at || mergedProgress.last_progress_at;
-  msg.textContent = "HeadHunter остановил загрузку и требует подтверждение";
+  if (canOpenChallenge) {
+    msg.textContent = "HeadHunter остановил загрузку и требует подтверждение";
+  } else if (challengeInfo.capture_status === "capture_failed" || challenge != null) {
+    msg.textContent = "CAPTCHA обнаружена, но открыть её не удалось";
+  } else {
+    msg.textContent = "CAPTCHA обнаружена, но открыть её не удалось";
+  }
   const bits = [];
-  if (when) bits.push(`обнаружено: ${formatSuitableClock(when)}`);
+  if (when) bits.push(`CAPTCHA обнаружена: ${formatSuitableClock(when)}`);
   if (pagesFetched != null && pagesPlanned != null) {
     bits.push(`страниц HH: ${pagesFetched}/${pagesPlanned}`);
   }
-  if (checked != null) bits.push(`проверено: ${Number(checked).toLocaleString("ru-RU")}`);
+  if (checked != null) bits.push(`Проверено: ${Number(checked).toLocaleString("ru-RU")}`);
   const shotOk = Boolean(challengeInfo.screenshot_available);
-  bits.push(shotOk ? "скриншот scraper-браузера: есть" : "скриншот: нет");
-  bits.push(
-    challengeInfo.challenge_session_available
-      ? "сессия challenge в noVNC: доступна"
-      : "сессия challenge: откройте вручную по кнопке ниже"
-  );
+  bits.push(shotOk ? "Скриншот CAPTCHA: есть" : "скриншот: нет");
+  if (challengeInfo.screenshot_error) {
+    bits.push(`ошибка скриншота: ${challengeInfo.screenshot_error}`);
+  }
+  if (canOpenChallenge) {
+    bits.push(
+      challengeInfo.challenge_session_available
+        ? "сессия challenge в noVNC: доступна"
+        : "сессия challenge: откройте вручную по кнопке ниже"
+    );
+  } else {
+    bits.push("recovery: URL challenge не сохранён — noVNC недоступен");
+  }
   bits.push("«Войти в HeadHunter» здесь не подходит — это другой браузер без challenge");
   if (meta) {
     meta.hidden = false;
@@ -2541,6 +2560,7 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   if (shot) {
     if (shotOk) {
       shot.hidden = false;
+      shot.alt = "Скриншот CAPTCHA";
       shot.src = `/api/v1/hh/challenge/screenshot?t=${Date.now()}`;
     } else {
       shot.hidden = true;
@@ -2553,13 +2573,27 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
     hhConnection?.dataset?.novncUrl ||
     "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
   if (openBtn) {
-    openBtn.dataset.novncUrl = url;
-    openBtn.dataset.challengeUrl = challengeInfo.challenge_url || "";
+    openBtn.dataset.novncUrl = canOpenChallenge ? url : "";
+    openBtn.dataset.challengeUrl = canOpenChallenge ? challengeInfo.challenge_url || "" : "";
     openBtn.textContent = "Открыть challenge в noVNC";
+    openBtn.hidden = !canOpenChallenge;
+    openBtn.disabled = !canOpenChallenge;
   }
   if (confirmBtn) {
-    confirmBtn.dataset.novncUrl = url;
-    confirmBtn.textContent = "Проверить снова";
+    confirmBtn.dataset.novncUrl = canOpenChallenge ? url : "";
+    confirmBtn.textContent = canOpenChallenge ? "Проверить снова" : "Повторить проверку / recovery";
+    confirmBtn.hidden = false;
+  }
+}
+
+async function loadActiveChallengeState() {
+  try {
+    const response = await fetch("/api/v1/hh/challenge", { cache: "no-store" });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return payload?.challenge || null;
+  } catch {
+    return null;
   }
 }
 
@@ -2717,16 +2751,19 @@ function renderSuitableFinalSummary(run, meta = {}) {
   countsEl.textContent = `Новых: ${created} · Обновлено: ${updated} · Уже в базе: ${unchanged}`;
   if (captchaStopped) {
     const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
-    showSuitableCaptchaPanel({
-      progress: {
-        ...progress,
-        pages_fetched: progress.pages_fetched ?? pagination.pages_fetched,
-        pages_planned: progress.pages_planned ?? pagination.max_pages,
-        checked_count: progress.checked_count ?? processed,
-        last_progress_at: progress.last_progress_at || finishedAt,
-      },
-      detectedAt: finishedAt || progress.last_progress_at,
-      novncUrl: meta.novncUrl || "",
+    void loadActiveChallengeState().then((challenge) => {
+      showSuitableCaptchaPanel({
+        progress: {
+          ...progress,
+          pages_fetched: progress.pages_fetched ?? pagination.pages_fetched,
+          pages_planned: progress.pages_planned ?? pagination.max_pages,
+          checked_count: progress.checked_count ?? processed,
+          last_progress_at: progress.last_progress_at || finishedAt,
+        },
+        detectedAt: finishedAt || progress.last_progress_at,
+        novncUrl: meta.novncUrl || "",
+        challenge,
+      });
     });
   } else {
     const captcha = document.querySelector("#suitable-live-captcha");
@@ -3248,17 +3285,26 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
       setSuitableStatus("HeadHunter остановил загрузку и требует подтверждение", {
         error: false,
       });
-      showSuitableCaptchaPanel({
-        progress: run?.progress || {
-          pages_fetched: pagination.pages_fetched,
-          pages_planned: maxPages,
-          checked_count: cumulativeChecked || processed,
-          last_progress_at: run?.finished_at,
-        },
-        detectedAt: run?.finished_at || run?.progress?.last_progress_at || payload.challenge?.detected_at,
-        novncUrl: payload.action?.novnc_url || payload.challenge?.novnc_url || "",
-        challenge: payload.challenge || null,
-      });
+      const baseProgress = run?.progress || {
+        pages_fetched: pagination.pages_fetched,
+        pages_planned: maxPages,
+        checked_count: cumulativeChecked || processed,
+        last_progress_at: run?.finished_at,
+      };
+      const applyPanel = (challenge) => {
+        showSuitableCaptchaPanel({
+          progress: baseProgress,
+          detectedAt:
+            run?.finished_at || run?.progress?.last_progress_at || challenge?.detected_at,
+          novncUrl: payload.action?.novnc_url || challenge?.novnc_url || "",
+          challenge: challenge || payload.challenge || null,
+        });
+      };
+      if (payload.challenge) {
+        applyPanel(payload.challenge);
+      } else {
+        void loadActiveChallengeState().then(applyPanel);
+      }
     } else if (status === "failed") {
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
       renderSuitableSummary(run, {
@@ -3692,25 +3738,40 @@ function initVacancySearch() {
   }
   document.querySelector("#suitable-captcha-open")?.addEventListener("click", async (event) => {
     const btn = event.currentTarget;
-    const knownUrl = btn?.dataset?.novncUrl || "";
     const challengeUrl = btn?.dataset?.challengeUrl || "";
     try {
       if (btn) btn.disabled = true;
-      const response = await fetch("/api/v1/hh/connection/open-challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(challengeUrl ? { challenge_url: challengeUrl } : {}),
-      });
-      const payload = await response.json();
-      const url = payload?.action?.novnc_url || payload?.novnc_url || knownUrl;
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
-      if (!response.ok) {
+      if (!challengeUrl) {
         setSuitableStatus(
-          payload.message || "Не удалось открыть challenge-браузер",
+          "CAPTCHA обнаружена, но открыть её не удалось — URL challenge не сохранён",
           { error: true }
         );
         return;
       }
+      const response = await fetch("/api/v1/hh/connection/open-challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge_url: challengeUrl }),
+      });
+      const payload = await response.json();
+      const ready = Boolean(
+        response.ok && payload.browser_started && payload.interactive_ready
+      );
+      if (!ready) {
+        setSuitableStatus(
+          payload.message ||
+            payload.code ||
+            "Браузер challenge не готов — noVNC не открыт (чёрный экран предотвращён)",
+          { error: true }
+        );
+        showSuitableCaptchaPanel({
+          challenge: payload.challenge || null,
+          progress: payload.challenge?.progress || {},
+        });
+        return;
+      }
+      const url = payload?.action?.novnc_url || payload?.novnc_url || btn?.dataset?.novncUrl || "";
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
       setSuitableStatus(
         "Открыт браузер challenge (тот же профиль, URL challenge — не страница входа). Пройдите CAPTCHA в noVNC.",
         { error: false }
@@ -3723,7 +3784,7 @@ function initVacancySearch() {
     } catch (error) {
       setSuitableStatus(error.message || "Не удалось открыть challenge", { error: true });
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn && btn.dataset.challengeUrl) btn.disabled = false;
     }
   });
   document.querySelector("#suitable-captcha-confirm")?.addEventListener("click", async (event) => {

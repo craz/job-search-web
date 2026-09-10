@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Suitable CAPTCHA recovery: hide «Открыть challenge в noVNC» when
+  ``challenge_url``/recovery missing; open noVNC only after
+  ``browser_started`` + ``interactive_ready`` (no black empty VNC); show
+  scraper screenshot label and case-C copy when capture failed.
 - Suitable live progress: in-place timer/progress text updates with reserved
   elapsed width — no vacancy-queue rebuild and no layout jump on 1s/2s ticks.
 - Suitable CAPTCHA handoff: «HeadHunter остановил загрузку и требует подтверждение»
