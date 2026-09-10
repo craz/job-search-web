@@ -185,5 +185,6 @@ class HhClient:
         return self._request(
             "POST",
             f"/api/v1/vacancies/{external_id}/refresh-content",
-            payload={},
+            json={},
+            timeout=max(self.timeout_seconds, 90.0),
         )
