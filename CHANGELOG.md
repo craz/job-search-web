@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Suitable CAPTCHA confirm: button «Я решил CAPTCHA — проверить»; while
+  challenge browser open show «Решите CAPTCHA в открытом окне HeadHunter»;
+  immediate «Проверяем HeadHunter…» (no silent failures).
 - Suitable CAPTCHA «Проверить снова»: immediate «Проверяем HeadHunter…»,
   explicit still-open / still-challenged / success messages in the captcha
   panel (no silent failures), refresh connection after clear.

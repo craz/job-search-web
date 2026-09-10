@@ -2586,10 +2586,15 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
     openBtn.hidden = !canOpenChallenge;
     openBtn.disabled = !canOpenChallenge;
   }
-  if (confirmBtn) {
+    if confirmBtn) {
     confirmBtn.dataset.novncUrl = canOpenChallenge ? url : "";
-    confirmBtn.textContent = canOpenChallenge ? "Проверить снова" : "Повторить проверку / recovery";
+    confirmBtn.textContent = canOpenChallenge
+      ? "Я решил CAPTCHA — проверить"
+      : "Повторить проверку / recovery";
     confirmBtn.hidden = false;
+  }
+  if (canOpenChallenge && challengeInfo.challenge_session_available) {
+    msg.textContent = "Решите CAPTCHA в открытом окне HeadHunter";
   }
 }
 
@@ -3830,8 +3835,7 @@ function initVacancySearch() {
       }
       if (code === "challenge_browser_open" || code === "profile_locked") {
         setCaptchaOperatorFeedback(
-          payload.message ||
-            "Окно CAPTCHA ещё открыто. Закройте браузер HeadHunter в noVNC и повторите проверку.",
+          payload.message || "Решите CAPTCHA в открытом окне HeadHunter",
           { error: true, running: false }
         );
       } else if (code === "browser_captcha_or_action_required") {

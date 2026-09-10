@@ -24,9 +24,10 @@ def test_suitable_captcha_copy_and_actions() -> None:
         "vacancy-search__actions"
     )[0]
     assert 'id="suitable-captcha-confirm"' in html
-    assert "Проверить снова" in html
+    assert "Я решил CAPTCHA — проверить" in html
     assert "open-challenge" in js
     assert "confirm-challenge" in js
+    assert "Решите CAPTCHA в открытом окне HeadHunter" in js
     assert "загрузка деталей" in js
     assert 'phase === "captcha_required"' in js
     assert "browser_proxy_unavailable" in js
@@ -48,9 +49,10 @@ def test_confirm_button_shows_checking_and_open_browser_message() -> None:
     js = APP_JS.read_text(encoding="utf-8")
     assert "setCaptchaOperatorFeedback" in js
     assert "Проверяем HeadHunter…" in js
-    assert "Окно CAPTCHA ещё открыто" in js
+    assert "Решите CAPTCHA в открытом окне HeadHunter" in js
     assert "CAPTCHA подтверждена, HeadHunter доступен" in js
     assert "challenge_browser_open" in js
+    assert "Я решил CAPTCHA — проверить" in js
     marker = 'document.querySelector("#suitable-captcha-confirm")?.addEventListener'
     assert marker in js
     confirm_handler = js.split(marker)[1].split("const continuation = readSuitableContinuation")[0]
@@ -59,7 +61,7 @@ def test_confirm_button_shows_checking_and_open_browser_message() -> None:
     checking_idx = confirm_handler.index("Проверяем HeadHunter…")
     fetch_idx = confirm_handler.index("confirm-challenge")
     assert checking_idx < fetch_idx
-
+    assert "Окно CAPTCHA ещё открыто" in js or "Решите CAPTCHA" in confirm_handler
 
 def test_open_challenge_requires_interactive_ready_before_novnc() -> None:
     js = APP_JS.read_text(encoding="utf-8")
