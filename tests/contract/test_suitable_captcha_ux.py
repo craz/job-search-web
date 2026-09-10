@@ -41,6 +41,7 @@ def test_missing_challenge_url_hides_open_button() -> None:
     assert "openBtn.hidden = !canOpenChallenge" in js
     assert "CAPTCHA обнаружена, но открыть её не удалось" in js
     assert "Скриншот CAPTCHA" in js
+    assert "hasUrl && !explicitNoRecovery" in js
 
 
 def test_open_challenge_requires_interactive_ready_before_novnc() -> None:

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Suitable CAPTCHA recovery: enable noVNC when ``challenge_url`` is present
+  (do not require a separate recovery flag); show screenshot capture error
+  reason when shot failed; hide open button only for true case-C.
 - Suitable CAPTCHA recovery: hide «Открыть challenge в noVNC» when
   ``challenge_url``/recovery missing; open noVNC only after
   ``browser_started`` + ``interactive_ready`` (no black empty VNC); show

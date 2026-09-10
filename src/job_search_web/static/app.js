@@ -2509,12 +2509,10 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   if (!captcha || !msg) return;
   captcha.hidden = false;
   const challengeInfo = challenge && typeof challenge === "object" ? challenge : {};
-  const recoveryAvailable = Boolean(
-    challengeInfo.recovery_available !== false &&
-      (challengeInfo.challenge_url || challengeInfo.recovery_available === true)
-  );
-  const hasUrl = Boolean(challengeInfo.challenge_url);
-  const canOpenChallenge = recoveryAvailable && hasUrl;
+  const hasUrl = Boolean(String(challengeInfo.challenge_url || "").trim());
+  // Gate on real URL. Explicit recovery_available=false without URL = case C.
+  const explicitNoRecovery = challengeInfo.recovery_available === false && !hasUrl;
+  const canOpenChallenge = hasUrl && !explicitNoRecovery;
   const mergedProgress = {
     ...progress,
     ...(challengeInfo.progress && typeof challengeInfo.progress === "object"
@@ -2527,8 +2525,6 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   const when = detectedAt || challengeInfo.detected_at || mergedProgress.last_progress_at;
   if (canOpenChallenge) {
     msg.textContent = "HeadHunter остановил загрузку и требует подтверждение";
-  } else if (challengeInfo.capture_status === "capture_failed" || challenge != null) {
-    msg.textContent = "CAPTCHA обнаружена, но открыть её не удалось";
   } else {
     msg.textContent = "CAPTCHA обнаружена, но открыть её не удалось";
   }
@@ -2539,9 +2535,14 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   }
   if (checked != null) bits.push(`Проверено: ${Number(checked).toLocaleString("ru-RU")}`);
   const shotOk = Boolean(challengeInfo.screenshot_available);
-  bits.push(shotOk ? "Скриншот CAPTCHA: есть" : "скриншот: нет");
-  if (challengeInfo.screenshot_error) {
-    bits.push(`ошибка скриншота: ${challengeInfo.screenshot_error}`);
+  if (shotOk) {
+    bits.push("Скриншот CAPTCHA: есть");
+  } else if (challengeInfo.screenshot_error) {
+    bits.push(`скриншот capture failed: ${challengeInfo.screenshot_error}`);
+  } else if (challenge != null) {
+    bits.push("скриншот: нет");
+  } else {
+    bits.push("скриншот: нет (challenge state недоступен)");
   }
   if (canOpenChallenge) {
     bits.push(
