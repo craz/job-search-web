@@ -392,80 +392,228 @@ function renderVacancyAssessmentSummary(assessment, failure) {
 }
 
 function levelLabelRu(level) {
-  const key = String(level || "").trim().toLowerCase();
+  const key = String(level || "")
+    .trim()
+    .toLowerCase();
   return (
     {
       high: "высокое",
       medium: "среднее",
       low: "низкое",
       unknown: "неизвестно",
-      pass: "ok",
+      pass: "подходит",
       constrained: "с ограничениями",
-      fail: "не проходит",
-      uncertain: "неопределено",
-      acceptable: "приемлемо",
-      unacceptable: "неприемлемо",
+      fail: "не подходит",
+      uncertain: "неопределённо",
+      acceptable: "приемлема",
+      acceptable_but_low: "приемлема, но низкая",
+      unacceptable: "неприемлема",
     }[key] ||
     level ||
     "—"
   );
 }
 
+function feasibilityStatusRu(status) {
+  const key = String(status || "")
+    .trim()
+    .toLowerCase();
+  if (key === "uncertain") return "неопределённо / требует уточнения";
+  return levelLabelRu(status);
+}
+
+function compensationStatusRu(status) {
+  const key = String(status || "")
+    .trim()
+    .toLowerCase();
+  if (key === "uncertain") return "требует уточнения";
+  return levelLabelRu(status);
+}
+
+const RULE_CODE_OWNER_RU = {
+  "DESIRABILITY.international_relocation.skip": "Обязательная работа или релокация за рубеж",
+  "DESIRABILITY.infrastructure_primary.skip": "Основная суть роли — инфраструктура / ops IT",
+  "DESIRABILITY.dedicated_crm_analyst.skip": "Роль dedicated CRM-аналитика — вне целевого профиля",
+  "DESIRABILITY.gph.maybe_cap": "Оформление через ГПХ / подряд",
+  COMPENSATION_UNCERTAINTY: "Компенсация не указана или не подтверждена",
+  "COMPENSATION.acceptable_but_low": "Компенсация в диапазоне «приемлемо, но низко»",
+  "FEAS.fail": "Условия вакансии не проходят обязательные ограничения",
+  "FEAS.compensation.unacceptable": "Компенсация ниже приемлемого уровня",
+  "FEAS.uncertain": "Недостаточно данных по условиям вакансии",
+  "FIT.commercial_primary": "Роль в основном коммерческая / sales",
+  "FIT.crm_manager": "Роль CRM-manager, не project/delivery",
+  "FIT.1c_engineering_required": "Требуется руководство разработкой 1С",
+  "INTEREST.review_recommended": "Возможен личный интерес — проверить",
+  "FORMAT_CAP.hybrid": "Гибридный формат ограничивает авто-рекомендацию",
+  "FORMAT_CAP.onsite": "Очный формат ограничивает авто-рекомендацию",
+};
+
+const ACTION_OWNER_RU = {
+  "do not pursue this vacancy": "Пропустить вакансию",
+  "proceed with application preparation": "Откликнуться",
+  "review trade-offs before applying": "Требует уточнения",
+  "review semantic assessment": "Требует уточнения",
+  proceed: "Рассмотреть вакансию",
+  pursue: "Откликнуться",
+  "need clarification": "Требует уточнения",
+};
+
+const DECISION_CARD_VERDICT_RU = {
+  apply: "Откликнуться",
+  maybe: "Требует уточнения",
+  skip: "Пропустить",
+};
+
+function localizeRuleCodeRu(code) {
+  const raw = String(code || "").trim();
+  if (!raw) return "Другое ограничение";
+  return RULE_CODE_OWNER_RU[raw] || "Другое ограничение";
+}
+
+function localizeActionRu(action) {
+  const text = String(action || "").trim();
+  if (!text) return "";
+  const mapped = ACTION_OWNER_RU[text.toLowerCase()];
+  return mapped || text;
+}
+
+function decisionCardVerdictRu(verdict) {
+  const key = normalizeVerdict(verdict);
+  return DECISION_CARD_VERDICT_RU[key] || assessmentVerdictLabel(verdict);
+}
+
+function localizeHardBlockerRu(item) {
+  const text = String(item || "").trim();
+  if (!text) return "Другое ограничение";
+  if (RULE_CODE_OWNER_RU[text]) return RULE_CODE_OWNER_RU[text];
+  // English canned leftovers from older assessments.
+  const folded = text.toLowerCase();
+  if (folded.includes("international relocation") || folded.includes("foreign work location")) {
+    return RULE_CODE_OWNER_RU["DESIRABILITY.international_relocation.skip"];
+  }
+  if (folded.includes("infrastructure") && folded.includes("ops")) {
+    return RULE_CODE_OWNER_RU["DESIRABILITY.infrastructure_primary.skip"];
+  }
+  if (/^[A-Z][A-Z0-9_.]+$/.test(text)) {
+    return "Другое ограничение";
+  }
+  return text;
+}
+
+function localizeOwnerExplanationRu(text) {
+  let out = String(text || "");
+  if (!out) return out;
+  out = localizeHardBlockerRu(out);
+  // Persisted canned templates may still mention English verdict tokens.
+  out = out
+    .replace(/\bAPPLY\b/g, "откликнуться")
+    .replace(/\bMAYBE\b/g, "требует уточнения")
+    .replace(/\bSKIP\b/g, "пропустить")
+    .replace(/\bacceptable-but-low\b/gi, "приемлемо, но низко")
+    .replace(/\bonsite-формат\b/gi, "очный формат")
+    .replace(/до maybe\b/gi, "до «требует уточнения»")
+    .replace(/ограничена до maybe\b/gi, "ограничена до «требует уточнения»");
+  return out;
+}
+
+function renderDecisionCardTechnicalDetails(assessment, card) {
+  const tech = card?.technical_details && typeof card.technical_details === "object"
+    ? card.technical_details
+    : {};
+  const lines = [];
+  const blockerCodes = Array.isArray(tech.hard_blocker_codes) ? tech.hard_blocker_codes : [];
+  const caps = Array.isArray(tech.caps_applied)
+    ? tech.caps_applied
+    : Array.isArray(card.caps_applied)
+      ? card.caps_applied
+      : [];
+  const factors = Array.isArray(tech.decisive_factors)
+    ? tech.decisive_factors
+    : Array.isArray(card.decisive_factors)
+      ? card.decisive_factors
+      : [];
+  if (blockerCodes.length) {
+    lines.push(`Коды ограничений: ${blockerCodes.join(", ")}`);
+  }
+  if (caps.length) {
+    lines.push(`Коды caps: ${caps.join(", ")}`);
+  }
+  if (factors.length) {
+    lines.push(`Решающие факторы: ${factors.join(", ")}`);
+  }
+  const model = tech.model_name_or_tag || assessment?.model;
+  if (model) lines.push(`Модель: ${model}`);
+  if (assessment?.prompt_version) lines.push(`Версия prompt: ${assessment.prompt_version}`);
+  if (tech.scoring_mode) lines.push(`Режим: ${tech.scoring_mode}`);
+  if (tech.provider) lines.push(`Провайдер: ${tech.provider}`);
+  const rawReasons = Array.isArray(tech.raw_signal_reasons) ? tech.raw_signal_reasons : [];
+  rawReasons.slice(0, 3).forEach((reason) => {
+    lines.push(`Сырой сигнал: ${reason}`);
+  });
+  if (!lines.length) return "";
+  const body = lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
+  return `<details class="decision-card__tech"><summary>Технические детали</summary><ul>${body}</ul></details>`;
+}
+
 function renderAssessmentDecisionCard(assessment) {
   const card = assessment?.decision_card;
   if (!card || typeof card !== "object") return "";
   const rows = [];
-  const finalVerdict = assessmentVerdictLabel(card.final_verdict || assessment.verdict);
+  const finalVerdict = decisionCardVerdictRu(card.final_verdict || assessment.verdict);
   rows.push(
     `<div class="decision-card__row"><span class="decision-card__key">Итог</span><span class="decision-card__val">${escapeHtml(
-      String(finalVerdict).toUpperCase()
+      finalVerdict
     )}</span></div>`
   );
   if (card.role_fit_level) {
     rows.push(
-      `<div class="decision-card__row"><span class="decision-card__key">Role fit</span><span class="decision-card__val">${escapeHtml(
+      `<div class="decision-card__row"><span class="decision-card__key">Профессиональное соответствие</span><span class="decision-card__val">${escapeHtml(
         levelLabelRu(card.role_fit_level)
       )}</span></div>`
     );
   }
   if (card.feasibility_status || card.compensation_status) {
-    const feas = card.feasibility_status ? levelLabelRu(card.feasibility_status) : "—";
+    const feas = card.feasibility_status ? feasibilityStatusRu(card.feasibility_status) : "—";
     const comp = card.compensation_status
-      ? ` · компенсация: ${levelLabelRu(card.compensation_status)}${
+      ? ` · компенсация: ${compensationStatusRu(card.compensation_status)}${
           card.compensation_basis === "unknown" ? " (в вакансии не указана)" : ""
         }`
       : "";
     rows.push(
-      `<div class="decision-card__row"><span class="decision-card__key">Feasibility</span><span class="decision-card__val">${escapeHtml(
+      `<div class="decision-card__row"><span class="decision-card__key">Реализуемость</span><span class="decision-card__val">${escapeHtml(
         `${feas}${comp}`
       )}</span></div>`
     );
   }
   if (card.interest_level) {
     rows.push(
-      `<div class="decision-card__row"><span class="decision-card__key">Interest</span><span class="decision-card__val">${escapeHtml(
+      `<div class="decision-card__row"><span class="decision-card__key">Личный интерес</span><span class="decision-card__val">${escapeHtml(
         levelLabelRu(card.interest_level)
       )}</span></div>`
     );
   }
   if (Array.isArray(card.hard_blockers) && card.hard_blockers.length) {
+    const blockers = card.hard_blockers
+      .slice(0, 3)
+      .map(localizeHardBlockerRu)
+      .join(" · ");
     rows.push(
-      `<div class="decision-card__row"><span class="decision-card__key">Hard blockers</span><span class="decision-card__val">${escapeHtml(
-        card.hard_blockers.slice(0, 3).join(" · ")
+      `<div class="decision-card__row"><span class="decision-card__key">Критические ограничения</span><span class="decision-card__val">${escapeHtml(
+        blockers
       )}</span></div>`
     );
   }
   if (card.final_decision_reason) {
     rows.push(
       `<div class="decision-card__row decision-card__row--why"><span class="decision-card__key">Почему итог</span><span class="decision-card__val">${escapeHtml(
-        card.final_decision_reason
+        localizeOwnerExplanationRu(card.final_decision_reason)
       )}</span></div>`
     );
   }
   if (Array.isArray(card.why) && card.why.length) {
     const bullets = card.why
       .slice(0, 4)
-      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .map((item) => `<li>${escapeHtml(localizeOwnerExplanationRu(item))}</li>`)
       .join("");
     rows.push(
       `<div class="decision-card__why"><span class="decision-card__key">Доказательства</span><ul>${bullets}</ul></div>`
@@ -474,6 +622,7 @@ function renderAssessmentDecisionCard(assessment) {
   if (card.relevance_score_note) {
     rows.push(`<p class="decision-card__score-note">${escapeHtml(card.relevance_score_note)}</p>`);
   }
+  rows.push(renderDecisionCardTechnicalDetails(assessment, card));
   return `<div class="decision-card" data-decision-card="1">${rows.join("")}</div>`;
 }
 
@@ -493,19 +642,18 @@ function renderAssessmentStoredBits(assessment) {
 
 function renderVacancyAssessmentDetail(assessment, failure) {
   if (assessment) {
-    const key = normalizeVerdict(assessment.verdict);
     const card = assessment.decision_card;
     const showLegacyReason = !card
       ? `<p class="assessment-detail__reason">${escapeHtml(assessment.reason || "Пояснение не сохранено.")}</p>`
       : "";
+    const actionRu = localizeActionRu(assessment.action);
     return `<div class="row-detail__section vacancy-assessment-detail">
-      <p class="row-detail__label">AI-оценка · ${escapeHtml(assessmentVerdictLabel(assessment.verdict))} · ${escapeHtml(formatDate(assessment.assessed_at))}</p>
+      <p class="row-detail__label">AI-оценка · ${escapeHtml(decisionCardVerdictRu(assessment.verdict))} · ${escapeHtml(formatDate(assessment.assessed_at))}</p>
       ${renderAssessmentDecisionCard(assessment)}
       ${showLegacyReason}
       ${assessment.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(assessment.risk)}</p>` : ""}
-      ${assessment.action ? `<p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(assessment.action)}</p>` : ""}
+      ${actionRu ? `<p class="assessment-detail__action"><span class="assessment-detail__label">Рекомендация</span> ${escapeHtml(actionRu)}</p>` : ""}
       ${renderAssessmentStoredBits(assessment)}
-      <p class="assessment-detail__meta">Модель: ${escapeHtml(assessment.model)} · ${escapeHtml(assessment.prompt_version || "—")} · вердикт ${escapeHtml(key.toUpperCase())}</p>
     </div>`;
   }
   if (failure) {

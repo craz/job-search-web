@@ -1369,7 +1369,7 @@ button { cursor: pointer; }
 
 .decision-card__row {
   display: grid;
-  grid-template-columns: 8rem minmax(0, 1fr);
+  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
 }
@@ -1377,8 +1377,8 @@ button { cursor: pointer; }
 .decision-card__key {
   font-size: var(--font-size-metadata);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--color-text-secondary);
 }
 
@@ -1392,9 +1392,25 @@ button { cursor: pointer; }
 }
 
 .decision-card__score-note {
-  margin: var(--space-2) 0 0;
-  color: var(--color-text-secondary);
+  margin: 0;
   font-size: var(--font-size-metadata);
+  color: var(--color-text-secondary);
+}
+
+.decision-card__tech {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-metadata);
+  color: var(--color-text-secondary);
+}
+
+.decision-card__tech summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.decision-card__tech ul {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.2rem;
 }
 
 .owner-decision {

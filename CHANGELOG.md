@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Localize vacancy scoring decision card labels/enums/actions to Russian; raw
+  codes and model stay under muted «Технические детали».
 - Vacancy Разбор shows structured Assessment decision card; non-authoritative relevance_score is muted and no longer treated as the verdict explanation.
 
 - Bulk «Оценить новые»: enqueue budget is new jobs only — already-queued ids are
