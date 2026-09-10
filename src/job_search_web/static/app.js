@@ -2421,6 +2421,13 @@ let suitableElapsedTimer = null;
 let suitableActivePost = false;
 let suitableLiveProgressFingerprint = "";
 let suitableWasWatchingRun = false;
+/** Bumped whenever live suitable UI ownership changes; stale async must ignore older gens. */
+let suitableUiGeneration = 0;
+
+function bumpSuitableUiGeneration() {
+  suitableUiGeneration += 1;
+  return suitableUiGeneration;
+}
 
 function setTextIfChanged(el, text) {
   if (!el) return false;
@@ -2514,7 +2521,15 @@ function isSuitableCaptchaCode(code) {
   return code === "browser_captcha_or_action_required" || code === "captcha_required";
 }
 
-function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl = "", challenge = null } = {}) {
+function showSuitableCaptchaPanel({
+  progress = {},
+  detectedAt = null,
+  novncUrl = "",
+  challenge = null,
+  liveRecovery = true,
+  expectGeneration = null,
+} = {}) {
+  if (expectGeneration != null && expectGeneration !== suitableUiGeneration) return;
   const captcha = document.querySelector("#suitable-live-captcha");
   const msg = document.querySelector("#suitable-live-captcha-msg");
   const meta = document.querySelector("#suitable-live-captcha-meta");
@@ -2529,7 +2544,7 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   const hasUrl = Boolean(String(challengeInfo.challenge_url || "").trim());
   // Gate on real URL. Explicit recovery_available=false without URL = case C.
   const explicitNoRecovery = challengeInfo.recovery_available === false && !hasUrl;
-  const canOpenChallenge = hasUrl && !explicitNoRecovery;
+  const canOpenChallenge = Boolean(liveRecovery) && hasUrl && !explicitNoRecovery;
   const mergedProgress = {
     ...progress,
     ...(challengeInfo.progress && typeof challengeInfo.progress === "object"
@@ -2540,7 +2555,9 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   const pagesPlanned = mergedProgress.pages_planned;
   const checked = mergedProgress.checked_count;
   const when = detectedAt || challengeInfo.detected_at || mergedProgress.last_progress_at;
-  if (canOpenChallenge) {
+  if (!liveRecovery) {
+    msg.textContent = "Предыдущая проверка остановилась на CAPTCHA (история)";
+  } else if (canOpenChallenge) {
     msg.textContent = "HeadHunter остановил загрузку и требует подтверждение";
   } else {
     msg.textContent = "CAPTCHA обнаружена, но открыть её не удалось";
@@ -2551,26 +2568,32 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
     bits.push(`страниц HH: ${pagesFetched}/${pagesPlanned}`);
   }
   if (checked != null) bits.push(`Проверено: ${Number(checked).toLocaleString("ru-RU")}`);
-  const shotOk = Boolean(challengeInfo.screenshot_available);
-  if (shotOk) {
-    bits.push("Скриншот CAPTCHA: есть");
-  } else if (challengeInfo.screenshot_error) {
-    bits.push(`скриншот capture failed: ${challengeInfo.screenshot_error}`);
-  } else if (challenge != null) {
-    bits.push("скриншот: нет");
+  const shotOk = Boolean(liveRecovery && challengeInfo.screenshot_available);
+  if (liveRecovery) {
+    if (shotOk) {
+      bits.push("Скриншот CAPTCHA: есть");
+    } else if (challengeInfo.screenshot_error) {
+      bits.push(`скриншот capture failed: ${challengeInfo.screenshot_error}`);
+    } else if (challenge != null) {
+      bits.push("скриншот: нет");
+    } else {
+      bits.push("скриншот: нет (challenge state недоступен)");
+    }
   } else {
-    bits.push("скриншот: нет (challenge state недоступен)");
+    bits.push("текущий challenge неактивен — кнопки recovery скрыты");
   }
-  if (canOpenChallenge) {
-    bits.push(
-      challengeInfo.challenge_session_available
-        ? "сессия challenge в noVNC: доступна"
-        : "сессия challenge: откройте вручную по кнопке ниже"
-    );
-  } else {
-    bits.push("recovery: URL challenge не сохранён — noVNC недоступен");
+  if (liveRecovery) {
+    if (canOpenChallenge) {
+      bits.push(
+        challengeInfo.challenge_session_available
+          ? "сессия challenge в noVNC: доступна"
+          : "сессия challenge: откройте вручную по кнопке ниже"
+      );
+    } else {
+      bits.push("recovery: URL challenge не сохранён — noVNC недоступен");
+    }
+    bits.push("«Войти в HeadHunter» здесь не подходит — это другой браузер без challenge");
   }
-  bits.push("«Войти в HeadHunter» здесь не подходит — это другой браузер без challenge");
   if (meta) {
     meta.hidden = false;
     meta.textContent = bits.join(" · ");
@@ -2602,22 +2625,32 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
     confirmBtn.textContent = canOpenChallenge
       ? "Я решил CAPTCHA — проверить"
       : "Повторить проверку / recovery";
-    confirmBtn.hidden = false;
+    // Live recovery CTAs only while challenge is active for the current operator session.
+    confirmBtn.hidden = !liveRecovery;
   }
-  if (canOpenChallenge && challengeInfo.challenge_session_available) {
+  if (liveRecovery && canOpenChallenge && challengeInfo.challenge_session_available) {
     msg.textContent = "Решите CAPTCHA в открытом окне HeadHunter";
   }
 }
 
-async function loadActiveChallengeState() {
+async function loadHhChallengePayload() {
   try {
     const response = await fetch("/api/v1/hh/challenge", { cache: "no-store" });
-    if (!response.ok) return null;
+    if (!response.ok) return { active: false, challenge: null };
     const payload = await response.json();
-    return payload?.challenge || null;
+    return {
+      active: Boolean(payload?.active),
+      challenge: payload?.challenge && typeof payload.challenge === "object" ? payload.challenge : null,
+    };
   } catch {
-    return null;
+    return { active: false, challenge: null };
   }
+}
+
+/** @deprecated use loadHhChallengePayload; kept for call sites that only need challenge object */
+async function loadActiveChallengeState() {
+  const payload = await loadHhChallengePayload();
+  return payload.active ? payload.challenge : null;
 }
 
 function updateSuitableLiveElapsed() {
@@ -2689,13 +2722,29 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   }
   if (progress.phase === "captcha_required") {
     pageBits.push("требуется CAPTCHA");
-    showSuitableCaptchaPanel({ progress, detectedAt: progress.last_progress_at });
+    // Live CAPTCHA CTAs only for the tracked run + active HH challenge.
+    const gen = suitableUiGeneration;
+    void loadHhChallengePayload().then((payload) => {
+      if (gen !== suitableUiGeneration) return;
+      if (suitableLiveRunId && run.id && suitableLiveRunId !== run.id) return;
+      if (!payload.active) {
+        hideSuitableCaptchaPanel();
+        return;
+      }
+      showSuitableCaptchaPanel({
+        progress,
+        detectedAt: progress.last_progress_at,
+        challenge: payload.challenge,
+        liveRecovery: true,
+        expectGeneration: gen,
+      });
+    });
     if (suitableElapsedTimer) {
       clearInterval(suitableElapsedTimer);
       suitableElapsedTimer = null;
     }
   } else {
-    if (captchaEl) captchaEl.hidden = true;
+    hideSuitableCaptchaPanel();
     if (progress.phase === "details") pageBits.push("загрузка деталей");
     if (progress.phase === "ingest") pageBits.push("запись в базу");
   }
@@ -2774,24 +2823,35 @@ function renderSuitableFinalSummary(run, meta = {}) {
   countsEl.textContent = `Новых: ${created} · Обновлено: ${updated} · Уже в базе: ${unchanged}`;
   if (captchaStopped) {
     const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
-    void loadActiveChallengeState().then((challenge) => {
-      // Finished SearchRun may still carry captcha error_code historically.
-      // Live operator panel (open/confirm) only when challenge is still active.
-      if (!challenge) {
-        hideSuitableCaptchaPanel();
+    const gen = suitableUiGeneration;
+    void loadHhChallengePayload().then((payload) => {
+      if (gen !== suitableUiGeneration) return;
+      // Live panel only for an active challenge; otherwise historical note without CTAs.
+      const panelProgress = {
+        ...progress,
+        pages_fetched: progress.pages_fetched ?? pagination.pages_fetched,
+        pages_planned: progress.pages_planned ?? pagination.max_pages,
+        checked_count: progress.checked_count ?? processed,
+        last_progress_at: progress.last_progress_at || finishedAt,
+      };
+      if (!payload.active) {
+        showSuitableCaptchaPanel({
+          progress: panelProgress,
+          detectedAt: finishedAt || progress.last_progress_at,
+          novncUrl: meta.novncUrl || "",
+          challenge: null,
+          liveRecovery: false,
+          expectGeneration: gen,
+        });
         return;
       }
       showSuitableCaptchaPanel({
-        progress: {
-          ...progress,
-          pages_fetched: progress.pages_fetched ?? pagination.pages_fetched,
-          pages_planned: progress.pages_planned ?? pagination.max_pages,
-          checked_count: progress.checked_count ?? processed,
-          last_progress_at: progress.last_progress_at || finishedAt,
-        },
+        progress: panelProgress,
         detectedAt: finishedAt || progress.last_progress_at,
-        novncUrl: meta.novncUrl || challenge.novnc_url || "",
-        challenge,
+        novncUrl: meta.novncUrl || payload.challenge?.novnc_url || "",
+        challenge: payload.challenge,
+        liveRecovery: true,
+        expectGeneration: gen,
       });
     });
   } else {
@@ -2965,9 +3025,11 @@ async function pollSuitableRunningProgress() {
     const payload = await response.json();
     if (!response.ok || !payload.items?.length) {
       if (suitableWasWatchingRun && !suitableActivePost) {
+        const trackedId = suitableLiveRunId;
         suitableWasWatchingRun = false;
         stopSuitableLiveTimers();
-        await loadLatestSuitableRun();
+        if (trackedId) await loadSuitableRunById(trackedId);
+        else await loadLatestSuitableRun();
       }
       return null;
     }
@@ -2975,18 +3037,25 @@ async function pollSuitableRunningProgress() {
       (item) =>
         item.acquisition_kind === "resume_suitable" && String(item.status || "") === "running"
     );
-    // Prefer the run we started; otherwise newest by started_at. Ignore ancient
-    // orphan "running" rows with no recent progress (stale DB leftovers).
+    // Strict run identity: tracked run_id never yields to another running row.
+    // While POST is in flight without an id yet, only adopt runs started at/after click.
     let running = null;
     if (suitableLiveRunId) {
       running = runningItems.find((item) => item.id === suitableLiveRunId) || null;
-    }
-    if (!running && runningItems.length) {
-      running = [...runningItems].sort((a, b) => {
-        const ta = Date.parse(a.started_at || "") || 0;
-        const tb = Date.parse(b.started_at || "") || 0;
-        return tb - ta;
-      })[0];
+    } else if (runningItems.length) {
+      const startedFloor = suitableLiveStartedAt
+        ? Date.parse(suitableLiveStartedAt) - 5000
+        : 0;
+      const candidates = suitableActivePost
+        ? runningItems.filter((item) => (Date.parse(item.started_at || "") || 0) >= startedFloor)
+        : runningItems;
+      if (candidates.length) {
+        running = [...candidates].sort((a, b) => {
+          const ta = Date.parse(a.started_at || "") || 0;
+          const tb = Date.parse(b.started_at || "") || 0;
+          return tb - ta;
+        })[0];
+      }
     }
     if (running) {
       const progress = running.progress && typeof running.progress === "object" ? running.progress : {};
@@ -3003,14 +3072,23 @@ async function pollSuitableRunningProgress() {
     }
     if (!running) {
       if (suitableWasWatchingRun && !suitableActivePost) {
+        const trackedId = suitableLiveRunId;
         suitableWasWatchingRun = false;
         stopSuitableLiveTimers();
-        await loadLatestSuitableRun();
+        if (trackedId) {
+          await loadSuitableRunById(trackedId);
+        } else {
+          await loadLatestSuitableRun();
+        }
       }
       return null;
     }
     suitableWasWatchingRun = true;
-    suitableLiveRunId = running.id || suitableLiveRunId;
+    // Bind once we see our run; never overwrite a different tracked id.
+    if (!suitableLiveRunId) suitableLiveRunId = running.id || null;
+    if (suitableLiveRunId && running.id && suitableLiveRunId !== running.id) {
+      return null;
+    }
     latestSuitableRunCache = running;
     // In-place progress fields only — never reload vacancy queue / HH account on poll.
     renderSuitableLiveFromRun(running, { clientStartedAt: suitableLiveStartedAt });
@@ -3033,8 +3111,11 @@ async function pollSuitableRunningProgress() {
 }
 
 function startSuitableLiveWatch({ startedAtIso = null, runId = null } = {}) {
+  bumpSuitableUiGeneration();
+  hideSuitableCaptchaPanel();
   suitableLiveStartedAt = startedAtIso || suitableLiveStartedAt || new Date().toISOString();
-  suitableLiveRunId = runId || suitableLiveRunId;
+  // Explicit null runId means "awaiting create" — do not keep a previous id.
+  suitableLiveRunId = runId !== undefined ? runId : suitableLiveRunId;
   suitableLiveProgressFingerprint = "";
   suitableWasWatchingRun = true;
   stopSuitableLiveTimers();
@@ -3164,17 +3245,28 @@ async function loadActiveResumeLine() {
 let latestSuitableRunCache = null;
 let latestSuitableRunMeta = {};
 
-async function loadLatestSuitableRun() {
-  const response = await fetch("/api/v1/search-runs");
-  const payload = await response.json();
-  if (!response.ok || !payload.items?.length) return;
-  const latest = payload.items.find((item) => item.acquisition_kind === "resume_suitable") || null;
-  if (!latest) return;
-  const title = latest.candidate_context_snapshot?.hh_resume_title;
+async function applySuitableRunPresentation(run, metaExtra = {}) {
+  if (!run) return;
+  // Refuse to overwrite a newer live suitable ownership with a stale/other run.
+  if (suitableLiveRunId && run.id && suitableLiveRunId !== run.id) {
+    if (suitableActivePost || suitableWasWatchingRun || vacancySearchRunning) return;
+  }
+  if (
+    !suitableLiveRunId &&
+    (suitableActivePost || suitableWasWatchingRun) &&
+    String(run.status || "") === "running"
+  ) {
+    const startedFloor = suitableLiveStartedAt
+      ? Date.parse(suitableLiveStartedAt) - 5000
+      : 0;
+    const startedMs = Date.parse(run.started_at || "") || 0;
+    if (startedMs < startedFloor) return;
+  }
+  const title = run.candidate_context_snapshot?.hh_resume_title;
   const continuation = readSuitableContinuation();
-  latestSuitableRunCache = latest;
+  latestSuitableRunCache = run;
   latestSuitableRunMeta = {
-    sourceTotal: latest.source_total ?? continuation?.sourceTotal,
+    sourceTotal: run.source_total ?? continuation?.sourceTotal,
     resumeTitle: title,
     pagination: continuation
       ? {
@@ -3183,29 +3275,105 @@ async function loadLatestSuitableRun() {
           more_remaining: continuation.moreRemaining,
           found: continuation.sourceTotal,
         }
-      : latest.execution_snapshot
+      : run.execution_snapshot
         ? {
-            start_page: latest.execution_snapshot.start_page,
-            page_from: latest.progress?.page_from ?? latest.execution_snapshot.start_page,
-            page_to: latest.progress?.page_current,
-            max_pages: latest.execution_snapshot.max_pages,
+            start_page: run.execution_snapshot.start_page,
+            page_from: run.progress?.page_from ?? run.execution_snapshot.start_page,
+            page_to: run.progress?.page_current,
+            max_pages: run.execution_snapshot.max_pages,
           }
         : undefined,
     cumulativeChecked: continuation?.cumulativeChecked,
     moreRemaining: continuation?.moreRemaining,
+    ...metaExtra,
   };
-  renderSuitableSummary(latest, latestSuitableRunMeta);
-  if (latest.status === "running") {
+  renderSuitableSummary(run, latestSuitableRunMeta);
+  if (run.status === "running") {
     setSuitableRunning(true);
     setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
-    suitableLiveRunId = latest.id;
-    startSuitableLiveWatch({ startedAtIso: latest.started_at, runId: latest.id });
-    renderSuitableLiveFromRun(latest);
+    suitableLiveRunId = run.id;
+    startSuitableLiveWatch({ startedAtIso: run.started_at, runId: run.id });
+    renderSuitableLiveFromRun(run);
   } else if (!suitableActivePost) {
-    if (latest.finished_at) {
-      renderSuitableFinalSummary(latest, latestSuitableRunMeta);
+    setSuitableRunning(false);
+    if (run.finished_at) {
+      renderSuitableFinalSummary(run, latestSuitableRunMeta);
     }
   }
+}
+
+async function loadSuitableRunById(runId) {
+  if (!runId) return;
+  try {
+    const response = await fetch(`/api/v1/search-runs/${encodeURIComponent(runId)}`, {
+      cache: "no-store",
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      await loadLatestSuitableRun();
+      return;
+    }
+    const run = payload.search_run || payload;
+    if (!run?.id) {
+      await loadLatestSuitableRun();
+      return;
+    }
+    await applySuitableRunPresentation(run);
+  } catch (_error) {
+    await loadLatestSuitableRun();
+  }
+}
+
+async function loadLatestSuitableRun() {
+  const response = await fetch("/api/v1/search-runs");
+  const payload = await response.json();
+  if (!response.ok || !payload.items?.length) return;
+  // Prefer an actively tracked run if still present; else newest resume_suitable.
+  // Never let a generic "latest"/orphan running steal a tracked active run.
+  let latest = null;
+  if (suitableLiveRunId) {
+    latest = payload.items.find((item) => item.id === suitableLiveRunId) || null;
+    if (latest) {
+      await applySuitableRunPresentation(latest);
+      return;
+    }
+  }
+  const suitableItems = payload.items.filter(
+    (item) => item.acquisition_kind === "resume_suitable"
+  );
+  if (!suitableItems.length) return;
+  if (suitableActivePost || suitableWasWatchingRun) {
+    // Awaiting create or watching: only adopt a run started at/after this click.
+    const startedFloor = suitableLiveStartedAt
+      ? Date.parse(suitableLiveStartedAt) - 5000
+      : 0;
+    latest =
+      suitableItems
+        .filter(
+          (item) =>
+            String(item.status || "") === "running" &&
+            (Date.parse(item.started_at || "") || 0) >= startedFloor
+        )
+        .sort((a, b) => (Date.parse(b.started_at || "") || 0) - (Date.parse(a.started_at || "") || 0))[0] ||
+      null;
+    if (!latest) return;
+  } else {
+    // Cold load: ignore empty-progress stuck "running" orphans older than stuck budget.
+    const freshRunning = suitableItems.find((item) => {
+      if (String(item.status || "") !== "running") return false;
+      const progress = item.progress && typeof item.progress === "object" ? item.progress : {};
+      const lastAt = progress.last_progress_at || item.started_at;
+      const lastMs = lastAt ? new Date(lastAt).getTime() : 0;
+      const ageMs = Date.now() - lastMs;
+      if ((!progress || Object.keys(progress).length === 0) && ageMs > SUITABLE_STUCK_MS) {
+        return false;
+      }
+      return true;
+    });
+    latest = freshRunning || suitableItems[0] || null;
+  }
+  if (!latest) return;
+  await applySuitableRunPresentation(latest);
 }
 
 function refreshSuitableHistoryPresentation() {
@@ -3215,6 +3383,19 @@ function refreshSuitableHistoryPresentation() {
 
 async function runSuitableSearch({ continueFromPrior = false } = {}) {
   if (vacancySearchRunning || suitableActivePost) return;
+  const challengeGate = await loadHhChallengePayload();
+  if (challengeGate.active) {
+    bumpSuitableUiGeneration();
+    setSuitableStatus("Сначала завершите текущую CAPTCHA HeadHunter", { error: false });
+    showSuitableCaptchaPanel({
+      challenge: challengeGate.challenge,
+      liveRecovery: true,
+      expectGeneration: suitableUiGeneration,
+    });
+    const live = document.querySelector("#suitable-live");
+    if (live) live.hidden = false;
+    return;
+  }
   const continuation = continueFromPrior ? readSuitableContinuation() : null;
   if (continueFromPrior && (!continuation || continuation.nextPage == null)) {
     setSuitableStatus("Нет следующей страницы для загрузки", { error: true });
@@ -3226,6 +3407,8 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
   suitableActivePost = true;
   suitableLiveRunId = null;
   suitableLiveStartedAt = new Date().toISOString();
+  bumpSuitableUiGeneration();
+  hideSuitableCaptchaPanel();
   setSuitableRunning(true);
   setSuitableStatus(
     continueFromPrior
@@ -3290,6 +3473,7 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
       );
     }
     if (run) {
+      if (run.id) suitableLiveRunId = run.id;
       latestSuitableRunCache = run;
       latestSuitableRunMeta = {
         sourceTotal,
@@ -3300,7 +3484,10 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
         novncUrl: payload.action?.novnc_url || "",
       };
       renderSuitableSummary(run, latestSuitableRunMeta);
-      if (String(run.status || "") !== "running") {
+      if (String(run.status || "") === "running") {
+        startSuitableLiveWatch({ startedAtIso: run.started_at, runId: run.id });
+        renderSuitableLiveFromRun(run);
+      } else {
         renderSuitableFinalSummary(run, latestSuitableRunMeta);
       }
     }
@@ -3323,19 +3510,31 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
         checked_count: cumulativeChecked || processed,
         last_progress_at: run?.finished_at,
       };
-      const applyPanel = (challenge) => {
+      const gen = suitableUiGeneration;
+      const applyPanel = (hhPayload) => {
+        if (gen !== suitableUiGeneration) return;
+        const challenge =
+          hhPayload && hhPayload.challenge !== undefined
+            ? hhPayload.challenge
+            : hhPayload;
+        const active =
+          hhPayload && typeof hhPayload.active === "boolean"
+            ? hhPayload.active
+            : Boolean(challenge);
         showSuitableCaptchaPanel({
           progress: baseProgress,
           detectedAt:
             run?.finished_at || run?.progress?.last_progress_at || challenge?.detected_at,
           novncUrl: payload.action?.novnc_url || challenge?.novnc_url || "",
           challenge: challenge || payload.challenge || null,
+          liveRecovery: active,
+          expectGeneration: gen,
         });
       };
-      if (payload.challenge) {
-        applyPanel(payload.challenge);
+      if (payload.challenge && payload.challenge_active !== false) {
+        applyPanel({ active: true, challenge: payload.challenge });
       } else {
-        void loadActiveChallengeState().then(applyPanel);
+        void loadHhChallengePayload().then(applyPanel);
       }
     } else if (status === "failed") {
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
@@ -3365,7 +3564,15 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
     setSuitableStatus(error.message || "Проверка не удалась", { error: true });
   } finally {
     suitableActivePost = false;
-    setSuitableRunning(false);
+    // Long POST usually returns terminal; if still running, keep timers/poll for that id.
+    const stillRunning =
+      Boolean(suitableLiveRunId) &&
+      latestSuitableRunCache &&
+      latestSuitableRunCache.id === suitableLiveRunId &&
+      String(latestSuitableRunCache.status || "") === "running";
+    if (!stillRunning) {
+      setSuitableRunning(false);
+    }
   }
 }
 
@@ -3904,6 +4111,20 @@ function initVacancySearch() {
       await loadLatestSuitableRun();
     } catch (_error) {
       // latest run is optional on first visit
+    }
+    try {
+      const gate = await loadHhChallengePayload();
+      if (gate.active) {
+        const live = document.querySelector("#suitable-live");
+        if (live) live.hidden = false;
+        showSuitableCaptchaPanel({
+          challenge: gate.challenge,
+          liveRecovery: true,
+          expectGeneration: suitableUiGeneration,
+        });
+      }
+    } catch (_error) {
+      // challenge bootstrap is best-effort
     }
   })();
 }

@@ -73,9 +73,9 @@ def test_historical_captcha_run_does_not_force_live_panel_without_challenge() ->
     marker = "function renderSuitableFinalSummary"
     assert marker in js
     body = js.split(marker, 1)[1].split("\nfunction ", 1)[0]
-    assert "loadActiveChallengeState" in body
-    assert "if (!challenge)" in body
-    assert "hideSuitableCaptchaPanel" in body
+    assert "loadHhChallengePayload" in body
+    assert "liveRecovery: false" in body
+    assert "if (!payload.active)" in body
     assert "остановлено: требуется CAPTCHA" not in body
 
 
