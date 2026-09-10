@@ -2402,6 +2402,12 @@ function setSuitableStatus(message, { running = false, error = false } = {}) {
   status.classList.toggle("is-error", Boolean(error));
 }
 
+function setCaptchaOperatorFeedback(message, { running = false, error = false } = {}) {
+  const msg = document.querySelector("#suitable-live-captcha-msg");
+  if (msg && message) msg.textContent = message;
+  setSuitableStatus(message, { running, error });
+}
+
 const SUITABLE_MAX_PAGES_PER_RUN = 5;
 const SUITABLE_PAGE_SIZE_HINT = 50;
 const SUITABLE_CONTINUATION_KEY = "hhSuitableContinuation";
@@ -3792,34 +3798,67 @@ function initVacancySearch() {
     const btn = event.currentTarget;
     try {
       if (btn) btn.disabled = true;
+      setCaptchaOperatorFeedback("Проверяем HeadHunter…", { running: true, error: false });
       const response = await fetch("/api/v1/hh/connection/confirm-challenge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const payload = await response.json();
+      const code = String(payload.code || "");
       if (payload.cleared) {
         const captcha = document.querySelector("#suitable-live-captcha");
         if (captcha) captcha.hidden = true;
-        setSuitableStatus(
-          payload.message ||
-            "Challenge снят. Можно снова запустить «Проверить подходящие» (точное продолжение середины деталей не сохраняется).",
-          { error: false }
+        setCaptchaOperatorFeedback(
+          payload.message || "CAPTCHA подтверждена, HeadHunter доступен",
+          { error: false, running: false }
         );
+        // Refresh HH connection/resumes so suitable becomes usable again.
+        try {
+          if (typeof loadHhConnection === "function") {
+            await loadHhConnection();
+          }
+        } catch (_error) {
+          // connection refresh is best-effort after clear
+        }
+        try {
+          await loadActiveResumeLine();
+        } catch (_error) {
+          // resume line optional
+        }
         return;
       }
-      setSuitableStatus(
-        payload.message || "CAPTCHA всё ещё активна — пройдите её в noVNC challenge-браузере.",
-        { error: true }
-      );
+      if (code === "challenge_browser_open" || code === "profile_locked") {
+        setCaptchaOperatorFeedback(
+          payload.message ||
+            "Окно CAPTCHA ещё открыто. Закройте браузер HeadHunter в noVNC и повторите проверку.",
+          { error: true, running: false }
+        );
+      } else if (code === "browser_captcha_or_action_required") {
+        setCaptchaOperatorFeedback(
+          payload.message || "HeadHunter всё ещё требует подтверждение CAPTCHA",
+          { error: true, running: false }
+        );
+      } else {
+        setCaptchaOperatorFeedback(
+          payload.message || payload.code || "Не удалось проверить challenge",
+          { error: true, running: false }
+        );
+      }
       if (payload.challenge) {
         showSuitableCaptchaPanel({
           challenge: payload.challenge,
           progress: payload.challenge.progress || {},
         });
+        // Keep the operator feedback as the primary captcha message after redraw.
+        const msg = document.querySelector("#suitable-live-captcha-msg");
+        if (msg && payload.message) msg.textContent = payload.message;
       }
     } catch (error) {
-      setSuitableStatus(error.message || "Не удалось проверить challenge", { error: true });
+      setCaptchaOperatorFeedback(error.message || "Не удалось проверить challenge", {
+        error: true,
+        running: false,
+      });
     } finally {
       if (btn) btn.disabled = false;
     }

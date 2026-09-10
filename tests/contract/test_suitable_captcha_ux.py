@@ -44,6 +44,23 @@ def test_missing_challenge_url_hides_open_button() -> None:
     assert "hasUrl && !explicitNoRecovery" in js
 
 
+def test_confirm_button_shows_checking_and_open_browser_message() -> None:
+    js = APP_JS.read_text(encoding="utf-8")
+    assert "setCaptchaOperatorFeedback" in js
+    assert "Проверяем HeadHunter…" in js
+    assert "Окно CAPTCHA ещё открыто" in js
+    assert "CAPTCHA подтверждена, HeadHunter доступен" in js
+    assert "challenge_browser_open" in js
+    marker = 'document.querySelector("#suitable-captcha-confirm")?.addEventListener'
+    assert marker in js
+    confirm_handler = js.split(marker)[1].split("const continuation = readSuitableContinuation")[0]
+    assert "confirm-challenge" in confirm_handler
+    assert "Проверяем HeadHunter…" in confirm_handler
+    checking_idx = confirm_handler.index("Проверяем HeadHunter…")
+    fetch_idx = confirm_handler.index("confirm-challenge")
+    assert checking_idx < fetch_idx
+
+
 def test_open_challenge_requires_interactive_ready_before_novnc() -> None:
     js = APP_JS.read_text(encoding="utf-8")
     marker = 'document.querySelector("#suitable-captcha-open")?.addEventListener'

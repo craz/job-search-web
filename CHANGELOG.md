@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Suitable CAPTCHA «Проверить снова»: immediate «Проверяем HeadHunter…»,
+  explicit still-open / still-challenged / success messages in the captcha
+  panel (no silent failures), refresh connection after clear.
 - Suitable CAPTCHA recovery: enable noVNC when ``challenge_url`` is present
   (do not require a separate recovery flag); show screenshot capture error
   reason when shot failed; hide open button only for true case-C.
