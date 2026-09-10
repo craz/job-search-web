@@ -5,6 +5,11 @@
 - Suitable CAPTCHA confirm: button «Я решил CAPTCHA — проверить»; while
   challenge browser open show «Решите CAPTCHA в открытом окне HeadHunter»;
   immediate «Проверяем HeadHunter…» (no silent failures).
+- Web initial load: fix `app.js` SyntaxError (`if confirmBtn)`) that aborted
+  the entire bootstrap (shell stuck on «Проверяем» / «—»); bump asset cache;
+  isolate HH/CAPTCHA failures via Promise.allSettled so Core/vacancies still load;
+  hide live CAPTCHA operator panel for historical SearchRun when challenge is
+  no longer active.
 - Suitable CAPTCHA «Проверить снова»: immediate «Проверяем HeadHunter…»,
   explicit still-open / still-challenged / success messages in the captcha
   panel (no silent failures), refresh connection after clear.

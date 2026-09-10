@@ -2586,7 +2586,7 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
     openBtn.hidden = !canOpenChallenge;
     openBtn.disabled = !canOpenChallenge;
   }
-    if confirmBtn) {
+  if (confirmBtn) {
     confirmBtn.dataset.novncUrl = canOpenChallenge ? url : "";
     confirmBtn.textContent = canOpenChallenge
       ? "Я решил CAPTCHA — проверить"
@@ -2764,6 +2764,13 @@ function renderSuitableFinalSummary(run, meta = {}) {
   if (captchaStopped) {
     const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
     void loadActiveChallengeState().then((challenge) => {
+      // Finished SearchRun may still carry captcha error_code historically.
+      // Live operator panel (open/confirm) only when challenge is still active.
+      if (!challenge) {
+        const captcha = document.querySelector("#suitable-live-captcha");
+        if (captcha) captcha.hidden = true;
+        return;
+      }
       showSuitableCaptchaPanel({
         progress: {
           ...progress,
@@ -2773,7 +2780,7 @@ function renderSuitableFinalSummary(run, meta = {}) {
           last_progress_at: progress.last_progress_at || finishedAt,
         },
         detectedAt: finishedAt || progress.last_progress_at,
-        novncUrl: meta.novncUrl || "",
+        novncUrl: meta.novncUrl || challenge.novnc_url || "",
         challenge,
       });
     });
@@ -6135,18 +6142,33 @@ if (hhResumeSync) {
 
 clearNotice();
 initNavigation();
-loadHhConnection();
-initVacancySearch();
+void loadHhConnection().catch(() => {
+  // HH must not abort unrelated Core/vacancy bootstrap
+});
+try {
+  initVacancySearch();
+} catch (error) {
+  console.error("initVacancySearch failed", error);
+}
 void (async () => {
-  await loadSearchCycle();
-  await loadApplications();
-  await loadPeople();
-  await loadDirectOutreaches();
-  await loadEmployerResponses();
-  await loadHiringProcesses();
-  await loadOffers();
-  await loadVacancies();
+  // Isolate subsystem failures: one rejected load must not blank the rest.
+  const tasks = [
+    ["search-cycle", () => loadSearchCycle()],
+    ["applications", () => loadApplications()],
+    ["people", () => loadPeople()],
+    ["direct-outreaches", () => loadDirectOutreaches()],
+    ["employer-responses", () => loadEmployerResponses()],
+    ["hiring-processes", () => loadHiringProcesses()],
+    ["offers", () => loadOffers()],
+    ["vacancies", () => loadVacancies()],
+  ];
+  const results = await Promise.allSettled(tasks.map(([, run]) => run()));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.error(`bootstrap ${tasks[index][0]} failed`, result.reason);
+    }
+  });
 })();
-loadMetrics();
-loadHypotheses();
+void loadMetrics().catch((error) => console.error("loadMetrics failed", error));
+void loadHypotheses().catch((error) => console.error("loadHypotheses failed", error));
 startLiveReload();

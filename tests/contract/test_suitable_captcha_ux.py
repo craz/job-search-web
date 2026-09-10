@@ -63,6 +63,16 @@ def test_confirm_button_shows_checking_and_open_browser_message() -> None:
     assert checking_idx < fetch_idx
     assert "Окно CAPTCHA ещё открыто" in js or "Решите CAPTCHA" in confirm_handler
 
+def test_historical_captcha_run_does_not_force_live_panel_without_challenge() -> None:
+    js = APP_JS.read_text(encoding="utf-8")
+    marker = "function renderSuitableFinalSummary"
+    assert marker in js
+    body = js.split(marker, 1)[1].split("\nfunction ", 1)[0]
+    assert "loadActiveChallengeState" in body
+    assert "if (!challenge)" in body
+    assert "captcha.hidden = true" in body
+
+
 def test_open_challenge_requires_interactive_ready_before_novnc() -> None:
     js = APP_JS.read_text(encoding="utf-8")
     marker = 'document.querySelector("#suitable-captcha-open")?.addEventListener'
