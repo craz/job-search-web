@@ -1349,12 +1349,52 @@ button { cursor: pointer; }
 }
 
 .assessment-score--muted {
-  opacity: 0.75;
+  opacity: 0.55;
   font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-regular);
   max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--color-text-secondary);
+}
+
+.decision-card {
+  margin: var(--space-3) 0;
+  padding: var(--space-3) 0 0;
+  border-top: var(--border-width) solid var(--color-border);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.decision-card__row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.decision-card__key {
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.decision-card__val {
+  line-height: 1.45;
+}
+
+.decision-card__why ul {
+  margin: var(--space-1) 0 0;
+  padding-left: 1.2rem;
+}
+
+.decision-card__score-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-metadata);
 }
 
 .owner-decision {

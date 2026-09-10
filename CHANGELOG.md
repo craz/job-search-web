@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Vacancy Разбор shows structured Assessment decision card; non-authoritative relevance_score is muted and no longer treated as the verdict explanation.
+
 - Bulk «Оценить новые»: enqueue budget is new jobs only — already-queued ids are
   skipped so a second click advances the remainder («Поставлено N из M»).
 - Suitable vacancy check paginates up to 5 HH pages (~250) per run with explicit

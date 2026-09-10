@@ -368,9 +368,17 @@ function renderVacancyAssessmentSummary(assessment, failure) {
   if (assessment) {
     const key = normalizeVerdict(assessment.verdict);
     const verdict = assessmentVerdictLabel(assessment.verdict);
+    const card = assessment.decision_card || {};
+    const scoreAuthoritative = card.relevance_score_authoritative === true;
+    const scoreHtml = scoreAuthoritative
+      ? `<span class="assessment-score" aria-label="Релевантность">${escapeHtml(assessment.relevance_score)}</span>`
+      : `<span class="assessment-score assessment-score--muted" title="${escapeHtml(
+          card.relevance_score_note ||
+            "Служебная метка вердикта (не сила совпадения)"
+        )}">${escapeHtml(assessment.relevance_score)}</span>`;
     return `<div class="vacancy-assessment-summary">
       ${renderBadge(verdict, assessmentVerdictBadge[key] || "neutral")}
-      <span class="assessment-score" aria-label="Релевантность">${escapeHtml(assessment.relevance_score)}</span>
+      ${scoreHtml}
     </div>`;
   }
   if (failure) {
@@ -381,6 +389,92 @@ function renderVacancyAssessmentSummary(assessment, failure) {
     </div>`;
   }
   return `<div class="vacancy-assessment-summary">${renderBadge("Без оценки", "neutral")}</div>`;
+}
+
+function levelLabelRu(level) {
+  const key = String(level || "").trim().toLowerCase();
+  return (
+    {
+      high: "высокое",
+      medium: "среднее",
+      low: "низкое",
+      unknown: "неизвестно",
+      pass: "ok",
+      constrained: "с ограничениями",
+      fail: "не проходит",
+      uncertain: "неопределено",
+      acceptable: "приемлемо",
+      unacceptable: "неприемлемо",
+    }[key] ||
+    level ||
+    "—"
+  );
+}
+
+function renderAssessmentDecisionCard(assessment) {
+  const card = assessment?.decision_card;
+  if (!card || typeof card !== "object") return "";
+  const rows = [];
+  const finalVerdict = assessmentVerdictLabel(card.final_verdict || assessment.verdict);
+  rows.push(
+    `<div class="decision-card__row"><span class="decision-card__key">Итог</span><span class="decision-card__val">${escapeHtml(
+      String(finalVerdict).toUpperCase()
+    )}</span></div>`
+  );
+  if (card.role_fit_level) {
+    rows.push(
+      `<div class="decision-card__row"><span class="decision-card__key">Role fit</span><span class="decision-card__val">${escapeHtml(
+        levelLabelRu(card.role_fit_level)
+      )}</span></div>`
+    );
+  }
+  if (card.feasibility_status || card.compensation_status) {
+    const feas = card.feasibility_status ? levelLabelRu(card.feasibility_status) : "—";
+    const comp = card.compensation_status
+      ? ` · компенсация: ${levelLabelRu(card.compensation_status)}${
+          card.compensation_basis === "unknown" ? " (в вакансии не указана)" : ""
+        }`
+      : "";
+    rows.push(
+      `<div class="decision-card__row"><span class="decision-card__key">Feasibility</span><span class="decision-card__val">${escapeHtml(
+        `${feas}${comp}`
+      )}</span></div>`
+    );
+  }
+  if (card.interest_level) {
+    rows.push(
+      `<div class="decision-card__row"><span class="decision-card__key">Interest</span><span class="decision-card__val">${escapeHtml(
+        levelLabelRu(card.interest_level)
+      )}</span></div>`
+    );
+  }
+  if (Array.isArray(card.hard_blockers) && card.hard_blockers.length) {
+    rows.push(
+      `<div class="decision-card__row"><span class="decision-card__key">Hard blockers</span><span class="decision-card__val">${escapeHtml(
+        card.hard_blockers.slice(0, 3).join(" · ")
+      )}</span></div>`
+    );
+  }
+  if (card.final_decision_reason) {
+    rows.push(
+      `<div class="decision-card__row decision-card__row--why"><span class="decision-card__key">Почему итог</span><span class="decision-card__val">${escapeHtml(
+        card.final_decision_reason
+      )}</span></div>`
+    );
+  }
+  if (Array.isArray(card.why) && card.why.length) {
+    const bullets = card.why
+      .slice(0, 4)
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
+    rows.push(
+      `<div class="decision-card__why"><span class="decision-card__key">Доказательства</span><ul>${bullets}</ul></div>`
+    );
+  }
+  if (card.relevance_score_note) {
+    rows.push(`<p class="decision-card__score-note">${escapeHtml(card.relevance_score_note)}</p>`);
+  }
+  return `<div class="decision-card" data-decision-card="1">${rows.join("")}</div>`;
 }
 
 function renderAssessmentStoredBits(assessment) {
@@ -400,9 +494,14 @@ function renderAssessmentStoredBits(assessment) {
 function renderVacancyAssessmentDetail(assessment, failure) {
   if (assessment) {
     const key = normalizeVerdict(assessment.verdict);
+    const card = assessment.decision_card;
+    const showLegacyReason = !card
+      ? `<p class="assessment-detail__reason">${escapeHtml(assessment.reason || "Пояснение не сохранено.")}</p>`
+      : "";
     return `<div class="row-detail__section vacancy-assessment-detail">
       <p class="row-detail__label">AI-оценка · ${escapeHtml(assessmentVerdictLabel(assessment.verdict))} · ${escapeHtml(formatDate(assessment.assessed_at))}</p>
-      <p class="assessment-detail__reason">${escapeHtml(assessment.reason || "Пояснение не сохранено.")}</p>
+      ${renderAssessmentDecisionCard(assessment)}
+      ${showLegacyReason}
       ${assessment.risk ? `<p class="assessment-detail__risk"><span class="assessment-detail__label">Риск</span> ${escapeHtml(assessment.risk)}</p>` : ""}
       ${assessment.action ? `<p class="assessment-detail__action"><span class="assessment-detail__label">Действие</span> ${escapeHtml(assessment.action)}</p>` : ""}
       ${renderAssessmentStoredBits(assessment)}
