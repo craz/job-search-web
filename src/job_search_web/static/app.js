@@ -2396,7 +2396,8 @@ function humanRecovery(code, { historical = false } = {}) {
 function setSuitableStatus(message, { running = false, error = false } = {}) {
   const status = document.querySelector("#suitable-status");
   if (!status) return;
-  status.textContent = message || "";
+  const next = message || "";
+  if (status.textContent !== next) status.textContent = next;
   status.classList.toggle("is-running", Boolean(running));
   status.classList.toggle("is-error", Boolean(error));
 }
@@ -2412,6 +2413,16 @@ let suitableLiveStartedAt = null;
 let suitablePollTimer = null;
 let suitableElapsedTimer = null;
 let suitableActivePost = false;
+let suitableLiveProgressFingerprint = "";
+let suitableWasWatchingRun = false;
+
+function setTextIfChanged(el, text) {
+  if (!el) return false;
+  const next = text == null ? "" : String(text);
+  if (el.textContent === next) return false;
+  el.textContent = next;
+  return true;
+}
 
 function readSuitableContinuation() {
   try {
@@ -2552,14 +2563,23 @@ function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl =
   }
 }
 
+function updateSuitableLiveElapsed() {
+  if (!suitableLiveStartedAt) return;
+  const elapsedEl = document.querySelector("#suitable-live-elapsed");
+  if (!elapsedEl) return;
+  const elapsedMs = Date.now() - new Date(suitableLiveStartedAt).getTime();
+  setTextIfChanged(elapsedEl, formatSuitableElapsed(elapsedMs));
+}
+
 function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   const live = document.querySelector("#suitable-live");
-  const timing = document.querySelector("#suitable-live-timing");
+  const startedEl = document.querySelector("#suitable-live-started");
+  const elapsedEl = document.querySelector("#suitable-live-elapsed");
   const progressEl = document.querySelector("#suitable-live-progress");
   const countsEl = document.querySelector("#suitable-live-counts");
   const stuckEl = document.querySelector("#suitable-live-stuck");
   const captchaEl = document.querySelector("#suitable-live-captcha");
-  if (!live || !timing || !progressEl || !countsEl) return;
+  if (!live || !progressEl || !countsEl) return;
   if (!run || String(run.status || "") !== "running") {
     hideSuitableLivePanel();
     return;
@@ -2568,9 +2588,15 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   const startedAt = run.started_at || clientStartedAt || suitableLiveStartedAt;
   suitableLiveStartedAt = startedAt;
   suitableLiveRunId = run.id || suitableLiveRunId;
-  const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
-  const elapsedMs = Date.now() - startedMs;
-  timing.textContent = `Запущена: ${formatSuitableClock(startedAt)} · прошло ${formatSuitableElapsed(elapsedMs)}`;
+  if (startedEl) {
+    setTextIfChanged(startedEl, `Запущена: ${formatSuitableClock(startedAt)}`);
+  }
+  const elapsedWrap = document.querySelector(".vacancy-search__live-elapsed-wrap");
+  if (elapsedWrap) elapsedWrap.hidden = false;
+  if (elapsedEl) {
+    const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
+    setTextIfChanged(elapsedEl, formatSuitableElapsed(Date.now() - startedMs));
+  }
 
   const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
   const pagesPlanned =
@@ -2607,7 +2633,6 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   if (progress.phase === "captcha_required") {
     pageBits.push("требуется CAPTCHA");
     showSuitableCaptchaPanel({ progress, detectedAt: progress.last_progress_at });
-    // Finalize elapsed display: stop the ticking feel once challenge is known.
     if (suitableElapsedTimer) {
       clearInterval(suitableElapsedTimer);
       suitableElapsedTimer = null;
@@ -2617,8 +2642,7 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
     if (progress.phase === "details") pageBits.push("загрузка деталей");
     if (progress.phase === "ingest") pageBits.push("запись в базу");
   }
-  progressEl.textContent = pageBits.join(" · ") || "Ожидаем первую страницу HH…";
-
+  const progressText = pageBits.join(" · ") || "Ожидаем первую страницу HH…";
   const created = progress.created_count;
   const updated = progress.updated_count;
   const unchanged = progress.unchanged_count;
@@ -2626,10 +2650,22 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   if (created != null) countBits.push(`Новых: ${created}`);
   if (updated != null) countBits.push(`Обновлено: ${updated}`);
   if (unchanged != null) countBits.push(`Уже в базе: ${unchanged}`);
-  countsEl.textContent = countBits.join(" · ");
-  countsEl.hidden = !countBits.length;
+  const countsText = countBits.join(" · ");
+  const fingerprint = [
+    progressText,
+    countsText,
+    progress.phase || "",
+    progress.last_progress_at || "",
+  ].join("|");
+  if (fingerprint !== suitableLiveProgressFingerprint) {
+    suitableLiveProgressFingerprint = fingerprint;
+    setTextIfChanged(progressEl, progressText);
+    setTextIfChanged(countsEl, countsText);
+    countsEl.hidden = !countBits.length;
+  }
 
   const lastProgressAt = progress.last_progress_at || run.started_at;
+  const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now();
   const lastMs = lastProgressAt ? new Date(lastProgressAt).getTime() : startedMs;
   const stalled =
     progress.phase !== "captcha_required" && Date.now() - lastMs > SUITABLE_STUCK_MS;
@@ -2638,7 +2674,8 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
 
 function renderSuitableFinalSummary(run, meta = {}) {
   const live = document.querySelector("#suitable-live");
-  const timing = document.querySelector("#suitable-live-timing");
+  const startedEl = document.querySelector("#suitable-live-started");
+  const elapsedWrap = document.querySelector(".vacancy-search__live-elapsed-wrap");
   const progressEl = document.querySelector("#suitable-live-progress");
   const countsEl = document.querySelector("#suitable-live-counts");
   const stuckEl = document.querySelector("#suitable-live-stuck");
@@ -2651,13 +2688,15 @@ function renderSuitableFinalSummary(run, meta = {}) {
   const finishedMs = finishedAt ? new Date(finishedAt).getTime() : null;
   const durationMs =
     startedMs != null && finishedMs != null ? Math.max(0, finishedMs - startedMs) : null;
-  timing.textContent = [
+  const summaryTiming = [
     `Запущена: ${formatSuitableClock(startedAt)}`,
     finishedAt ? `Завершена: ${formatSuitableClock(finishedAt)}` : null,
     durationMs != null ? `Длительность: ${formatSuitableElapsed(durationMs)}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  if (startedEl) setTextIfChanged(startedEl, summaryTiming);
+  if (elapsedWrap) elapsedWrap.hidden = true;
 
   const pagination = meta.pagination || {};
   const pageFrom = pagination.page_from ?? pagination.start_page;
@@ -2738,16 +2777,20 @@ function setSuitableRunning(running) {
   const button = document.querySelector("#suitable-run");
   if (button) {
     button.disabled = running;
-    button.textContent = running ? "Проверяем…" : "Проверить подходящие";
+    const label = running ? "Проверяем…" : "Проверить подходящие";
+    if (button.textContent !== label) button.textContent = label;
   }
   const more = document.querySelector("#suitable-load-more");
   if (more) {
     more.disabled = running;
-    more.textContent = running ? "Загружаем…" : "Загрузить ещё";
+    const label = running ? "Загружаем…" : "Загрузить ещё";
+    if (more.textContent !== label) more.textContent = label;
   }
   if (!running) {
     stopSuitableLiveTimers();
     suitableActivePost = false;
+    suitableLiveProgressFingerprint = "";
+    suitableWasWatchingRun = false;
   }
 }
 
@@ -2851,7 +2894,14 @@ async function pollSuitableRunningProgress() {
   try {
     const response = await fetch("/api/v1/search-runs");
     const payload = await response.json();
-    if (!response.ok || !payload.items?.length) return null;
+    if (!response.ok || !payload.items?.length) {
+      if (suitableWasWatchingRun && !suitableActivePost) {
+        suitableWasWatchingRun = false;
+        stopSuitableLiveTimers();
+        await loadLatestSuitableRun();
+      }
+      return null;
+    }
     const runningItems = payload.items.filter(
       (item) =>
         item.acquisition_kind === "resume_suitable" && String(item.status || "") === "running"
@@ -2882,18 +2932,30 @@ async function pollSuitableRunningProgress() {
         running = null;
       }
     }
-    if (!running) return null;
-    if (suitableLiveRunId && running.id && running.id !== suitableLiveRunId) {
-      // Prefer the run we started; fall through to newest running suitable.
+    if (!running) {
+      if (suitableWasWatchingRun && !suitableActivePost) {
+        suitableWasWatchingRun = false;
+        stopSuitableLiveTimers();
+        await loadLatestSuitableRun();
+      }
+      return null;
     }
+    suitableWasWatchingRun = true;
     suitableLiveRunId = running.id || suitableLiveRunId;
     latestSuitableRunCache = running;
+    // In-place progress fields only — never reload vacancy queue / HH account on poll.
     renderSuitableLiveFromRun(running, { clientStartedAt: suitableLiveStartedAt });
-    setSuitableRunning(true);
-    if (running.progress?.phase === "captcha_required") {
-      setSuitableStatus("HeadHunter требует подтверждение CAPTCHA", { running: false, error: false });
-    } else {
-      setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
+    if (!vacancySearchRunning) setSuitableRunning(true);
+    const nextStatus =
+      running.progress?.phase === "captcha_required"
+        ? "HeadHunter требует подтверждение CAPTCHA"
+        : "Проверяем подходящие вакансии…";
+    const statusEl = document.querySelector("#suitable-status");
+    if (!statusEl || statusEl.textContent !== nextStatus) {
+      setSuitableStatus(nextStatus, {
+        running: running.progress?.phase !== "captcha_required",
+        error: false,
+      });
     }
     return running;
   } catch (_error) {
@@ -2904,6 +2966,8 @@ async function pollSuitableRunningProgress() {
 function startSuitableLiveWatch({ startedAtIso = null, runId = null } = {}) {
   suitableLiveStartedAt = startedAtIso || suitableLiveStartedAt || new Date().toISOString();
   suitableLiveRunId = runId || suitableLiveRunId;
+  suitableLiveProgressFingerprint = "";
+  suitableWasWatchingRun = true;
   stopSuitableLiveTimers();
   const last = document.querySelector("#suitable-last");
   if (last) {
@@ -2925,15 +2989,7 @@ function startSuitableLiveWatch({ startedAtIso = null, runId = null } = {}) {
     );
   }
   suitableElapsedTimer = setInterval(() => {
-    if (!suitableLiveStartedAt) return;
-    const timing = document.querySelector("#suitable-live-timing");
-    if (!timing) return;
-    const elapsedMs = Date.now() - new Date(suitableLiveStartedAt).getTime();
-    const base = timing.textContent || "";
-    const prefix = base.includes("· прошло")
-      ? base.replace(/· прошло .+$/, "")
-      : `Запущена: ${formatSuitableClock(suitableLiveStartedAt)} `;
-    timing.textContent = `${prefix.replace(/\s+$/, "")} · прошло ${formatSuitableElapsed(elapsedMs)}`;
+    updateSuitableLiveElapsed();
   }, 1000);
   suitablePollTimer = setInterval(() => {
     void pollSuitableRunningProgress();

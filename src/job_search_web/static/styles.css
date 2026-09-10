@@ -556,6 +556,8 @@ button { cursor: pointer; }
   gap: var(--space-1);
   font-size: var(--font-size-secondary);
   line-height: 1.45;
+  /* Reserve vertical space so progress/stuck text growth does not shove the queue. */
+  min-height: 4.5rem;
 }
 
 .vacancy-search__live-timing,
@@ -564,10 +566,25 @@ button { cursor: pointer; }
   margin: 0;
 }
 
+.vacancy-search__live-progress {
+  min-height: 2.9em; /* up to two wrapped lines without CLS into the vacancy list */
+}
+
+.vacancy-search__live-counts {
+  min-height: 1.45em;
+}
+
+.vacancy-search__live-elapsed {
+  display: inline-block;
+  min-width: 10ch;
+  font-variant-numeric: tabular-nums;
+}
+
 .vacancy-search__live-stuck {
   margin: var(--space-1) 0 0;
   color: var(--color-warning, #a15c00);
   font-weight: var(--font-weight-semibold);
+  min-height: 1.45em;
 }
 
 .vacancy-search__live-captcha {

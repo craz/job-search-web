@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Suitable live progress: in-place timer/progress text updates with reserved
+  elapsed width — no vacancy-queue rebuild and no layout jump on 1s/2s ticks.
 - Suitable CAPTCHA handoff: «HeadHunter остановил загрузку и требует подтверждение»
   with scraper screenshot, challenge-noVNC open (not login), and «Проверить снова».
 - Suitable CAPTCHA: live panel switches from «загрузка деталей» to

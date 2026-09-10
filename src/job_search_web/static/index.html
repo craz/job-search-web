@@ -111,12 +111,17 @@
               <p class="vacancy-search__resume" id="suitable-resume-line">Рабочее резюме: —</p>
               <p class="vacancy-search__total" id="suitable-total-line" hidden>HH предлагает: —</p>
               <p class="vacancy-search__progress" id="suitable-progress-line" hidden></p>
-              <div class="vacancy-search__live" id="suitable-live" hidden aria-live="polite">
-                <p class="vacancy-search__live-timing" id="suitable-live-timing"></p>
-                <p class="vacancy-search__live-progress" id="suitable-live-progress"></p>
+              <div class="vacancy-search__live" id="suitable-live" hidden>
+                <p class="vacancy-search__live-timing" id="suitable-live-timing">
+                  <span id="suitable-live-started"></span>
+                  <span class="vacancy-search__live-elapsed-wrap">
+                    · прошло <span id="suitable-live-elapsed" class="vacancy-search__live-elapsed">0 сек</span>
+                  </span>
+                </p>
+                <p class="vacancy-search__live-progress" id="suitable-live-progress" aria-live="polite"></p>
                 <p class="vacancy-search__live-counts" id="suitable-live-counts"></p>
                 <p class="vacancy-search__live-stuck" id="suitable-live-stuck" hidden>Давно нет прогресса</p>
-              <div class="vacancy-search__live-captcha" id="suitable-live-captcha" hidden>
+                <div class="vacancy-search__live-captcha" id="suitable-live-captcha" hidden>
                   <p class="vacancy-search__live-captcha-msg" id="suitable-live-captcha-msg">
                     HeadHunter остановил загрузку и требует подтверждение
                   </p>

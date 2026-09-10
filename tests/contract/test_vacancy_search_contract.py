@@ -59,7 +59,8 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "Давно нет прогресса" in html
     assert "SUITABLE_POLL_MS" in js
     assert "Запущена:" in js
-    assert "прошло" in js
+    assert "прошло" in html  # stable label beside #suitable-live-elapsed
+    assert "updateSuitableLiveElapsed" in js
     assert "Проверено:" in js
     assert "Новых:" in js
     assert "Уже в базе:" in js
