@@ -43,6 +43,7 @@ class HhGateway(Protocol):
     ) -> tuple[int, Any]: ...
 
     def get_vacancy_source_status(self, external_id: str) -> tuple[int, Any]: ...
+    def refresh_vacancy_content(self, external_id: str) -> tuple[int, Any]: ...
 
 
 class HhClient:
@@ -177,4 +178,12 @@ class HhClient:
             "GET",
             f"/api/v1/vacancies/{external_id}/source-status",
             timeout=max(self.timeout_seconds, 60.0),
+        )
+
+    def refresh_vacancy_content(self, external_id: str) -> tuple[int, Any]:
+        """Owner-triggered HH detail fetch + Core ingest for one vacancy."""
+        return self._request(
+            "POST",
+            f"/api/v1/vacancies/{external_id}/refresh-content",
+            payload={},
         )

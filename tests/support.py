@@ -1463,6 +1463,36 @@ class StubHh:
             "core_writes": False,
         }
 
+    def refresh_vacancy_content(self, external_id: str) -> tuple[int, Any]:
+        if self.unavailable:
+            from job_search_web.hh_client import HhUnavailableError
+
+            raise HhUnavailableError
+        self.calls.append(("vacancy-refresh-content", external_id))
+        result = getattr(self, "refresh_content_result", None)
+        if result is not None:
+            status_code, body = result
+            return status_code, body
+        vacancy = {
+            "id": "00000000-0000-0000-0000-000000000042",
+            "external_id": external_id,
+            "source": "hh",
+            "title": "Updated title",
+            "description": "Updated description body for scoring.",
+            "source_status": "active",
+        }
+        return 200, {
+            "ok": True,
+            "ux_status": getattr(self, "refresh_ux_status", "updated"),
+            "outcome": getattr(self, "refresh_outcome", "updated"),
+            "code": "ready",
+            "status": "available",
+            "vacancy": vacancy,
+            "hh_writes": False,
+            "core_writes": True,
+            "scoring_enqueued": False,
+        }
+
 
 class StubScoring:
     """In-memory Scoring calibration + semantic score gateway for Web facade tests."""

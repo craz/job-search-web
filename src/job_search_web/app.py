@@ -1132,6 +1132,84 @@ def create_app(
             return proxy_response(reread_status, reread)
         return reread_status, reread
 
+    @application.post("/api/v1/vacancies/{vacancy_id}/refresh-content")
+    def post_vacancy_refresh_content(vacancy_id: str) -> JSONResponse:
+        """Owner «Проверить обновления»: HH detail → Core ingest (no Scoring).
+
+        Returns Russian UX status for the expanded vacancy detail button.
+        Does not mutate Assessment history, owner_decision, Application,
+        DirectOutreach, HiringProcess, or Offer beyond Core ingest source fields.
+        """
+        try:
+            status, vacancy = gateway.get_vacancy(vacancy_id)
+        except CoreUnavailableError:
+            return unavailable_response()
+        if status != 200 or not isinstance(vacancy, dict):
+            return proxy_response(status, vacancy)
+
+        if str(vacancy.get("source") or "") != "hh":
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "code": "unsupported_source",
+                    "message": "Обновление с HH доступно только для вакансий источника hh",
+                    "ux_status": "error",
+                    "ux_message": "Не удалось проверить",
+                },
+            )
+
+        external_id = str(vacancy.get("external_id") or "").strip()
+        if not external_id:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "code": "missing_external_id",
+                    "message": "У вакансии нет external_id для обновления с HH",
+                    "ux_status": "error",
+                    "ux_message": "Не удалось проверить",
+                },
+            )
+
+        try:
+            hh_status, hh_payload = hh_gateway.refresh_vacancy_content(external_id)
+        except HhUnavailableError:
+            return hh_unavailable_response()
+        if not isinstance(hh_payload, dict):
+            return proxy_response(hh_status, hh_payload)
+
+        ux = str(hh_payload.get("ux_status") or "error")
+        ux_messages = {
+            "unchanged": "Изменений нет",
+            "updated": "Вакансия обновлена",
+            "unavailable": "Вакансия недоступна на HH",
+            "error": "Не удалось проверить",
+        }
+        # Re-read Core vacancy when ingest succeeded so UI gets fresh fields.
+        refreshed_vacancy = vacancy
+        if hh_payload.get("ok") and isinstance(hh_payload.get("vacancy"), dict):
+            try:
+                reread_status, reread = gateway.get_vacancy(vacancy_id)
+                if reread_status == 200 and isinstance(reread, dict):
+                    refreshed_vacancy = reread
+            except CoreUnavailableError:
+                refreshed_vacancy = hh_payload.get("vacancy") or vacancy
+
+        body = {
+            "ok": bool(hh_payload.get("ok")),
+            "ux_status": ux,
+            "ux_message": ux_messages.get(ux, "Не удалось проверить"),
+            "outcome": hh_payload.get("outcome"),
+            "code": hh_payload.get("code"),
+            "vacancy": refreshed_vacancy,
+            "hh": {
+                "status": hh_payload.get("status"),
+                "code": hh_payload.get("code"),
+                "action": hh_payload.get("action"),
+            },
+        }
+        out_status = 200 if body["ok"] else (409 if hh_status >= 400 else hh_status)
+        return JSONResponse(status_code=out_status, content=body)
+
     @application.post("/api/v1/vacancies/{vacancy_id}/source-status/refresh")
     def post_vacancy_source_status_refresh(vacancy_id: str) -> JSONResponse:
         """Refresh Core source_status from HH without enqueueing Scoring."""

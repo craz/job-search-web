@@ -4807,6 +4807,51 @@ grid.addEventListener("click", async (event) => {
     }
     return;
   }
+  const refreshContentButton = event.target.closest("[data-refresh-content]");
+  if (refreshContentButton) {
+    const card = refreshContentButton.closest("[data-id]");
+    const statusEl = card?.querySelector("[data-refresh-content-status]");
+    const vacancyId = card?.dataset?.id;
+    if (!vacancyId) return;
+    refreshContentButton.disabled = true;
+    refreshContentButton.textContent = "Проверяем…";
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.textContent = "Проверяем…";
+    }
+    try {
+      const response = await fetch(`/api/v1/vacancies/${vacancyId}/refresh-content`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const payload = await response.json().catch(() => ({}));
+      const message =
+        payload.ux_message ||
+        (response.ok ? "Вакансия обновлена" : "Не удалось проверить");
+      if (statusEl) {
+        statusEl.hidden = false;
+        statusEl.textContent = message;
+      }
+      if (!response.ok && !payload.ux_message) {
+        throw new Error(payload.message || message);
+      }
+      showNotice(message, response.ok ? undefined : "error");
+      if (response.ok || payload.vacancy) {
+        await loadVacancies();
+      }
+    } catch (error) {
+      const msg = error.message || "Не удалось проверить";
+      if (statusEl) {
+        statusEl.hidden = false;
+        statusEl.textContent = msg;
+      }
+      showNotice(msg, "error");
+      refreshContentButton.disabled = false;
+      refreshContentButton.textContent = "Проверить обновления";
+    }
+    return;
+  }
   const button = event.target.closest("[data-apply]");
   if (button) {
     const card = button.closest("[data-id]");

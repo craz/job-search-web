@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expanded HH vacancy detail: button «Проверить обновления» →
+  `POST /api/v1/vacancies/{id}/refresh-content` (HH detail → Core ingest);
+  UX: Проверяем… / Изменений нет / Вакансия обновлена /
+  Вакансия недоступна на HH / Не удалось проверить.
+- Suitable batch acquisition counters remain Новых / Обновлено / Уже в базе
+  with create-only semantics (Обновлено normally 0).
+
 - Suitable CAPTCHA confirm: button «Я решил CAPTCHA — проверить»; while
   challenge browser open show «Решите CAPTCHA в открытом окне HeadHunter»;
   immediate «Проверяем HeadHunter…» (no silent failures).
