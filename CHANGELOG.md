@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Suitable history: failed/partial last-run wording stays past-tense when HH is
+  healthy; hide previous-run error block while a live suitable run is active.
 - Suitable live progress: started/elapsed timer, HH page + checked counts from
   SearchRun.progress polling, stuck warning, reload restore, final duration summary.
 - Localize vacancy scoring decision card labels/enums/actions to Russian; raw

@@ -2362,15 +2362,22 @@ const SEARCH_RECOVERY = {
 };
 
 const SEARCH_RECOVERY_HISTORY = {
-  profile_locked: "Во время проверки браузер HeadHunter был занят",
-  browser_login_required: "Нужно было войти в HeadHunter",
-  browser_session_not_logged_in: "Нужно было войти в HeadHunter",
-  not_authorized: "Нужно было войти в HeadHunter",
-  browser_captcha_or_action_required: "HeadHunter требовал действие в браузере",
-  action_required: "HeadHunter требовал действие в браузере",
-  transport_unavailable: "HeadHunter был недоступен",
-  browser_vacancy_read_failed: "HeadHunter был недоступен",
-  hh_unavailable: "HeadHunter был недоступен",
+  profile_locked: "во время проверки профиль браузера был занят",
+  browser_login_required: "во время проверки нужно было войти в HeadHunter",
+  browser_session_not_logged_in: "во время проверки нужно было войти в HeadHunter",
+  not_authorized: "во время проверки нужно было войти в HeadHunter",
+  browser_captcha_or_action_required: "во время проверки HeadHunter требовал действие в браузере",
+  action_required: "во время проверки HeadHunter требовал действие в браузере",
+  transport_unavailable: "во время проверки HeadHunter был недоступен",
+  browser_vacancy_read_failed: "во время проверки HeadHunter был недоступен",
+  hh_unavailable: "во время проверки HeadHunter был недоступен",
+  vacancy_detail_failed: "во время проверки не удалось открыть часть вакансий",
+  search_page_failed: "во время проверки не удалось получить результаты поиска",
+  page_parse_failed: "во время проверки не удалось разобрать страницу поиска",
+  core_ingest_failed: "во время проверки не удалось сохранить часть вакансий",
+  partial_pagination: "проверка завершилась не полностью",
+  resume_search_page_mismatch: "во время проверки страница подходящих не подтвердилась",
+  active_resume_required: "во время проверки не было выбрано рабочее резюме",
 };
 
 function humanRecovery(code, { historical = false } = {}) {
@@ -2378,8 +2385,7 @@ function humanRecovery(code, { historical = false } = {}) {
   if (historical) {
     return (
       SEARCH_RECOVERY_HISTORY[code] ||
-      SEARCH_RECOVERY[code] ||
-      "Проверка завершилась с ошибкой"
+      "проверка завершилась с ошибкой"
     );
   }
   return SEARCH_RECOVERY[code] || "Проверка завершилась с ошибкой";
@@ -2677,29 +2683,36 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
     moreRemaining: more,
   });
   if (!last || !body || !run) return;
-  const when = formatDate(run.finished_at || run.started_at);
   const status = String(run.status || "");
+  // While a run is active, only the live progress panel is "current".
+  if (status === "running" || vacancySearchRunning || suitableActivePost) {
+    last.hidden = true;
+    last.classList.remove("is-history", "is-error");
+    body.textContent = "";
+    if (status === "running") {
+      renderSuitableLiveFromRun(run);
+    }
+    return;
+  }
+  const when = formatDate(run.finished_at || run.started_at);
   const processed = Number(run.found_count || 0);
   const created = Number(run.created_count || 0);
   const updated = Number(run.updated_count || 0);
   const unchanged = Number(run.unchanged_count || 0);
   const historyDetail = humanRecovery(run.error_code, { historical: true });
   let headline = `Последняя проверка: ${when}`;
-  let detail = "";
-  if (status === "running") {
-    headline = `Проверка идёт · запущена ${formatSuitableClock(run.started_at)}`;
-    renderSuitableLiveFromRun(run);
-  } else if (status === "success" && processed === 0) {
-    detail = "подходящих вакансий в этой проверке нет";
+  if (status === "success" && processed === 0) {
+    headline = `Последняя проверка: ${when} — подходящих вакансий в этой проверке нет`;
   } else if (status === "success") {
-    detail = "завершена";
+    headline = `Последняя проверка: ${when} — завершена`;
   } else if (status === "partial") {
-    detail = "завершена не полностью";
+    headline = historyDetail
+      ? `Последняя проверка: ${when} — завершилась не полностью: ${historyDetail}`
+      : `Последняя проверка: ${when} — завершилась не полностью`;
   } else if (status === "failed") {
-    detail = "завершилась с ошибкой";
-  }
-  if (status !== "running" && detail) {
-    headline = `Последняя проверка: ${when} — ${detail}`;
+    headline = historyDetail
+      ? `Последняя проверка: ${when} — завершилась с ошибкой: ${historyDetail}`
+      : `Последняя проверка: ${when} — завершилась с ошибкой`;
   }
   const pageHint =
     pageFrom != null && pageTo != null
@@ -2710,20 +2723,14 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
   const counts =
     status === "failed" && processed === 0
       ? ""
-      : status === "running"
-        ? ""
-        : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.${pageHint ? ` ${pageHint}` : ""}`;
-  const historyNote =
-    status === "failed" && historyDetail
-      ? historyDetail
-      : status === "partial" && historyDetail
-        ? historyDetail
-        : "";
+      : `Проверено: ${processed}. Новых: ${created}. Обновлено: ${updated}. Уже в базе: ${unchanged}.${pageHint ? ` ${pageHint}` : ""}`;
   last.hidden = false;
-  const healthyNow = hhConnectionLooksHealthy() && status !== "running";
-  last.classList.toggle("is-history", healthyNow && status === "failed");
+  const healthyNow = hhConnectionLooksHealthy();
+  const treatAsHistory =
+    healthyNow && (status === "failed" || status === "partial") && Boolean(run.error_code);
+  last.classList.toggle("is-history", treatAsHistory);
   last.classList.toggle("is-error", status === "failed" && !healthyNow);
-  body.textContent = [headline, counts, historyNote].filter(Boolean).join(" · ");
+  body.textContent = [headline, counts].filter(Boolean).join(" · ");
 }
 
 async function pollSuitableRunningProgress() {
@@ -2755,6 +2762,11 @@ function startSuitableLiveWatch({ startedAtIso = null, runId = null } = {}) {
   suitableLiveStartedAt = startedAtIso || suitableLiveStartedAt || new Date().toISOString();
   suitableLiveRunId = runId || suitableLiveRunId;
   stopSuitableLiveTimers();
+  const last = document.querySelector("#suitable-last");
+  if (last) {
+    last.hidden = true;
+    last.classList.remove("is-history", "is-error");
+  }
   const live = document.querySelector("#suitable-live");
   if (live) {
     live.hidden = false;
