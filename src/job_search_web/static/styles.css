@@ -570,6 +570,24 @@ button { cursor: pointer; }
   font-weight: var(--font-weight-semibold);
 }
 
+.vacancy-search__live-captcha {
+  margin-top: var(--space-2);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.vacancy-search__live-captcha-msg {
+  margin: 0;
+  color: var(--color-warning, #a15c00);
+  font-weight: var(--font-weight-semibold);
+}
+
+.vacancy-search__live-captcha-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .vacancy-list-filter {
   margin-bottom: var(--space-4);
   color: var(--color-text-secondary);

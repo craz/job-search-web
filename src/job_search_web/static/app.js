@@ -2346,7 +2346,8 @@ const SEARCH_RECOVERY = {
   browser_login_required: "Нужно войти в HeadHunter",
   browser_session_not_logged_in: "Нужно войти в HeadHunter",
   not_authorized: "Нужно войти в HeadHunter",
-  browser_captcha_or_action_required: "HeadHunter требует действие в браузере",
+  browser_captcha_or_action_required: "HeadHunter требует подтверждение CAPTCHA",
+  captcha_required: "HeadHunter требует подтверждение CAPTCHA",
   action_required: "HeadHunter требует действие в браузере",
   profile_locked: "Браузер HeadHunter сейчас используется",
   transport_unavailable: "HeadHunter сейчас недоступен",
@@ -2366,7 +2367,8 @@ const SEARCH_RECOVERY_HISTORY = {
   browser_login_required: "во время проверки нужно было войти в HeadHunter",
   browser_session_not_logged_in: "во время проверки нужно было войти в HeadHunter",
   not_authorized: "во время проверки нужно было войти в HeadHunter",
-  browser_captcha_or_action_required: "во время проверки HeadHunter требовал действие в браузере",
+  browser_captcha_or_action_required: "остановлено: требуется CAPTCHA",
+  captcha_required: "остановлено: требуется CAPTCHA",
   action_required: "во время проверки HeadHunter требовал действие в браузере",
   transport_unavailable: "во время проверки HeadHunter был недоступен",
   browser_vacancy_read_failed: "во время проверки HeadHunter был недоступен",
@@ -2476,6 +2478,40 @@ function hideSuitableLivePanel() {
   if (live) live.hidden = true;
   const stuck = document.querySelector("#suitable-live-stuck");
   if (stuck) stuck.hidden = true;
+  const captcha = document.querySelector("#suitable-live-captcha");
+  if (captcha) captcha.hidden = true;
+}
+
+function isSuitableCaptchaCode(code) {
+  return code === "browser_captcha_or_action_required" || code === "captcha_required";
+}
+
+function showSuitableCaptchaPanel({ progress = {}, detectedAt = null, novncUrl = "" } = {}) {
+  const captcha = document.querySelector("#suitable-live-captcha");
+  const msg = document.querySelector("#suitable-live-captcha-msg");
+  const openBtn = document.querySelector("#suitable-captcha-open");
+  const confirmBtn = document.querySelector("#suitable-captcha-confirm");
+  const stuckEl = document.querySelector("#suitable-live-stuck");
+  if (stuckEl) stuckEl.hidden = true;
+  if (!captcha || !msg) return;
+  captcha.hidden = false;
+  const pagesFetched = progress.pages_fetched;
+  const pagesPlanned = progress.pages_planned;
+  const checked = progress.checked_count;
+  const when = detectedAt || progress.last_progress_at;
+  const bits = ["HeadHunter требует подтверждение CAPTCHA"];
+  if (when) bits.push(`обнаружено: ${formatSuitableClock(when)}`);
+  if (pagesFetched != null && pagesPlanned != null) {
+    bits.push(`страниц HH: ${pagesFetched}/${pagesPlanned}`);
+  }
+  if (checked != null) bits.push(`проверено: ${Number(checked).toLocaleString("ru-RU")}`);
+  msg.textContent = bits.join(" · ");
+  const url =
+    novncUrl ||
+    hhConnection?.dataset?.novncUrl ||
+    "http://127.0.0.1:6080/vnc.html?autoconnect=1&resize=scale";
+  if (openBtn) openBtn.dataset.novncUrl = url;
+  if (confirmBtn) confirmBtn.dataset.novncUrl = url;
 }
 
 function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
@@ -2484,6 +2520,7 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   const progressEl = document.querySelector("#suitable-live-progress");
   const countsEl = document.querySelector("#suitable-live-counts");
   const stuckEl = document.querySelector("#suitable-live-stuck");
+  const captchaEl = document.querySelector("#suitable-live-captcha");
   if (!live || !timing || !progressEl || !countsEl) return;
   if (!run || String(run.status || "") !== "running") {
     hideSuitableLivePanel();
@@ -2529,8 +2566,19 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
       pageBits.push(`Проверено: ${checked.toLocaleString("ru-RU")}`);
     }
   }
-  if (progress.phase === "details") pageBits.push("загрузка деталей");
-  if (progress.phase === "ingest") pageBits.push("запись в базу");
+  if (progress.phase === "captcha_required") {
+    pageBits.push("требуется CAPTCHA");
+    showSuitableCaptchaPanel({ progress, detectedAt: progress.last_progress_at });
+    // Finalize elapsed display: stop the ticking feel once challenge is known.
+    if (suitableElapsedTimer) {
+      clearInterval(suitableElapsedTimer);
+      suitableElapsedTimer = null;
+    }
+  } else {
+    if (captchaEl) captchaEl.hidden = true;
+    if (progress.phase === "details") pageBits.push("загрузка деталей");
+    if (progress.phase === "ingest") pageBits.push("запись в базу");
+  }
   progressEl.textContent = pageBits.join(" · ") || "Ожидаем первую страницу HH…";
 
   const created = progress.created_count;
@@ -2545,7 +2593,8 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
 
   const lastProgressAt = progress.last_progress_at || run.started_at;
   const lastMs = lastProgressAt ? new Date(lastProgressAt).getTime() : startedMs;
-  const stalled = Date.now() - lastMs > SUITABLE_STUCK_MS;
+  const stalled =
+    progress.phase !== "captcha_required" && Date.now() - lastMs > SUITABLE_STUCK_MS;
   if (stuckEl) stuckEl.hidden = !stalled;
 }
 
@@ -2579,7 +2628,9 @@ function renderSuitableFinalSummary(run, meta = {}) {
   const created = Number(run.created_count || 0);
   const updated = Number(run.updated_count || 0);
   const unchanged = Number(run.unchanged_count || 0);
+  const captchaStopped = isSuitableCaptchaCode(run.error_code);
   progressEl.textContent = [
+    captchaStopped ? "остановлено: требуется CAPTCHA" : null,
     `Проверено: ${processed.toLocaleString("ru-RU")}`,
     pageFrom != null && pageTo != null ? `Страницы HH: ${pageFrom}–${pageTo}` : null,
   ]
@@ -2587,6 +2638,23 @@ function renderSuitableFinalSummary(run, meta = {}) {
     .join(" · ");
   countsEl.hidden = false;
   countsEl.textContent = `Новых: ${created} · Обновлено: ${updated} · Уже в базе: ${unchanged}`;
+  if (captchaStopped) {
+    const progress = run.progress && typeof run.progress === "object" ? run.progress : {};
+    showSuitableCaptchaPanel({
+      progress: {
+        ...progress,
+        pages_fetched: progress.pages_fetched ?? pagination.pages_fetched,
+        pages_planned: progress.pages_planned ?? pagination.max_pages,
+        checked_count: progress.checked_count ?? processed,
+        last_progress_at: progress.last_progress_at || finishedAt,
+      },
+      detectedAt: finishedAt || progress.last_progress_at,
+      novncUrl: meta.novncUrl || "",
+    });
+  } else {
+    const captcha = document.querySelector("#suitable-live-captcha");
+    if (captcha) captcha.hidden = true;
+  }
 }
 
 function renderSuitableProgress(meta = {}) {
@@ -2707,11 +2775,19 @@ function renderSuitableSummary(run, { sourceTotal, resumeTitle, pagination, cumu
     headline = `Последняя проверка: ${when} — завершена`;
   } else if (status === "partial") {
     headline = historyDetail
-      ? `Последняя проверка: ${when} — завершилась не полностью: ${historyDetail}`
+      ? `Последняя проверка: ${when} — ${
+          isSuitableCaptchaCode(run.error_code)
+            ? historyDetail
+            : `завершилась не полностью: ${historyDetail}`
+        }`
       : `Последняя проверка: ${when} — завершилась не полностью`;
   } else if (status === "failed") {
     headline = historyDetail
-      ? `Последняя проверка: ${when} — завершилась с ошибкой: ${historyDetail}`
+      ? `Последняя проверка: ${when} — ${
+          isSuitableCaptchaCode(run.error_code)
+            ? historyDetail
+            : `завершилась с ошибкой: ${historyDetail}`
+        }`
       : `Последняя проверка: ${when} — завершилась с ошибкой`;
   }
   const pageHint =
@@ -2738,11 +2814,36 @@ async function pollSuitableRunningProgress() {
     const response = await fetch("/api/v1/search-runs");
     const payload = await response.json();
     if (!response.ok || !payload.items?.length) return null;
-    const running =
-      payload.items.find(
-        (item) =>
-          item.acquisition_kind === "resume_suitable" && String(item.status || "") === "running"
-      ) || null;
+    const runningItems = payload.items.filter(
+      (item) =>
+        item.acquisition_kind === "resume_suitable" && String(item.status || "") === "running"
+    );
+    // Prefer the run we started; otherwise newest by started_at. Ignore ancient
+    // orphan "running" rows with no recent progress (stale DB leftovers).
+    let running = null;
+    if (suitableLiveRunId) {
+      running = runningItems.find((item) => item.id === suitableLiveRunId) || null;
+    }
+    if (!running && runningItems.length) {
+      running = [...runningItems].sort((a, b) => {
+        const ta = Date.parse(a.started_at || "") || 0;
+        const tb = Date.parse(b.started_at || "") || 0;
+        return tb - ta;
+      })[0];
+    }
+    if (running) {
+      const progress = running.progress && typeof running.progress === "object" ? running.progress : {};
+      const lastAt = progress.last_progress_at || running.started_at;
+      const lastMs = lastAt ? new Date(lastAt).getTime() : 0;
+      const ageMs = Date.now() - lastMs;
+      // Empty-progress orphans older than stuck budget must not keep the UI "running".
+      if (
+        (!progress || Object.keys(progress).length === 0) &&
+        ageMs > SUITABLE_STUCK_MS
+      ) {
+        running = null;
+      }
+    }
     if (!running) return null;
     if (suitableLiveRunId && running.id && running.id !== suitableLiveRunId) {
       // Prefer the run we started; fall through to newest running suitable.
@@ -2751,7 +2852,11 @@ async function pollSuitableRunningProgress() {
     latestSuitableRunCache = running;
     renderSuitableLiveFromRun(running, { clientStartedAt: suitableLiveStartedAt });
     setSuitableRunning(true);
-    setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
+    if (running.progress?.phase === "captcha_required") {
+      setSuitableStatus("HeadHunter требует подтверждение CAPTCHA", { running: false, error: false });
+    } else {
+      setSuitableStatus("Проверяем подходящие вакансии…", { running: true });
+    }
     return running;
   } catch (_error) {
     return null;
@@ -3029,10 +3134,11 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
         pagination,
         cumulativeChecked,
         moreRemaining,
+        novncUrl: payload.action?.novnc_url || "",
       };
       renderSuitableSummary(run, latestSuitableRunMeta);
       if (String(run.status || "") !== "running") {
-        renderSuitableFinalSummary(run, { pagination });
+        renderSuitableFinalSummary(run, latestSuitableRunMeta);
       }
     }
     if (!response.ok && !run) {
@@ -3043,7 +3149,28 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
       return;
     }
     const status = String(run?.status || payload.status || "");
-    if (status === "failed") {
+    const code = String(payload.code || run?.error_code || "");
+    if (isSuitableCaptchaCode(code) || status === "action_required") {
+      setSuitableStatus("HeadHunter требует подтверждение CAPTCHA", { error: false });
+      showSuitableCaptchaPanel({
+        progress: run?.progress || {
+          pages_fetched: pagination.pages_fetched,
+          pages_planned: maxPages,
+          checked_count: cumulativeChecked || processed,
+          last_progress_at: run?.finished_at,
+        },
+        detectedAt: run?.finished_at || run?.progress?.last_progress_at,
+        novncUrl: payload.action?.novnc_url || "",
+      });
+      // Surface the same recovery actions as HH account panel (noVNC + confirm).
+      if (typeof setHhResumesActions === "function") {
+        setHhResumesActions({
+          open: true,
+          confirm: true,
+          novncUrl: payload.action?.novnc_url || "",
+        });
+      }
+    } else if (status === "failed") {
       setSuitableStatus("Последняя проверка завершилась с ошибкой", { error: false });
       renderSuitableSummary(run, {
         sourceTotal,
@@ -3474,6 +3601,21 @@ function initVacancySearch() {
       void runSuitableSearch({ continueFromPrior: true });
     });
   }
+  document.querySelector("#suitable-captcha-open")?.addEventListener("click", (event) => {
+    const btn = event.currentTarget;
+    const url = btn?.dataset?.novncUrl || "";
+    void runHhLoginAction("open_login", url, btn);
+  });
+  document.querySelector("#suitable-captcha-confirm")?.addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+    const url = btn?.dataset?.novncUrl || "";
+    await runHhLoginAction("confirm_login", url, btn);
+    // Exact mid-detail resume is not implemented — restart a fresh suitable run.
+    setSuitableStatus(
+      "Проверка HH обновлена. Можно снова запустить «Проверить подходящие» (продолжение с середины деталей не сохраняется).",
+      { error: false }
+    );
+  });
   const continuation = readSuitableContinuation();
   setSuitableLoadMoreVisible(Boolean(continuation?.moreRemaining && continuation?.nextPage != null));
   if (continuation?.cumulativeChecked) {
