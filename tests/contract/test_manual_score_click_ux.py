@@ -35,7 +35,7 @@ def test_manual_score_enqueue_and_pending_ux_strings() -> None:
     assert "active_queue_duplicate" in js
     assert "ollama_unavailable" in js
     assert "Оценка уже в очереди" in js
-    assert "Модель оценки сейчас недоступна" in js
+    assert "Ollama недоступна (сервис не отвечает). Повторите позже." in js
     assert "Оценка поставлена в очередь" in js
     assert "Ставим в очередь…" in js
     assert "Оценка запущена…" in js

@@ -1762,6 +1762,10 @@ function vacancyRow(item) {
       <p class="row-detail__label">Материал вакансии</p>
       <p class="assessment-detail__reason">${escapeHtml(excerpt(item.description, 600))}</p>
       <p class="list-row__meta">Источник: <a class="inline-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>${hhId ? ` · HH ${escapeHtml(hhId)}` : ""}</p>
+      ${item.source === "hh" && item.external_id ? `<div class="row-detail__actions">
+        <button class="btn btn--secondary btn--sm" data-refresh-content type="button">Проверить обновления</button>
+        <p class="list-row__meta" data-refresh-content-status hidden></p>
+      </div>` : ""}
     </div>`,
   ];
   if (!directChannel && (item.company.website_url || evidenceCount)) {

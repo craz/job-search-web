@@ -15,6 +15,11 @@
 - Vacancy freshness UX: label «Опубликована» only when `source_published_at` is present; otherwise «Найдена» (`first_seen_at`). Never present first_seen as HH publication time.
 - Suitable pagination wording: «Проверено N из M · можно загрузить ещё» when continuation remains; «дальше по HH не осталось» only when HH has no further page (not page-budget stop).
 
+- Fix: render «Проверить обновления» (`data-refresh-content`) in expanded HH
+  «Материал вакансии» detail (handler existed since r56; markup was missing).
+  Align contract string with shipped Ollama unavailable UX.
+  Asset cache-bust r61.
+
 - Expanded HH vacancy detail: button «Проверить обновления» →
   `POST /api/v1/vacancies/{id}/refresh-content` (HH detail → Core ingest);
   UX: Проверяем… / Изменений нет / Вакансия обновлена /
