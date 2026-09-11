@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Suitable freshness-first default: «Проверить подходящие» uses `max_pages=1`
+  (~50 newest SERP, create-only details). «Загрузить ещё» continues from the
+  next HH page (not page 0). Live create-only counters:
+  «Проверено SERP N · Уже в базе X · Новых Y · Карточек HH загружено Z из Y».
+
 - Manual «Оценить»: handle `[data-score]` before owner-decision; set pending +
   «Ставим в очередь…» / notice «Оценка запущена…» immediately (survive list
   re-renders); re-bind live button by vacancy id; DOM regression that

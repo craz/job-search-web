@@ -2427,7 +2427,7 @@ function setCaptchaOperatorFeedback(message, { running = false, error = false } 
   setSuitableStatus(message, { running, error });
 }
 
-const SUITABLE_MAX_PAGES_PER_RUN = 5;
+const SUITABLE_MAX_PAGES_PER_RUN = 1; // freshness-first: ~50 newest SERP per click
 const SUITABLE_PAGE_SIZE_HINT = 50;
 const SUITABLE_CONTINUATION_KEY = "hhSuitableContinuation";
 const SUITABLE_POLL_MS = 2000;
@@ -2730,15 +2730,29 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
   } else if (pagesFetched != null) {
     pageBits.push(`Страниц HH: ${pagesFetched}`);
   }
-  if (Number.isFinite(checked)) {
-    if (sourceTotal != null && sourceTotal !== "") {
-      pageBits.push(
-        `Проверено: ${checked.toLocaleString("ru-RU")} из ~${Number(sourceTotal).toLocaleString("ru-RU")}`
-      );
-    } else {
-      pageBits.push(`Проверено: ${checked.toLocaleString("ru-RU")}`);
-    }
+  // SERP checked / create-only partition live in countsEl (not duplicated here).
+  if (sourceTotal != null && sourceTotal !== "" && Number.isFinite(checked)) {
+    pageBits.push(`из ~${Number(sourceTotal).toLocaleString("ru-RU")} на HH`);
   }
+  const alreadyInDb =
+    progress.unchanged_count != null
+      ? Number(progress.unchanged_count)
+      : progress.already_in_db != null
+        ? Number(progress.already_in_db)
+        : null;
+  const newIds =
+    progress.detail_planned != null
+      ? Number(progress.detail_planned)
+      : progress.new_ids != null
+        ? Number(progress.new_ids)
+        : alreadyInDb != null && Number.isFinite(checked)
+          ? Math.max(0, checked - alreadyInDb)
+          : null;
+  const detailFetched =
+    progress.detail_fetched != null ? Number(progress.detail_fetched) : null;
+  const hasCreateOnlyPartition =
+    alreadyInDb != null || newIds != null || detailFetched != null;
+
   if (progress.phase === "captcha_required") {
     pageBits.push("требуется CAPTCHA");
     // Live CAPTCHA CTAs only for the tracked run + active HH challenge.
@@ -2764,17 +2778,39 @@ function renderSuitableLiveFromRun(run, { clientStartedAt = null } = {}) {
     }
   } else {
     hideSuitableCaptchaPanel();
-    if (progress.phase === "details") pageBits.push("загрузка деталей");
+    // Prefer create-only partition counters over generic «загрузка деталей».
     if (progress.phase === "ingest") pageBits.push("запись в базу");
+    else if (progress.phase === "details" && !hasCreateOnlyPartition) {
+      pageBits.push("загрузка деталей");
+    }
   }
   const progressText = pageBits.join(" · ") || "Ожидаем первую страницу HH…";
   const created = progress.created_count;
   const updated = progress.updated_count;
-  const unchanged = progress.unchanged_count;
   const countBits = [];
-  if (created != null) countBits.push(`Новых: ${created}`);
-  if (updated != null) countBits.push(`Обновлено: ${updated}`);
-  if (unchanged != null) countBits.push(`Уже в базе: ${unchanged}`);
+  if (Number.isFinite(checked)) {
+    countBits.push(`Проверено SERP ${checked.toLocaleString("ru-RU")}`);
+  }
+  if (alreadyInDb != null) {
+    countBits.push(`Уже в базе ${alreadyInDb.toLocaleString("ru-RU")}`);
+  }
+  if (newIds != null) {
+    countBits.push(`Новых ${newIds.toLocaleString("ru-RU")}`);
+  }
+  if (detailFetched != null && newIds != null) {
+    countBits.push(
+      `Карточек HH загружено ${detailFetched.toLocaleString("ru-RU")} из ${newIds.toLocaleString("ru-RU")}`
+    );
+  } else if (detailFetched != null) {
+    countBits.push(`Карточек HH загружено ${detailFetched.toLocaleString("ru-RU")}`);
+  }
+  // After ingest, also show outcome counts when present.
+  if (created != null && progress.phase === "ingest") {
+    countBits.push(`Создано: ${created}`);
+  }
+  if (updated != null && Number(updated) > 0) {
+    countBits.push(`Обновлено: ${updated}`);
+  }
   const countsText = countBits.join(" · ");
   const fingerprint = [
     progressText,
@@ -3442,8 +3478,8 @@ async function runSuitableSearch({ continueFromPrior = false } = {}) {
   setSuitableRunning(true);
   setSuitableStatus(
     continueFromPrior
-      ? `Загружаем ещё подходящие (со страницы HH ${startPage}, до ${maxPages} стр.)…`
-      : `Проверяем подходящие вакансии (до ${maxPages} стр. HH / ~${maxPages * SUITABLE_PAGE_SIZE_HINT})…`,
+      ? `Загружаем ещё подходящие (со страницы HH ${startPage}, ещё ~${maxPages * SUITABLE_PAGE_SIZE_HINT})…`
+      : `Проверяем свежие подходящие (~${maxPages * SUITABLE_PAGE_SIZE_HINT} новейших, страница HH ${startPage})…`,
     { running: true }
   );
   startSuitableLiveWatch({

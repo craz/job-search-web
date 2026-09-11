@@ -29,9 +29,10 @@ def test_vacancies_page_exposes_primary_suitable_controls() -> None:
     assert 'id="suitable-live"' in html
     assert "suitable-live-timing" in html
     assert "Загрузить ещё" in html
-    assert "до 5 страниц" in html
-    assert "~250" in html
-    assert "до ~50 вакансий" not in html
+    assert "1 страница HH" in html or "~50" in html
+    assert "свежие сначала" in html or "новейших" in html
+    assert "до 5 страниц" not in html
+    assert "~250" not in html
     assert "Рабочее резюме" in html
     assert "HH предлагает" in html
     assert "Свой поиск" in html
@@ -61,9 +62,11 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "Запущена:" in js
     assert "прошло" in html  # stable label beside #suitable-live-elapsed
     assert "updateSuitableLiveElapsed" in js
-    assert "Проверено:" in js
-    assert "Новых:" in js
-    assert "Уже в базе:" in js
+    assert "Проверено SERP" in js
+    assert "Уже в базе" in js
+    assert "Новых" in js
+    assert "Карточек HH загружено" in js
+    assert "Проверено:" in js  # terminal/history summary still uses colon form
     assert "HH предлагает" in js
     assert "SUITABLE_MAX_PAGES_PER_RUN" in js
     assert "start_page" in js
@@ -72,7 +75,8 @@ def test_app_js_uses_suitable_proxy_and_local_filter() -> None:
     assert "можно загрузить ещё" in js
     assert "Проверено ${" in js or "Проверено " in js
     assert "дальше по HH не осталось (или достигнут конец выдачи)" not in js
-    assert "max_pages: 1" not in js
+    assert "SUITABLE_MAX_PAGES_PER_RUN = 1" in js
+    assert "SUITABLE_MAX_PAGES_PER_RUN = 5" not in js
     assert "buildVacancyListQuery" in js
     assert "formatFirstSeen" in js
     assert "getFullYear()" in js
