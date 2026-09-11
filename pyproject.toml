@@ -40,6 +40,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# HTML fixture mirrors real vacancyRow markup on one line.
+"tests/contract/test_manual_score_click_dom.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

@@ -27,7 +27,7 @@ class Node:
         tag = None
         attr = None
         attr_val = None
-        m = re.fullmatch(r'([a-z0-9_-]+)?(?:\[([a-z0-9_-]+)(?:=\"([^\"]*)\")?\])?', selector)
+        m = re.fullmatch(r"([a-z0-9_-]+)?(?:\[([a-z0-9_-]+)(?:=\"([^\"]*)\")?\])?", selector)
         if not m:
             return False
         tag, attr, attr_val = m.group(1), m.group(2), m.group(3)
