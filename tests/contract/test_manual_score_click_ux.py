@@ -40,11 +40,17 @@ def test_manual_score_enqueue_and_pending_ux_strings() -> None:
     assert "Ставим в очередь…" in js
     assert "Оценка запущена…" in js
     assert "jobPayload.error_code" in js
-    score_block = js.split("const scoreButton = event.target.closest")[1].split(
+    marker = 'grid.addEventListener("click", async (event) => {'
+    click = js.split(marker, 1)[1]
+    score_block = click.split("const scoreButton = event.target.closest")[1].split(
         "const decisionButton = event.target.closest"
     )[0]
     assert "resetOffset: true" not in score_block
-    assert "window.scrollTo(0, scrollY)" in score_block
+    assert "await loadVacancies()" not in score_block
+    assert "loadVacancies(" not in score_block
+    assert "window.scrollTo(0, scrollY)" not in score_block
+    assert "refreshVacancyScoringInPlace" in score_block
+    assert "patchVacancyScoringControls" in js
     assert "pendingScoreByVacancyId.set(vacancyId" in score_block
     assert "Ставим в очередь…" in score_block
     assert "Оценка запущена…" in score_block

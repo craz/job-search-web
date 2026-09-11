@@ -1525,6 +1525,130 @@ function vacancyScoreActionHtml(item, assessment, failure) {
   return `<button class="btn btn--secondary btn--sm" data-score type="button">Оценить</button>`;
 }
 
+
+function vacancyCardEl(vacancyId) {
+  if (!vacancyId) return null;
+  return document.querySelector(
+    `.list-row-group--vacancy[data-id="${CSS.escape(vacancyId)}"]`,
+  );
+}
+
+/** In-place scoring controls only — never touches grid.innerHTML / scroll / focus. */
+function patchVacancyScoringControls(vacancyId, { assessment = null, failure = null } = {}) {
+  const card = vacancyCardEl(vacancyId);
+  if (!card) return false;
+  const item =
+    (knownVacancies || []).find((candidate) => candidate.id === vacancyId) || { id: vacancyId };
+  const scoringState = vacancyScoringState(item, assessment, failure);
+  card.dataset.scoringState = scoringState;
+  card.dataset.verdict = assessment ? normalizeVerdict(assessment.verdict) || "" : card.dataset.verdict || "";
+  if (!assessment && !failure) card.dataset.verdict = "";
+
+  const trailing = card.querySelector(".list-row__trailing");
+  if (trailing) {
+    const summaryHtml = renderVacancyAssessmentSummary(assessment, failure);
+    const existingSummary = trailing.querySelector(".vacancy-assessment-summary");
+    if (existingSummary) existingSummary.outerHTML = summaryHtml;
+    else trailing.insertAdjacentHTML("afterbegin", summaryHtml);
+  }
+
+  const actions = card.querySelector(".list-row__actions");
+  if (actions) {
+    const scoreHtml = vacancyScoreActionHtml(item, assessment, failure);
+    const existingAction = actions.querySelector("[data-score], [data-score-state]");
+    if (!scoreHtml) {
+      existingAction?.remove();
+    } else {
+      const holder = document.createElement("div");
+      holder.innerHTML = scoreHtml;
+      const next = holder.firstElementChild;
+      if (existingAction) existingAction.replaceWith(next);
+      else {
+        const apply = actions.querySelector("[data-apply]");
+        if (apply) actions.insertBefore(next, apply);
+        else actions.appendChild(next);
+      }
+    }
+  }
+
+  const detailBody = card.querySelector("details.row-detail > .row-detail__body");
+  if (detailBody) {
+    const detailHtml = renderVacancyAssessmentDetail(assessment, failure);
+    const existingDetail = detailBody.querySelector(".vacancy-assessment-detail");
+    if (existingDetail) {
+      existingDetail.outerHTML = detailHtml;
+    } else {
+      const sections = [...detailBody.querySelectorAll(":scope > .row-detail__section")];
+      const material = sections.find((section) =>
+        (section.querySelector(".row-detail__label")?.textContent || "").includes("Материал"),
+      );
+      if (material) material.insertAdjacentHTML("beforebegin", detailHtml);
+      else detailBody.insertAdjacentHTML("beforeend", detailHtml);
+    }
+  }
+  return true;
+}
+
+function applyVacancyScoringMaps(vacancyId, item) {
+  if (!item) return { assessment: null, failure: semanticFailuresByVacancyId.get(vacancyId) || null };
+  const idx = (knownVacancies || []).findIndex((candidate) => candidate.id === vacancyId);
+  if (idx >= 0) knownVacancies[idx] = item;
+  const raw = item.current_assessment;
+  if (raw) {
+    const assessment = { ...raw, vacancy: { id: vacancyId } };
+    assessmentsByVacancyId.set(vacancyId, assessment);
+    semanticFailuresByVacancyId.delete(vacancyId);
+    return { assessment, failure: null };
+  }
+  assessmentsByVacancyId.delete(vacancyId);
+  return {
+    assessment: null,
+    failure: semanticFailuresByVacancyId.get(vacancyId) || null,
+  };
+}
+
+/**
+ * Refresh one vacancy's scoring UI without queue rerender/reorder/collapse.
+ * Prefer this after manual «Оценить» transitions (not loadVacancies).
+ */
+async function refreshVacancyScoringInPlace(vacancyId) {
+  if (!vacancyId) return false;
+  const response = await fetch(`/api/v1/vacancies?${buildVacancyListQuery()}`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || "Не удалось обновить оценку карточки");
+  }
+  // Keep page totals fresh without replacing the DOM list order.
+  if (payload.total != null) {
+    vacancyPage.total = Number(payload.total || 0);
+    setSectionCount(count, vacancyPage.total);
+  }
+  try {
+    const failuresResponse = await fetch("/api/v1/semantic-failures");
+    if (failuresResponse.ok) {
+      const failuresPayload = await failuresResponse.json();
+      semanticFailuresByVacancyId = indexSemanticFailuresByVacancy(failuresPayload.items);
+      semanticFailedIds = [...semanticFailuresByVacancyId.keys()];
+    }
+  } catch (_error) {
+    // Failures enrichment is best-effort for retry affordance.
+  }
+  const items = payload.items || [];
+  const fresh = items.find((candidate) => candidate.id === vacancyId);
+  const maps = applyVacancyScoringMaps(vacancyId, fresh);
+  if (!fresh) {
+    // Filtered out of current page — still clear pending on any leftover controls.
+    pendingScoreByVacancyId.delete(vacancyId);
+    patchVacancyScoringControls(vacancyId, maps);
+    void refreshBulkScoreNewButton();
+    return false;
+  }
+  pendingScoreByVacancyId.delete(vacancyId);
+  patchVacancyScoringControls(vacancyId, maps);
+  void refreshBulkScoreNewButton();
+  return true;
+}
+
 function vacancySourceSignalsHtml(item) {
   const sourceStatus = vacancySourceStatus(item);
   const freshness = vacancyFreshnessHint(item);
@@ -2228,7 +2352,7 @@ async function watchPendingScoreJob(vacancyId, jobId) {
       if (jobPayload.status === "done") {
         pendingScoreByVacancyId.delete(vacancyId);
         showNotice("Оценка готова");
-        await loadVacancies();
+        await refreshVacancyScoringInPlace(vacancyId);
         return;
       }
       if (jobPayload.status === "error" || jobPayload.error_code || jobPayload.error_message) {
@@ -2236,7 +2360,7 @@ async function watchPendingScoreJob(vacancyId, jobId) {
         const message =
           jobPayload.error_message || jobPayload.error_code || "Оценка не выполнена";
         showNotice(ownerFacingScoringError(message), "error");
-        await loadVacancies();
+        await refreshVacancyScoringInPlace(vacancyId);
         return;
       }
       const button = document.querySelector(
@@ -4277,6 +4401,18 @@ function ownerFacingScoringError(codeOrMessage) {
   }
 }
 
+// Mouse-down on «Оценить» must not scroll a below-fold control into view via focus.
+grid.addEventListener(
+  "mousedown",
+  (event) => {
+    const scoreButton = event.target.closest("[data-score]");
+    if (!scoreButton || scoreButton.disabled) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+  },
+  true,
+);
+
 grid.addEventListener("click", async (event) => {
   // Score first: article[data-owner-decision] must never steal «Оценить».
   const scoreButton = event.target.closest("[data-score]");
@@ -4285,8 +4421,7 @@ grid.addEventListener("click", async (event) => {
     const card = scoreButton.closest("[data-id]");
     const vacancyId = card?.dataset.id;
     if (!vacancyId) return;
-    // Preserve filters/sort/page across score refresh (no pagination reset).
-    const scrollY = window.scrollY;
+    // Keep filters/sort/page; update scoring controls in place (no queue rerender).
     const idleLabel = scoreButton.dataset.scoreRetry === "1" ? "Повторить оценку" : "Оценить";
     // Optimistic pending BEFORE await so list re-renders keep «В очереди».
     pendingScoreByVacancyId.set(vacancyId, pendingScoreByVacancyId.get(vacancyId) || true);
@@ -4294,6 +4429,11 @@ grid.addEventListener("click", async (event) => {
     scoreButton.classList.add("is-processing");
     scoreButton.dataset.scorePending = "1";
     scoreButton.textContent = "Ставим в очередь…";
+    try {
+      scoreButton.focus({ preventScroll: true });
+    } catch (_error) {
+      // Older engines: leave unfocused rather than risk a focus scroll.
+    }
     showNotice("Оценка запущена…", "info");
     const restoreIdle = () => {
       pendingScoreByVacancyId.delete(vacancyId);
@@ -4305,6 +4445,7 @@ grid.addEventListener("click", async (event) => {
       btn.classList.remove("is-processing");
       btn.textContent = idleLabel;
       delete btn.dataset.scorePending;
+      if (idleLabel === "Повторить оценку") btn.dataset.scoreRetry = "1";
     };
     const keepQueued = (jobId) => {
       pendingScoreByVacancyId.set(vacancyId, jobId || pendingScoreByVacancyId.get(vacancyId) || true);
@@ -4335,8 +4476,14 @@ grid.addEventListener("click", async (event) => {
         if (errorInfo.code === "vacancy_archived") {
           showNotice(errorInfo.message || "Вакансия в архиве на источнике", "warning");
           pendingScoreByVacancyId.delete(vacancyId);
-          await loadVacancies();
-          window.scrollTo(0, scrollY);
+          const liveCard = vacancyCardEl(vacancyId);
+          if (liveCard) liveCard.dataset.sourceStatus = "archived";
+          const item = (knownVacancies || []).find((candidate) => candidate.id === vacancyId);
+          if (item) item.source_status = "archived";
+          patchVacancyScoringControls(vacancyId, {
+            assessment: assessmentsByVacancyId.get(vacancyId) || null,
+            failure: null,
+          });
           return;
         }
         if (errorInfo.code === "source_status_unknown") {
@@ -4376,8 +4523,6 @@ grid.addEventListener("click", async (event) => {
         ) {
           keepQueued();
           showNotice("Оценка уже в очереди", "info");
-          await loadVacancies();
-          window.scrollTo(0, scrollY);
           return;
         }
         throw new Error(errorInfo.message || "Оценка не запущена");
@@ -4390,8 +4535,7 @@ grid.addEventListener("click", async (event) => {
       );
       if (payload.status === "done") {
         pendingScoreByVacancyId.delete(vacancyId);
-        await loadVacancies();
-        window.scrollTo(0, scrollY);
+        await refreshVacancyScoringInPlace(vacancyId);
         return;
       }
       if (jobId) {
@@ -4410,8 +4554,7 @@ grid.addEventListener("click", async (event) => {
           if (jobPayload.status === "done") {
             pendingScoreByVacancyId.delete(vacancyId);
             showNotice("Оценка готова");
-            await loadVacancies();
-            window.scrollTo(0, scrollY);
+            await refreshVacancyScoringInPlace(vacancyId);
             return;
           }
           // Scoring may leave error_code on non-error status (e.g. queued + ollama_unavailable).
@@ -4427,16 +4570,17 @@ grid.addEventListener("click", async (event) => {
         keepQueued(jobId);
         showNotice("Оценка ещё в очереди — статус сохранится на карточке", "info");
         void watchPendingScoreJob(vacancyId, jobId);
-        await loadVacancies();
-        window.scrollTo(0, scrollY);
         return;
       }
       keepQueued();
     } catch (error) {
       showNotice(error.message || "Оценка не запущена", "error");
       restoreIdle();
-      await loadVacancies();
-      window.scrollTo(0, scrollY);
+      try {
+        await refreshVacancyScoringInPlace(vacancyId);
+      } catch (_refreshError) {
+        // Keep idle/retry controls already restored.
+      }
     }
     return;
   }
