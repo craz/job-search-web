@@ -51,8 +51,8 @@ def test_index_and_vacancy_flow_use_core_gateway() -> None:
     assert "Войти в HeadHunter" in page.text
     assert "Я вошёл — проверить" in page.text
     assert "HeadHunter" in page.text
-    assert "/assets/app.js?v=20260911-r61-refresh-btn" in page.text
-    assert "/assets/styles.css?v=20260911-r58" in page.text
+    assert "/assets/app.js?v=20260911-r63-score-viewport" in page.text
+    assert "/assets/styles.css?v=20260911-r63-score-viewport" in page.text
     assert 'id="vacancy-filter-verdict"' in page.text
     assert 'id="vacancy-filter-scoring"' in page.text
     assert 'id="vacancy-filter-owner"' in page.text
