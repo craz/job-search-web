@@ -2231,12 +2231,7 @@ async function watchPendingScoreJob(vacancyId, jobId) {
         pendingScoreByVacancyId.delete(vacancyId);
         const message =
           jobPayload.error_message || jobPayload.error_code || "Оценка не выполнена";
-        showNotice(
-          message === "ollama_unavailable"
-            ? "Модель оценки сейчас недоступна. Повторите позже."
-            : message,
-          "error",
-        );
+        showNotice(ownerFacingScoringError(message), "error");
         await loadVacancies();
         return;
       }
@@ -4220,6 +4215,28 @@ grid.addEventListener("change", async (event) => {
   }
 });
 
+
+function ownerFacingScoringError(codeOrMessage) {
+  const code = String(codeOrMessage || "").trim();
+  switch (code) {
+    case "ollama_unavailable":
+      return "Ollama недоступна (сервис не отвечает). Повторите позже.";
+    case "model_not_available":
+    case "model_missing":
+    case "model_not_found":
+      return "Модель оценки не найдена в Ollama. Проверьте установку модели.";
+    case "inference_timeout":
+    case "generation_timeout":
+      return "Таймаут вывода модели. Повторите оценку.";
+    case "inference_failed":
+      return "Сбой вывода модели во время оценки. Повторите попытку.";
+    case "rabbitmq_publish_failed":
+      return "Не удалось поставить оценку в очередь (RabbitMQ).";
+    default:
+      return code || "Оценка не выполнена";
+  }
+}
+
 grid.addEventListener("click", async (event) => {
   // Score first: article[data-owner-decision] must never steal «Оценить».
   const scoreButton = event.target.closest("[data-score]");
@@ -4298,12 +4315,15 @@ grid.addEventListener("click", async (event) => {
         if (
           errorInfo.code === "ollama_unavailable" ||
           errorInfo.code === "rabbitmq_publish_failed" ||
+          errorInfo.code === "model_not_available" ||
+          errorInfo.code === "model_missing" ||
+          errorInfo.code === "model_not_found" ||
+          errorInfo.code === "inference_timeout" ||
+          errorInfo.code === "inference_failed" ||
           errorInfo.message === "ollama_unavailable"
         ) {
           showNotice(
-            errorInfo.code === "rabbitmq_publish_failed"
-              ? "Не удалось поставить оценку в очередь (RabbitMQ)."
-              : "Модель оценки сейчас недоступна. Повторите позже.",
+            ownerFacingScoringError(errorInfo.code || errorInfo.message),
             "warning",
           );
           restoreIdle();
